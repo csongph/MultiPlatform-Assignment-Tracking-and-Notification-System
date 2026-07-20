@@ -1,7 +1,21 @@
 # MultiPlatform-Assignment-Tracking-and-Notification-System
-Thesis ProJect
+Thesis Project
+
+KMAPS is a FastAPI backend for tracking assignments from multiple learning
+platforms, starting with Google Classroom and Microsoft Teams OAuth onboarding.
+
+## Current backend features
+
+- Email/password registration and login with JWT access/refresh tokens
+- OAuth onboarding for Google Classroom and Microsoft Teams
+- Connected platform management
+- Dashboard summary API
+- Course and assignment read APIs backed by the local database
+- Notification settings and notification read APIs
+- Sync job placeholder API backed by `sync_logs`
 
 ## คำสั่งรันระบบ
+
 # รันอันนี้ก่อน
 # วิธีตั้งค่า Database (Supabase) สำหรับรันโปรเจกต์ KMAPS
 
@@ -51,6 +65,29 @@ pip install -r requirements.txt
 - รหัสผ่านที่ได้รับมาคือรหัส database ทั้งโปรเจกต์ ห้ามแชร์ต่อในกลุ่มสาธารณะ
 - ถ้าเชื่อมต่อไม่ได้ ให้เช็คว่า copy รหัสผ่านมาครบ ไม่มีช่องว่างเกิน และ URL ยังมี `?ssl=require` ต่อท้ายอยู่
 
+## Run locally
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+docker-compose up -d
+pip install -r requirements.txt
+alembic upgrade head
+python -m scripts.seed_platforms
+uvicorn app.main:app --reload
+```
+
+Open:
+
+```text
+http://localhost:8000/docs
+```
+
+## API documentation
+
+See `API1_DESIGN.md` for required ENV/API values, provider scopes, and the API1
+endpoint contract.
+
 # frontend
 1. d:\PROJECT_KMAPS\MultiPlatform-Assignment-Tracking-and-Notification-System\.venv\Scripts\activate
 2. cd MultiPlatform-Assignment-Tracking-and-Notification-System\frontend
@@ -60,5 +97,3 @@ pip install -r requirements.txt
 1. (Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned) ; (& d:\PROJECT_KMAPS\MultiPlatform-Assignment-Tracking-and-Notification-System\.venv\Scripts\Activate.ps1)
 2. cd MultiPlatform-Assignment-Tracking-and-Notification-System\backend
 3. python -m  uvicorn app.main:app --reload
-
-
