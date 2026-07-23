@@ -1,0 +1,121 @@
+<form id="register-form" class="auth-form animate-slide-up" novalidate aria-label="Create account form">
+  <div class="auth-title-group">
+    <h1 id="register-heading" class="auth-title">Create Account</h1>
+    <p class="auth-subtitle">Join KMAPS to track your assignments</p>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="register-full-name">Full Name</label>
+    <div class="input-group">
+      <input
+        type="text"
+        id="register-full-name"
+        name="full_name"
+        class="form-input"
+        placeholder="John Doe"
+        autocomplete="name"
+        required
+        aria-required="true"
+        aria-describedby="register-full-name-error"
+      />
+    </div>
+    <span id="register-full-name-error" class="field-error" data-error-for="full_name" role="alert"></span>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="register-email">Email</label>
+    <div class="input-group">
+      <input
+        type="email"
+        id="register-email"
+        name="email"
+        class="form-input"
+        placeholder="you@kmitl.ac.th"
+        autocomplete="email"
+        required
+        aria-required="true"
+        aria-describedby="register-email-error"
+      />
+    </div>
+    <span id="register-email-error" class="field-error" data-error-for="email" role="alert"></span>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="register-password">Password</label>
+    <div class="input-group">
+      <input
+        type="password"
+        id="register-password"
+        name="password"
+        class="form-input"
+        placeholder="Minimum 8 characters"
+        autocomplete="new-password"
+        required
+        aria-required="true"
+        aria-describedby="register-password-error register-password-hint"
+        minlength="8"
+      />
+      <button
+        type="button"
+        class="password-toggle"
+        data-toggle-password="register-password"
+        aria-label="Show password"
+        aria-pressed="false"
+        tabindex="0"
+      >
+        <svg class="icon-show" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <svg class="icon-hide hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      </button>
+    </div>
+    <p id="register-password-hint" class="password-hint">Must be at least 8 characters</p>
+    <span id="register-password-error" class="field-error" data-error-for="password" role="alert"></span>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="register-confirm-password">Confirm Password</label>
+    <div class="input-group">
+      <input
+        type="password"
+        id="register-confirm-password"
+        name="confirm_password"
+        class="form-input"
+        placeholder="Re-enter your password"
+        autocomplete="new-password"
+        required
+        aria-required="true"
+        aria-describedby="register-confirm-password-error"
+      />
+      <button
+        type="button"
+        class="password-toggle"
+        data-toggle-password="register-confirm-password"
+        aria-label="Show confirm password"
+        aria-pressed="false"
+        tabindex="0"
+      >
+        <svg class="icon-show" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <svg class="icon-hide hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      </button>
+    </div>
+    <span id="register-confirm-password-error" class="field-error" data-error-for="confirm_password" role="alert"></span>
+  </div>
+
+  <button type="submit" class="btn btn-primary register-submit" aria-label="Create your account">
+    <span class="btn-spinner" aria-hidden="true"></span>
+    <span class="btn-text" data-default-text="Create Account">Create Account</span>
+  </button>
+</form>

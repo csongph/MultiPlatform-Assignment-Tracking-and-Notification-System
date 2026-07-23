@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Create your KMAPS account - KMITL Multi-Platform Assignment Tracking and Notification System" />
+  <title>Create Account - KMAPS</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/register.css" />
+</head>
+<body class="register-page">
+  <main class="auth-page" role="main">
+    <div class="auth-container">
+      <article class="auth-card" aria-labelledby="register-heading">
+        <div id="auth-header"></div>
+        <div id="register-form-container"></div>
+        <div id="auth-footer"></div>
+      </article>
+    </div>
+  </main>
+
+  <script>
+    window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
+    window.KMAPS_USE_MOCK_API = false;
+  </script>
+  <script type="module" src="../js/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In - KMAPS</title>
+
+  <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/login.css" />
+</head>
+<body>
+
+  <div class="auth-page">
+    <main class="auth-card">
+      <div id="auth-header"></div>
+      <div id="login-form-container"></div>
+      <div id="auth-footer"></div>
+    </main>
+  </div>
+
+  <script>
+    window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
+    window.KMAPS_USE_MOCK_API = false;
+  </script>
+  <script type="module" src="../js/login.js"></script>
+
+</body>
+</html>

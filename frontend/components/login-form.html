@@ -1,0 +1,78 @@
+<form id="login-form" class="auth-form animate-slide-up" novalidate aria-label="Sign in form">
+  <div class="auth-title-group login-welcome">
+    <h1 id="login-heading" class="auth-title">Welcome Back</h1>
+    <p class="auth-subtitle">Sign in to continue to KMAPS</p>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="login-email">Email</label>
+    <div class="input-group">
+      <input
+        type="email"
+        id="login-email"
+        name="email"
+        class="form-input"
+        placeholder="you@kmitl.ac.th"
+        autocomplete="email"
+        required
+        aria-required="true"
+        aria-describedby="login-email-error"
+      />
+    </div>
+    <span id="login-email-error" class="field-error" data-error-for="email" role="alert"></span>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="login-password">Password</label>
+    <div class="input-group">
+      <input
+        type="password"
+        id="login-password"
+        name="password"
+        class="form-input"
+        placeholder="Enter your password"
+        autocomplete="current-password"
+        required
+        aria-required="true"
+        aria-describedby="login-password-error"
+      />
+      <button
+        type="button"
+        class="password-toggle"
+        data-toggle-password="login-password"
+        aria-label="Show password"
+        aria-pressed="false"
+        tabindex="0"
+      >
+        <svg class="icon-show" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <svg class="icon-hide hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      </button>
+    </div>
+    <span id="login-password-error" class="field-error" data-error-for="password" role="alert"></span>
+  </div>
+
+  <div class="form-options">
+    <div class="checkbox-group">
+      <input
+        type="checkbox"
+        id="remember-me"
+        name="remember_me"
+        class="form-checkbox"
+      />
+      <label class="checkbox-label" for="remember-me">Remember Me</label>
+    </div>
+    <a href="#" class="forgot-link" aria-label="Forgot password">Forgot Password</a>
+  </div>
+
+  <button type="submit" class="btn btn-primary" aria-label="Sign in to your account">
+    <span class="btn-spinner" aria-hidden="true"></span>
+    <span class="btn-text" data-default-text="Sign In">Sign In</span>
+  </button>
+</form>
