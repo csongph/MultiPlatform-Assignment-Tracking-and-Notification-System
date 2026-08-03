@@ -1,6 +1,6 @@
 import uuid
 
-import jwt
+from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError, UnauthorizedError
@@ -77,7 +77,7 @@ class OAuthOnboardingService:
     def _verify_state(state: str) -> tuple[uuid.UUID, str]:
         try:
             payload = decode_oauth_state_token(state)
-        except jwt.PyJWTError as exc:
+        except JWTError as exc:
             raise UnauthorizedError("Invalid or expired OAuth state token") from exc
 
         return uuid.UUID(payload["sub"]), payload["platform"]

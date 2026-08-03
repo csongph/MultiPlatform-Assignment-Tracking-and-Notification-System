@@ -7,7 +7,7 @@ from app.core.exceptions import NotFoundError
 from app.models.core import Assignment, Course, Notification, NotificationSettings
 from app.models.logs import SyncLog
 from app.repositories.learning_repository import LearningRepository
-from app.repositories.oauth_repository import PlatformRepository
+from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
 from app.schemas.learning import (
     AssignmentOut,
     CourseOut,
@@ -23,6 +23,7 @@ class LearningService:
         self.db = db
         self.learning = LearningRepository(db)
         self.platforms = PlatformRepository(db)
+        self.connections = OAuthConnectionRepository(db)
 
     async def dashboard_summary(self, user_id: uuid.UUID) -> DashboardSummary:
         total_courses, total_assignments, due_soon, overdue, connected_platforms = (
@@ -103,7 +104,19 @@ class LearningService:
                 f"Platform '{platform_name}' has no row in the platforms table. "
                 f"Seed it first (see scripts/seed_platforms.py)."
             )
+
+        connection = await self.connections.get_by_user_and_platform(user_id, platform.id)
+        if connection is None:
+            raise NotFoundError(f"'{platform_name}' is not connected yet. Connect it first.")
+
         sync_log = await self.learning.create_sync_log(user_id, platform.id)
+
+        # Import here (not at module scope) to avoid importing Celery/worker
+        # code into every FastAPI request - only needed on this code path.
+        from worker.sync.sync_engine import sync_connection_task
+
+        sync_connection_task.delay(str(connection.id), str(sync_log.id))
+
         return self._sync_out(sync_log, platform.name)
 
     async def get_sync(self, user_id: uuid.UUID, sync_id: uuid.UUID) -> SyncJobOut:

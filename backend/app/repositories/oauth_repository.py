@@ -40,6 +40,51 @@ class OAuthConnectionRepository:
         )
         return list(result.scalars().all())
 
+    async def get_by_id_with_platform(self, connection_id: uuid.UUID) -> OAuthConnection | None:
+        result = await self.db.execute(
+            select(OAuthConnection)
+            .options(selectinload(OAuthConnection.platform))
+            .where(OAuthConnection.id == connection_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_user_and_platform_with_platform(
+        self, user_id: uuid.UUID, platform_id: int
+    ) -> OAuthConnection | None:
+        result = await self.db.execute(
+            select(OAuthConnection)
+            .options(selectinload(OAuthConnection.platform))
+            .where(
+                OAuthConnection.user_id == user_id,
+                OAuthConnection.platform_id == platform_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_all_connected(self) -> list[OAuthConnection]:
+        """Every currently-connected connection, across all users — used by
+        the periodic Celery sync task."""
+        result = await self.db.execute(
+            select(OAuthConnection)
+            .options(selectinload(OAuthConnection.platform))
+            .where(OAuthConnection.status == "connected")
+        )
+        return list(result.scalars().all())
+
+    async def list_expiring_before(self, cutoff: datetime) -> list[OAuthConnection]:
+        """Connected connections whose access token expires before `cutoff`
+        — used by the proactive token-refresh Celery task."""
+        result = await self.db.execute(
+            select(OAuthConnection)
+            .options(selectinload(OAuthConnection.platform))
+            .where(
+                OAuthConnection.status == "connected",
+                OAuthConnection.token_expires_at.is_not(None),
+                OAuthConnection.token_expires_at <= cutoff,
+            )
+        )
+        return list(result.scalars().all())
+
     async def upsert(
         self,
         user_id: uuid.UUID,

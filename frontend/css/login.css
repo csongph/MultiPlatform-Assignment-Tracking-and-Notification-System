@@ -1,0 +1,218 @@
+/* ==========================================================================
+   KMAPS Login Page Specific Styles
+   ========================================================================== */
+
+/* Background with Campus Image */
+.auth-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(15,23,42,0.65) 0%, rgba(15,23,42,0.45) 50%, rgba(15,23,42,0.75) 100%),
+    url('../assets/campus-bg.jpg') center/cover no-repeat;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+/* Auth Container */
+.auth-container {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Main Card Container */
+.auth-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+/* Header Inside Card */
+.auth-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-header .brand-logo {
+  max-width: 220px;
+  height: auto;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.auth-system-name {
+  color: #475569 !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  text-shadow: none !important;
+  margin-top: 10px !important;
+  line-height: 1.4 !important;
+}
+
+/* Form Headings */
+.auth-title {
+  color: #0f172a;
+  font-size: 1.625rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.auth-subtitle {
+  color: #64748b;
+  font-size: 0.875rem;
+  text-align: center;
+  margin-top: 4px;
+  margin-bottom: 20px;
+}
+
+/* Form Fields */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  color: #1e293b;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.input-group:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.15);
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background: transparent;
+  border: none;
+  outline: none;
+  border-radius: 10px;
+}
+
+.form-input::placeholder {
+  color: #94a3b8;
+}
+
+/* Checkbox & Forgot Link */
+.form-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.checkbox-label {
+  color: #475569;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.forgot-link {
+  color: #2563eb;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+}
+
+/* Primary Button (Sign In / Create Account) */
+.btn-primary {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: 48px !important;
+  padding: 12px 24px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  border: none !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+  transition: all 0.2s ease !important;
+  margin-top: 8px !important;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Footer Section inside Card */
+.auth-footer {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.auth-footer-text {
+  color: #64748b !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  text-shadow: none !important;
+}
+
+.auth-footer-link {
+  color: #2563eb !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+  margin-left: 4px;
+}
+
+.auth-footer-link:hover {
+  color: #1d4ed8 !important;
+  text-decoration: underline !important;
+}

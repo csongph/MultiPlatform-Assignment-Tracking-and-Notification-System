@@ -6,6 +6,7 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import OAuthProviderError
 from app.integrations.base_adapter import BaseOAuthAdapter, TokenBundle
+from app.integrations.base_fetcher import BaseAssignmentFetcher, RemoteCourseWithAssignments
 
 SCOPES = [
     "offline_access",
@@ -82,4 +83,28 @@ class MicrosoftTeamsAdapter(BaseOAuthAdapter):
             refresh_token=payload.get("refresh_token"),
             expires_at=expires_at,
             raw=payload,
+        )
+
+
+class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
+    """
+    OAuth connect/refresh for Microsoft Teams works today (see
+    MicrosoftTeamsAdapter above), but pulling actual assignments from
+    Microsoft Graph's Education API (`/education/me/classes`,
+    `/education/classes/{id}/assignments`) is not implemented yet.
+
+    Registering this stub means the sync engine can still enumerate
+    Microsoft Teams connections without crashing — it just records a
+    "skipped" sync_log with the reason below instead of raising an
+    unhandled error deep in a Celery task.
+    """
+
+    platform_name = "microsoft_teams"
+
+    async def fetch_assignments(self, access_token: str) -> list[RemoteCourseWithAssignments]:
+        raise NotImplementedError(
+            "Microsoft Teams assignment sync is not implemented yet. "
+            "OAuth connect/refresh works; course/assignment fetching is a TODO "
+            "(Microsoft Graph Education API: /education/me/classes, "
+            "/education/classes/{id}/assignments)."
         )
