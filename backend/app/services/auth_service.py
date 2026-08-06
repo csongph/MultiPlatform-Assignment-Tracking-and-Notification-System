@@ -12,6 +12,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import Role, User, UserRole
+from app.repositories.admin_repository import AuditLogRepository
 from app.schemas.auth import RegisterRequest
 
 
@@ -74,6 +75,10 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your account has been disabled.")
+
+    # Feeds the Admin Console's Audit Log tab (M14) - see PROJECT_DOC/
+    # 14_admin_audit_logging.md for the list of actions that belong here.
+    await AuditLogRepository(db).create(actor_user_id=user.id, action="login", target=user.email)
 
     return user
 

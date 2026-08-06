@@ -7,7 +7,9 @@ from app.core.exceptions import NotFoundError, UnauthorizedError
 from app.core.security import create_oauth_state_token, decode_oauth_state_token, encrypt_token
 from app.integrations import SUPPORTED_PLATFORMS, get_adapter
 from app.models.core import OAuthConnection
+from app.repositories.admin_repository import AuditLogRepository
 from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
+from app.repositories.user_repository import UserRepository
 
 
 class OAuthOnboardingService:
@@ -50,7 +52,7 @@ class OAuthOnboardingService:
         access_token_enc = encrypt_token(token_bundle.access_token)
         refresh_token_enc = encrypt_token(token_bundle.refresh_token) if token_bundle.refresh_token else None
 
-        return await self.connections.upsert(
+        connection = await self.connections.upsert(
             user_id=user_id,
             platform_id=platform.id,
             access_token_enc=access_token_enc,
@@ -58,6 +60,17 @@ class OAuthOnboardingService:
             token_expires_at=token_bundle.expires_at,
             status="connected",
         )
+
+        # Feeds the Admin Console's Audit Log tab (M14).
+        user = await UserRepository(self.db).get_by_id(user_id)
+        await AuditLogRepository(self.db).create(
+            actor_user_id=user_id,
+            action="connect_platform",
+            target=user.email if user else str(user_id),
+            metadata={"platform": platform_name},
+        )
+
+        return connection
 
     async def list_connections(self, user_id: uuid.UUID) -> list[OAuthConnection]:
         return await self.connections.list_for_user(user_id)
@@ -72,6 +85,15 @@ class OAuthOnboardingService:
             raise NotFoundError("No active connection found for this platform")
 
         await self.connections.delete(connection)
+
+        # Feeds the Admin Console's Audit Log tab (M14).
+        user = await UserRepository(self.db).get_by_id(user_id)
+        await AuditLogRepository(self.db).create(
+            actor_user_id=user_id,
+            action="disconnect_platform",
+            target=user.email if user else str(user_id),
+            metadata={"platform": platform_name},
+        )
 
     @staticmethod
     def _verify_state(state: str) -> tuple[uuid.UUID, str]:

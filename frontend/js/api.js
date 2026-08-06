@@ -270,7 +270,13 @@ export async function adminFlagConnectionStale(userId, platform) {
 }
 
 export function adminConnectionsExportUrl() {
-  return `${API_BASE_URL}/admin/connections/export`;
+  // A plain <a href> navigation can't set an Authorization header, so the
+  // access token has to ride along as a query param. The backend's
+  // get_current_user (app/api/v1/deps.py) accepts either.
+  const token = getAccessToken();
+  const query = new URLSearchParams(token ? { token } : {});
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return `${API_BASE_URL}/admin/connections/export${suffix}`;
 }
 
 export async function adminListAuditLogs({ user = '', action = '', date = '', page = 1 } = {}) {
@@ -279,7 +285,8 @@ export async function adminListAuditLogs({ user = '', action = '', date = '', pa
 }
 
 export function adminAuditLogsExportUrl({ user = '', action = '', date = '' } = {}) {
-  const query = new URLSearchParams({ user, action, date });
+  const token = getAccessToken();
+  const query = new URLSearchParams({ user, action, date, ...(token ? { token } : {}) });
   return `${API_BASE_URL}/admin/audit-logs/export?${query.toString()}`;
 }
 
