@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="KMAPS admin console" />
+  <title>Admin Console - KMAPS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+</head>
+<body class="app-page">
+  <main class="app-shell admin-shell" role="main" style="max-width: 1180px;">
+    <header class="app-header">
+      <div>
+        <p class="app-eyebrow">Administrator</p>
+        <h1 id="admin-title">Admin Console</h1>
+        <p id="admin-subtitle">User, connection, audit, and system oversight for KMAPS.</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary app-link-button" href="dashboard.html">Back to Dashboard</a>
+        <button type="button" class="btn btn-secondary" id="logout-button">Sign Out</button>
+      </div>
+    </header>
+
+    <nav class="admin-tabs" role="tablist" aria-label="Admin sections">
+      <button class="admin-tab is-active" data-tab="users" role="tab" aria-selected="true">Users &amp; Roles</button>
+      <button class="admin-tab" data-tab="connections" role="tab" aria-selected="false">Connection Monitoring</button>
+      <button class="admin-tab" data-tab="audit" role="tab" aria-selected="false">Audit Log</button>
+      <button class="admin-tab" data-tab="monitoring" role="tab" aria-selected="false">System Monitoring</button>
+      <button class="admin-tab" data-tab="logs" role="tab" aria-selected="false">Server Logs</button>
+    </nav>
+
+    <!-- M12: User & Role Management -->
+    <section class="admin-panel is-active" id="panel-users">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>Users &amp; Roles</h2>
+            <p>Search users, change their role, or deactivate an account (force logout applies immediately).</p>
+          </div>
+          <div class="admin-toolbar">
+            <input type="search" id="users-search" placeholder="Search name or email…" />
+          </div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="users-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+        <div class="admin-pagination">
+          <span id="users-page-info"></span>
+          <button class="btn-sm" id="users-prev">Prev</button>
+          <button class="btn-sm" id="users-next">Next</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- M13: Connection Monitoring -->
+    <section class="admin-panel" id="panel-connections">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>Connection Monitoring</h2>
+            <p>Platform connection status for every user. Force-flag a token as Stale for proactive support.</p>
+          </div>
+          <div class="admin-toolbar">
+            <select id="connections-filter">
+              <option value="">All Statuses</option>
+              <option value="connected">Connected</option>
+              <option value="expired">Expired</option>
+              <option value="stale">Stale</option>
+              <option value="broken">Broken / Not connected</option>
+            </select>
+            <a class="btn-sm" id="connections-export" href="#" target="_blank" rel="noopener">Export CSV</a>
+          </div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="connections-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Platform</th>
+                <th>Status</th>
+                <th>Connected At</th>
+                <th>Token Expires</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="connections-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- M14: Audit Logging -->
+    <section class="admin-panel" id="panel-audit">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>Audit Log</h2>
+            <p>Every sensitive admin action and auth event, filterable by user, action, and date.</p>
+          </div>
+          <div class="admin-toolbar">
+            <input type="text" id="audit-user" placeholder="Filter by user email…" />
+            <select id="audit-action">
+              <option value="">All Actions</option>
+              <option value="role_change">Role Change</option>
+              <option value="user_status_change">Deactivate/Reactivate</option>
+              <option value="connection_flag_stale">Flag Stale Connection</option>
+              <option value="login">Login</option>
+              <option value="logout">Logout</option>
+            </select>
+            <input type="date" id="audit-date" />
+            <a class="btn-sm" id="audit-export" href="#" target="_blank" rel="noopener">Export CSV</a>
+          </div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="audit-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Metadata</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+        <div class="admin-pagination">
+          <span id="audit-page-info"></span>
+          <button class="btn-sm" id="audit-prev">Prev</button>
+          <button class="btn-sm" id="audit-next">Next</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- M15: System Monitoring -->
+    <section class="admin-panel" id="panel-monitoring">
+      <div id="monitoring-alert"></div>
+
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>System Health</h2>
+            <p>Live status of the database and background sync queue.</p>
+          </div>
+          <button class="btn-sm" id="monitoring-refresh">Refresh</button>
+        </div>
+        <p id="health-status"><span class="health-dot health-green"></span>Checking…</p>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>Sync Status</h2>
+            <p>Success rate and queue depth over the last 15 minutes.</p>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="stat-label">Success Rate</span>
+            <strong id="sync-success-rate">–</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Queue Depth</span>
+            <strong id="sync-queue-depth">–</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Events (15m)</span>
+            <strong id="sync-events-count">–</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Last Sync</span>
+            <strong id="sync-last-run" style="font-size: 0.9rem;">–</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>Error Summary</h2>
+            <p>Sync failures grouped by provider, most recent first.</p>
+          </div>
+        </div>
+        <div class="stat-grid" id="error-by-provider"></div>
+        <div class="admin-table-wrap" style="margin-top: 1rem;">
+          <table class="admin-table" id="errors-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Provider</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="errors-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- M16: Server Log Viewer -->
+    <section class="admin-panel" id="panel-logs">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <h2>Server Logs</h2>
+            <p>Live terminal stream of backend app.py server events and errors.</p>
+          </div>
+          <div class="admin-toolbar">
+            <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 0.25rem; cursor: pointer; user-select: none; color: var(--color-text-secondary); font-weight: 500;">
+              <input type="checkbox" id="logs-auto-refresh" checked style="margin: 0;" /> Auto-refresh (10s)
+            </label>
+            <button class="btn-sm" id="logs-refresh">Refresh Logs</button>
+          </div>
+        </div>
+        
+        <div class="console-wrapper">
+          <pre class="console-viewport" id="console-viewport">Loading logs...</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
+    window.KMAPS_USE_MOCK_API = false;
+  </script>
+  <script type="module" src="../js/admin.js"></script>
+</body>
+</html>
