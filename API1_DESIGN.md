@@ -1,82 +1,8 @@
-# API1 Design - KMAPS
+# KMAPS API Design
 
-เอกสารนี้สรุปค่า API/ENV ที่ระบบต้องใช้ และออกแบบ API v1 รอบแรกสำหรับระบบ
-MultiPlatform Assignment Tracking and Notification System
+## 1. Overview
 
-## 1. Required ENV/API Values
-
-### Core backend
-
-| Key | Required | Example | Purpose |
-| --- | --- | --- | --- |
-| `DATABASE_URL` | Yes | `postgresql+asyncpg://kmaps:kmaps@localhost:5432/kmaps_db` | PostgreSQL async connection string |
-| `REDIS_URL` | Yes | `redis://localhost:6379/0` | Queue/cache backend for worker jobs |
-| `JWT_SECRET_KEY` | Yes | long random string | Sign access, refresh, and OAuth state JWTs |
-| `JWT_ALGORITHM` | No | `HS256` | JWT signing algorithm |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | No | `15` | Access token lifetime |
-| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | No | `30` | Refresh token lifetime |
-| `TOKEN_ENCRYPTION_KEY` | Yes | long random string | Encrypt stored OAuth access/refresh tokens |
-
-### Frontend redirect
-
-| Key | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `FRONTEND_ORIGIN` | Yes | `http://localhost:5173` | Frontend base URL after OAuth callback |
-| `FRONTEND_ONBOARDING_SUCCESS_PATH` | No | `/onboarding/success` | Redirect path when OAuth succeeds |
-| `FRONTEND_ONBOARDING_ERROR_PATH` | No | `/onboarding/error` | Redirect path when OAuth fails |
-
-### Google Classroom OAuth
-
-| Key | Required | Example | Purpose |
-| --- | --- | --- | --- |
-| `GOOGLE_OAUTH_CLIENT_ID` | Yes | from Google Cloud Console | OAuth client id |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Yes | from Google Cloud Console | OAuth client secret |
-| `GOOGLE_OAUTH_REDIRECT_URI` | Yes | `http://localhost:8000/api/v1/oauth/google_classroom/callback` | Must match Google OAuth app redirect URI |
-
-Google APIs/scopes:
-
-| Value | Purpose |
-| --- | --- |
-| Enable Google Classroom API | Required in Google Cloud project |
-| `https://www.googleapis.com/auth/classroom.courses.readonly` | Read courses |
-| `https://www.googleapis.com/auth/classroom.coursework.me.readonly` | Read user's coursework |
-| `https://www.googleapis.com/auth/classroom.coursework.students.readonly` | Read student coursework where allowed |
-| `openid email profile` | Basic identity |
-
-OAuth endpoints used by code:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `https://accounts.google.com/o/oauth2/v2/auth` | Authorization screen |
-| `https://oauth2.googleapis.com/token` | Exchange/refresh token |
-
-### Microsoft Teams / Microsoft Graph OAuth
-
-| Key | Required | Example | Purpose |
-| --- | --- | --- | --- |
-| `MICROSOFT_OAUTH_CLIENT_ID` | Yes | from Azure App Registration | OAuth client id |
-| `MICROSOFT_OAUTH_CLIENT_SECRET` | Yes | from Azure App Registration | OAuth client secret |
-| `MICROSOFT_OAUTH_TENANT` | No | `common` | Tenant id or `common` |
-| `MICROSOFT_OAUTH_REDIRECT_URI` | Yes | `http://localhost:8000/api/v1/oauth/microsoft_teams/callback` | Must match Azure redirect URI |
-
-Microsoft Graph scopes:
-
-| Value | Purpose |
-| --- | --- |
-| `offline_access` | Get refresh token |
-| `openid email profile` | Basic identity |
-| `https://graph.microsoft.com/User.Read` | Read current user |
-| `https://graph.microsoft.com/EduAssignments.ReadBasic` | Read education assignments |
-| `https://graph.microsoft.com/Team.ReadBasic.All` | Read basic team information |
-
-OAuth endpoints used by code:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize` | Authorization screen |
-| `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token` | Exchange/refresh token |
-
-## 2. API1 Base
+KMAPS provides a REST API for managing users, connected learning platforms, courses, assignments, notifications, and synchronization jobs.
 
 Base URL:
 
@@ -84,68 +10,63 @@ Base URL:
 http://localhost:8000/api/v1
 ```
 
-Auth:
+Swagger UI:
 
-```http
-Authorization: Bearer <access_token>
+```text
+http://localhost:8000/docs
 ```
 
-Response error shape:
+---
+
+# 2. Authentication
+
+KMAPS uses JWT Bearer Authentication.
+
+After login, the client receives:
 
 ```json
 {
-  "detail": "Human readable error"
+  "access_token": "ACCESS_TOKEN",
+  "refresh_token": "REFRESH_TOKEN",
+  "token_type": "bearer"
 }
 ```
 
-## 3. Implemented API1 Endpoints
-
-### Health/root
+Authenticated requests must include:
 
 ```http
-GET /
+Authorization: Bearer <ACCESS_TOKEN>
 ```
 
-Response:
+---
 
-```json
-{
-  "message": "KMAPS API is running"
-}
-```
+# 3. Authentication Endpoints
 
-### Auth
+## Register
 
 ```http
 POST /api/v1/auth/register
 ```
 
-Request:
+Example:
 
 ```json
 {
   "email": "student@example.com",
   "password": "password123",
-  "display_name": "Student Name"
+  "display_name": "Student"
 }
 ```
 
-Response `201`:
+---
 
-```json
-{
-  "id": "uuid",
-  "email": "student@example.com",
-  "display_name": "Student Name",
-  "is_active": true
-}
-```
+## Login
 
 ```http
 POST /api/v1/auth/login
 ```
 
-Request:
+Example:
 
 ```json
 {
@@ -158,278 +79,486 @@ Response:
 
 ```json
 {
-  "access_token": "jwt",
-  "refresh_token": "jwt",
+  "access_token": "jwt-access-token",
+  "refresh_token": "jwt-refresh-token",
   "token_type": "bearer"
 }
 ```
+
+---
+
+## Refresh Token
 
 ```http
 POST /api/v1/auth/refresh
 ```
 
-Request:
+Used to obtain a new access token.
 
-```json
-{
-  "refresh_token": "jwt"
-}
-```
+---
+
+## Current User
 
 ```http
 GET /api/v1/auth/me
 ```
 
-Requires bearer token.
-
-### OAuth onboarding
+Requires:
 
 ```http
-GET /api/v1/oauth/platforms
+Authorization: Bearer <ACCESS_TOKEN>
 ```
 
-Response:
+---
 
-```json
-{
-  "platforms": ["google_classroom", "microsoft_teams"]
-}
-```
+# 4. OAuth
 
-```http
-GET /api/v1/oauth/connections
-```
-
-Requires bearer token.
-
-Response:
-
-```json
-[
-  {
-    "id": "uuid",
-    "platform_id": 1,
-    "platform_name": "google_classroom",
-    "status": "connected",
-    "token_expires_at": "2026-07-20T12:00:00Z",
-    "connected_at": "2026-07-20T11:00:00Z"
-  }
-]
-```
-
-```http
-GET /api/v1/oauth/{platform}/authorize
-```
-
-Requires bearer token.
-
-Supported `platform` values:
+Supported platforms:
 
 ```text
 google_classroom
 microsoft_teams
 ```
 
-Response:
+---
 
-```json
-{
-  "authorization_url": "https://..."
-}
-```
+## Get Supported Platforms
 
 ```http
-GET /api/v1/oauth/{platform}/callback?code=...&state=...
+GET /api/v1/oauth/platforms
 ```
 
-Called by Google/Microsoft. On success redirects to:
+Returns the platforms supported by the system.
+
+---
+
+## Get Connected Platforms
+
+```http
+GET /api/v1/oauth/connections
+```
+
+Requires authentication.
+
+Returns platforms currently connected to the user's account.
+
+---
+
+# 5. Google Classroom OAuth
+
+Authorization:
+
+```http
+GET /api/v1/oauth/google_classroom/authorize
+```
+
+Callback:
+
+```http
+GET /api/v1/oauth/google_classroom/callback
+```
+
+Redirect URI:
 
 ```text
-{FRONTEND_ORIGIN}{FRONTEND_ONBOARDING_SUCCESS_PATH}?platform={platform}
+http://localhost:8000/api/v1/oauth/google_classroom/callback
 ```
 
-On failure redirects to:
+Required environment variables:
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/google_classroom/callback
+```
+
+Google Classroom API must be enabled in Google Cloud Console.
+
+---
+
+# 6. Microsoft Teams OAuth
+
+Authorization:
+
+```http
+GET /api/v1/oauth/microsoft_teams/authorize
+```
+
+Callback:
+
+```http
+GET /api/v1/oauth/microsoft_teams/callback
+```
+
+Redirect URI:
 
 ```text
-{FRONTEND_ORIGIN}{FRONTEND_ONBOARDING_ERROR_PATH}?platform={platform}
+http://localhost:8000/api/v1/oauth/microsoft_teams/callback
 ```
+
+Required environment variables:
+
+```env
+MICROSOFT_OAUTH_CLIENT_ID=
+MICROSOFT_OAUTH_CLIENT_SECRET=
+MICROSOFT_OAUTH_TENANT=common
+MICROSOFT_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/microsoft_teams/callback
+```
+
+Microsoft Graph permissions must be configured in Azure App Registration.
+
+---
+
+# 7. Disconnect Platform
 
 ```http
 DELETE /api/v1/oauth/{platform}
 ```
 
-Requires bearer token. Disconnects a platform.
+Example:
 
-## 4. Proposed API1 Endpoints For Next Build
+```http
+DELETE /api/v1/oauth/google_classroom
+```
 
-These match the existing SQLAlchemy models but still need routers,
-repositories, schemas, and services.
+Requires authentication.
 
-### Dashboard
+---
+
+# 8. Dashboard
+
+## Dashboard Summary
 
 ```http
 GET /api/v1/dashboard/summary
 ```
 
-Response:
+Requires authentication.
 
-```json
-{
-  "total_courses": 5,
-  "total_assignments": 18,
-  "due_soon": 4,
-  "overdue": 2,
-  "connected_platforms": ["google_classroom"]
-}
-```
+The endpoint provides summary information such as:
 
-### Courses
+* Connected platforms
+* Number of courses
+* Number of assignments
+* Assignment status
+* Upcoming assignments
+* Notification information
 
-```http
-GET /api/v1/courses?platform=google_classroom&include_deleted=false
-```
+---
 
-Response:
+# 9. Courses
 
-```json
-[
-  {
-    "id": "uuid",
-    "platform": "google_classroom",
-    "external_course_id": "course-id",
-    "name": "Software Engineering",
-    "is_deleted": false
-  }
-]
-```
-
-### Assignments
+## Get Courses
 
 ```http
-GET /api/v1/assignments?status=overdue&course_id=uuid&due_before=2026-07-31T23:59:59Z
+GET /api/v1/courses
 ```
 
-Response:
+Requires authentication.
 
-```json
-[
-  {
-    "id": "uuid",
-    "course_id": "uuid",
-    "course_name": "Software Engineering",
-    "platform": "google_classroom",
-    "title": "Final Report",
-    "description": "Submit PDF",
-    "due_at": "2026-07-31T23:59:59Z",
-    "source_status": "assigned",
-    "computed_status": "overdue",
-    "source_url": "https://...",
-    "last_synced_at": "2026-07-20T10:00:00Z"
-  }
-]
+Possible filters include:
+
+```text
+platform
 ```
+
+Example:
+
+```text
+GET /api/v1/courses?platform=google_classroom
+```
+
+---
+
+# 10. Assignments
+
+## Get Assignments
+
+```http
+GET /api/v1/assignments
+```
+
+Requires authentication.
+
+Possible filters include:
+
+* Platform
+* Course
+* Status
+* Due date
+
+---
+
+## Get Assignment
 
 ```http
 GET /api/v1/assignments/{assignment_id}
 ```
 
-Returns one assignment owned by the current user.
+Requires authentication.
 
-### Sync
+---
 
-```http
-POST /api/v1/sync
-```
+# 11. Notifications
 
-Request:
-
-```json
-{
-  "platform": "google_classroom"
-}
-```
-
-Response:
-
-```json
-{
-  "job_id": "uuid",
-  "status": "queued"
-}
-```
+## Get Notifications
 
 ```http
-GET /api/v1/sync/{job_id}
+GET /api/v1/notifications
 ```
 
-Response:
+Requires authentication.
 
-```json
-{
-  "job_id": "uuid",
-  "status": "running",
-  "created_at": "2026-07-20T10:00:00Z",
-  "finished_at": null
-}
-```
+---
 
-### Notification settings
-
-```http
-GET /api/v1/notification-settings
-```
-
-```http
-PUT /api/v1/notification-settings
-```
-
-Request:
-
-```json
-{
-  "lead_time_minutes": 60,
-  "new_assignment_enabled": true,
-  "due_soon_enabled": true,
-  "overdue_enabled": true,
-  "channel": "push"
-}
-```
-
-### Notifications
-
-```http
-GET /api/v1/notifications?status=pending
-```
+## Mark Notification as Read
 
 ```http
 POST /api/v1/notifications/{notification_id}/mark-read
 ```
 
-## 5. Setup Checklist
+Requires authentication.
 
-1. Create `.env` in `backend/`.
-2. Start PostgreSQL and Redis with `docker-compose up -d`.
-3. Run migrations.
-4. Run `python -m scripts.seed_platforms`.
-5. Start API with `uvicorn app.main:app --reload`.
-6. Open `http://localhost:8000/docs`.
+---
 
-Minimum `.env` for local development:
+# 12. Notification Settings
+
+## Get Settings
+
+```http
+GET /api/v1/notification-settings
+```
+
+---
+
+## Update Settings
+
+```http
+PUT /api/v1/notification-settings
+```
+
+Example:
+
+```json
+{
+  "due_soon_enabled": true,
+  "overdue_enabled": true
+}
+```
+
+---
+
+# 13. Synchronization
+
+## Start Sync
+
+```http
+POST /api/v1/sync
+```
+
+Starts a synchronization job.
+
+---
+
+## Check Sync Status
+
+```http
+GET /api/v1/sync/{job_id}
+```
+
+Returns information about the synchronization job.
+
+Possible statuses:
+
+```text
+pending
+running
+completed
+failed
+```
+
+---
+
+# 14. Environment Variables
+
+The backend uses:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://kmaps:kmaps@localhost:5432/kmaps_db
-REDIS_URL=redis://localhost:6379/0
-JWT_SECRET_KEY=change-me-to-a-long-random-secret
-TOKEN_ENCRYPTION_KEY=change-me-to-another-long-random-secret
+DATABASE_URL=
+REDIS_URL=
 
-GOOGLE_OAUTH_CLIENT_ID=your-google-client-id
-GOOGLE_OAUTH_CLIENT_SECRET=your-google-client-secret
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/google_classroom/callback
+JWT_SECRET_KEY=
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
 
-MICROSOFT_OAUTH_CLIENT_ID=your-microsoft-client-id
-MICROSOFT_OAUTH_CLIENT_SECRET=your-microsoft-client-secret
+TOKEN_ENCRYPTION_KEY=
+
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=
+
+MICROSOFT_OAUTH_CLIENT_ID=
+MICROSOFT_OAUTH_CLIENT_SECRET=
 MICROSOFT_OAUTH_TENANT=common
-MICROSOFT_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/microsoft_teams/callback
+MICROSOFT_OAUTH_REDIRECT_URI=
 
-FRONTEND_ORIGIN=http://localhost:5173
+FRONTEND_ORIGIN=http://localhost:5500
+FRONTEND_ONBOARDING_SUCCESS_PATH=/onboarding/success
+FRONTEND_ONBOARDING_ERROR_PATH=/onboarding/error
+
+SYNC_INTERVAL_MINUTES=10
+NOTIFICATION_POLL_INTERVAL_SECONDS=60
+TOKEN_REFRESH_LEAD_MINUTES=15
+CACHE_TTL_SECONDS=300
+```
+
+---
+
+# 15. Database
+
+The project uses:
+
+```text
+PostgreSQL
+```
+
+Development database:
+
+```text
+Supabase PostgreSQL
+```
+
+Example:
+
+```env
+DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/postgres?ssl=require
+```
+
+The database credentials must never be committed to GitHub.
+
+---
+
+# 16. Redis
+
+Redis is used for:
+
+* Caching
+* Background jobs
+* Synchronization infrastructure
+
+Example:
+
+```env
+REDIS_URL=redis://localhost:6379/0
+```
+
+---
+
+# 17. JWT Configuration
+
+Example:
+
+```env
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
+```
+
+`JWT_SECRET_KEY` must be a strong random secret.
+
+Generate one:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+---
+
+# 18. Token Encryption
+
+OAuth tokens are encrypted before being stored.
+
+Required:
+
+```env
+TOKEN_ENCRYPTION_KEY=
+```
+
+Generate a secure key:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Do not change the encryption key after tokens have been stored unless existing OAuth connections are intentionally invalidated.
+
+---
+
+# 19. Frontend Configuration
+
+The frontend normally runs at:
+
+```text
+http://localhost:5500
+```
+
+Backend:
+
+```text
+http://localhost:8000
+```
+
+Environment:
+
+```env
+FRONTEND_ORIGIN=http://localhost:5500
+```
+
+---
+
+# 20. API Development Status
+
+## Completed
+
+* Authentication
+* JWT
+* OAuth onboarding
+* Platform connections
+* Dashboard API
+* Course API
+* Assignment API
+* Notification API
+* Notification settings
+* Sync job infrastructure
+
+## In Progress
+
+* Google Classroom synchronization
+* Microsoft Teams synchronization
+* Automatic synchronization
+* Background synchronization
+* Automatic token refresh
+* Notification delivery
+
+---
+
+# 21. API Documentation
+
+The most up-to-date API schema can be viewed through Swagger:
+
+```text
+http://localhost:8000/docs
+```
+
+ReDoc:
+
+```text
+http://localhost:8000/redoc
+```
+
+Repository:
+
+```text
+https://github.com/csongph/MultiPlatform-Assignment-Tracking-and-Notification-System
 ```
