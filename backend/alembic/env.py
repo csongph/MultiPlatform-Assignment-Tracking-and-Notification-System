@@ -19,9 +19,11 @@ config = context.config
 
 # ✅ set sqlalchemy.url จาก settings ทันที ก่อนเรียก offline/online
 # ทำให้ทั้งสองโหมดใช้ค่า URL จาก .env เสมอ ไม่ใช้ placeholder จาก alembic.ini
+# - ตัด +asyncpg ออก เพราะ alembic ใช้ psycopg2 (sync driver)
+# - แปลง ssl=require เป็น sslmode=require เพราะ psycopg2 ไม่รู้จัก "ssl"
 config.set_main_option(
     "sqlalchemy.url",
-    settings.DATABASE_URL.replace("+asyncpg", "")
+    settings.DATABASE_URL.replace("+asyncpg", "").replace("ssl=require", "sslmode=require")
 )
 
 # Interpret the config file for Python logging.
