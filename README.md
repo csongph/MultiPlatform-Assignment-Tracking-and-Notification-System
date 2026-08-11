@@ -1,99 +1,280 @@
-# MultiPlatform-Assignment-Tracking-and-Notification-System
-Thesis Project
+# KMAPS — Multi-Platform Assignment Tracking and Notification System
 
-KMAPS is a FastAPI backend for tracking assignments from multiple learning
-platforms, starting with Google Classroom and Microsoft Teams OAuth onboarding.
+**Thesis Project**
 
-## Current backend features
+KMAPS is a web-based system for tracking assignments from multiple learning platforms in one place.
 
-- Email/password registration and login with JWT access/refresh tokens
-- OAuth onboarding for Google Classroom and Microsoft Teams
-- Connected platform management
-- Dashboard summary API
-- Course and assignment read APIs backed by the local database
-- Notification settings and notification read APIs
-- Sync job placeholder API backed by `sync_logs`
+The system is designed to integrate learning platforms such as:
 
-## คำสั่งรันระบบ
+* Google Classroom
+* Microsoft Teams
 
-# รันอันนี้ก่อน
-# วิธีตั้งค่า Database (Supabase) สำหรับรันโปรเจกต์ KMAPS
+and provide centralized assignment, course, notification, and synchronization management.
 
-## 1. Copy ไฟล์ .env.example เป็น .env
+---
 
-```bash
-cp .env.example .env
-```
+## 🚀 Getting Started
 
-## 2. แก้รหัสผ่านใน .env
+ต้องการติดตั้งและรันโปรเจกต์?
 
-เปิดไฟล์ `.env` แล้วหาบรรทัด `DATABASE_URL` จะเห็นแบบนี้:
+👉 **[ดูคู่มือการติดตั้งและรันระบบ → SETUP.md](SETUP.md)**
 
-```dotenv
-DATABASE_URL=postgresql+asyncpg://postgres.tecthxhgyxsvlpjijenk:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?ssl=require
-```
+คู่มือ `SETUP.md` ครอบคลุม:
 
-ให้แทนที่ `[YOUR-PASSWORD]` ด้วยรหัสผ่าน database จริงที่ได้รับมา (จากเพื่อนในทีม อย่าคอมมิตขึ้น GitHub) เช่น:
+* Clone Repository
+* สร้าง Python Virtual Environment
+* ติดตั้ง Dependencies
+* ตั้งค่า `.env`
+* ตั้งค่า PostgreSQL
+* ตั้งค่า Redis
+* Database Migration
+* Seed Database
+* รัน Backend
+* รัน Frontend
+* ตั้งค่า Google OAuth
+* ตั้งค่า Microsoft OAuth
+* Troubleshooting
 
-```dotenv
-DATABASE_URL=postgresql+asyncpg://postgres.tecthxhgyxsvlpjijenk:xxxxxxxx@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?ssl=require
-```
+---
 
-### หรือใช้คำสั่งเดียวจบ (ไม่ต้องเปิดไฟล์เอง)
+## ✨ Current Features
 
-**Mac:**
-```bash
-cp .env.example .env && sed -i '' 's/\[YOUR-PASSWORD\]/ใส่รหัสจริงตรงนี้/' .env
-```
+### Authentication
 
-**Linux:**
-```bash
-cp .env.example .env && sed -i 's/\[YOUR-PASSWORD\]/ใส่รหัสจริงตรงนี้/' .env
-```
+* User registration
+* User login
+* JWT access token
+* JWT refresh token
+* Current user API
 
-## 3. ติดตั้ง dependencies แล้วรันโปรเจกต์
+### OAuth
 
-```bash
-pip install -r requirements.txt
-```
+* Google Classroom OAuth
+* Microsoft Teams OAuth
+* Connected platform management
+* OAuth token encryption
+* Connect / disconnect platform
 
-จากนั้นรันโปรเจกต์ตามปกติ — ไม่ต้องติดตั้งหรือตั้งค่า Postgres local เอง เพราะทุกคนต่อฐานข้อมูลเดียวกันบน Supabase
+### Dashboard
 
-## ⚠️ ข้อควรระวัง
+* Dashboard summary
+* Course statistics
+* Assignment statistics
+* Connected platform information
 
-- **ห้าม commit ไฟล์ `.env` ขึ้น GitHub เด็ดขาด** (ต้องอยู่ใน `.gitignore` แล้ว)
-- รหัสผ่านที่ได้รับมาคือรหัส database ทั้งโปรเจกต์ ห้ามแชร์ต่อในกลุ่มสาธารณะ
-- ถ้าเชื่อมต่อไม่ได้ ให้เช็คว่า copy รหัสผ่านมาครบ ไม่มีช่องว่างเกิน และ URL ยังมี `?ssl=require` ต่อท้ายอยู่
+### Courses
 
-## Run locally
+* Course API
+* Platform filtering
+* Course information
 
-```powershell
-cd backend
-Copy-Item .env.example .env
-docker-compose up -d
-pip install -r requirements.txt
-alembic upgrade head
-python -m scripts.seed_platforms
-uvicorn app.main:app --reload
-```
+### Assignments
 
-Open:
+* Assignment API
+* Assignment status
+* Due date
+* Course relationship
+* Source URL
+
+### Notifications
+
+* Notification settings
+* Notification list
+* Mark notification as read
+* Due-soon notification configuration
+* Overdue notification configuration
+
+### Synchronization
+
+* Sync job infrastructure
+* Sync logs
+* Redis infrastructure
+* Celery infrastructure
+
+> Full automatic synchronization from Google Classroom and Microsoft Teams is still under development.
+
+---
+
+# 🛠 Technology Stack
+
+| Component       | Technology              |
+| --------------- | ----------------------- |
+| Backend         | Python                  |
+| API Framework   | FastAPI                 |
+| ORM             | SQLAlchemy              |
+| Database        | PostgreSQL              |
+| Migration       | Alembic                 |
+| Cache / Queue   | Redis                   |
+| Background Jobs | Celery                  |
+| Authentication  | JWT                     |
+| OAuth           | Google / Microsoft      |
+| Frontend        | HTML / CSS / JavaScript |
+| API Server      | Uvicorn                 |
+| Testing         | Pytest                  |
+| Container       | Docker / Docker Compose |
+
+---
+
+# 📁 Project Structure
 
 ```text
-http://localhost:8000/docs
+MultiPlatform-Assignment-Tracking-and-Notification-System/
+│
+├── README.md
+├── SETUP.md
+├── API1_DESIGN.md
+├── README_ONBOARDING.md
+├── dashboard_flow.md
+├── System_Capability_Analysis_MultiPlatform_Tracking.md
+│
+├── PROJECT_DOC/
+│
+├── backend/
+│   ├── app/
+│   ├── alembic/
+│   ├── scripts/
+│   ├── tests/
+│   ├── .env.example
+│   ├── docker-compose.yml
+│   └── requirements.txt
+│
+└── frontend/
+    ├── index.html
+    ├── css/
+    ├── js/
+    └── ...
 ```
 
-## API documentation
+---
 
-See `API1_DESIGN.md` for required ENV/API values, provider scopes, and the API1
-endpoint contract.
+# 📚 Documentation
 
-# frontend
-1. d:\PROJECT_KMAPS\MultiPlatform-Assignment-Tracking-and-Notification-System\.venv\Scripts\activate
-2. cd MultiPlatform-Assignment-Tracking-and-Notification-System\frontend
-3. python -m http.server 5500
+| Document                                                                              | Description                                        |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 🚀 [SETUP.md](SETUP.md)                                                               | Installation, configuration and running the system |
+| 📡 [API1_DESIGN.md](API1_DESIGN.md)                                                   | API specification and environment variables        |
+| 🔐 [README_ONBOARDING.md](README_ONBOARDING.md)                                       | OAuth onboarding documentation                     |
+| 📊 [dashboard_flow.md](dashboard_flow.md)                                             | Dashboard flow                                     |
+| 📁 [PROJECT_DOC](PROJECT_DOC/)                                                        | Project documentation                              |
+| 📋 [System Capability Analysis](System_Capability_Analysis_MultiPlatform_Tracking.md) | System capability analysis                         |
 
-# Backend
-1. (Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned) ; (& d:\PROJECT_KMAPS\MultiPlatform-Assignment-Tracking-and-Notification-System\.venv\Scripts\Activate.ps1)
-2. cd MultiPlatform-Assignment-Tracking-and-Notification-System\backend
-3. python -m  uvicorn app.main:app --reload
+---
+
+# 🔗 Quick Links
+
+### Development
+
+* 🚀 **[Installation & Setup](SETUP.md)**
+* 📡 **[API Design](API1_DESIGN.md)**
+* 🔐 **[OAuth Onboarding](README_ONBOARDING.md)**
+
+### Project Documentation
+
+* 📊 **[Dashboard Flow](dashboard_flow.md)**
+* 📁 **[Project Documentation](PROJECT_DOC/)**
+* 📋 **[System Capability Analysis](System_Capability_Analysis_MultiPlatform_Tracking.md)**
+
+---
+
+# 📌 Development Status
+
+## Completed
+
+* [x] User registration
+* [x] User login
+* [x] JWT authentication
+* [x] Refresh token
+* [x] Google Classroom OAuth onboarding
+* [x] Microsoft Teams OAuth onboarding
+* [x] OAuth connection management
+* [x] OAuth token encryption
+* [x] Dashboard API
+* [x] Course API
+* [x] Assignment API
+* [x] Notification settings
+* [x] Notification API
+* [x] Sync job infrastructure
+* [x] PostgreSQL integration
+* [x] Alembic migrations
+* [x] Redis infrastructure
+* [x] Celery infrastructure
+* [x] API documentation
+
+## In Progress
+
+* [ ] Google Classroom synchronization
+* [ ] Microsoft Teams synchronization
+* [ ] Automatic course synchronization
+* [ ] Automatic assignment synchronization
+* [ ] Background synchronization
+* [ ] Automatic OAuth token refresh
+* [ ] Complete notification delivery
+* [ ] Production deployment
+* [ ] Production OAuth configuration
+* [ ] Full frontend integration
+
+---
+
+# 👥 Team Development
+
+สมาชิกในทีมควรสร้าง Feature Branch แยกจาก `main`
+
+ตัวอย่าง:
+
+```bash
+git checkout -b feature/google-classroom-sync
+```
+
+หลังพัฒนาเสร็จ:
+
+```bash
+git add .
+git commit -m "Add Google Classroom sync"
+git push origin feature/google-classroom-sync
+```
+
+จากนั้นสร้าง Pull Request กลับมายัง Repository หลัก
+
+---
+
+# 🔐 Security
+
+**ห้าม Commit ไฟล์ `.env` ขึ้น GitHub**
+
+ไฟล์ที่ควร Commit:
+
+```text
+.env.example
+```
+
+ไฟล์ที่ไม่ควร Commit:
+
+```text
+.env
+```
+
+ห้ามเผยแพร่:
+
+* Database Password
+* JWT Secret
+* Token Encryption Key
+* OAuth Client Secret
+* API Keys
+* Access Tokens
+* Refresh Tokens
+
+---
+
+# 📦 Repository
+
+GitHub:
+
+https://github.com/csongph/MultiPlatform-Assignment-Tracking-and-Notification-System
+
+---
+
+# 🎓 Thesis Project
+
+**KMAPS — Multi-Platform Assignment Tracking and Notification System**
+
+A thesis project for integrating assignment information from multiple learning platforms into a centralized system.
