@@ -25,8 +25,7 @@ and provide centralized assignment, course, notification, and synchronization ma
 * สร้าง Python Virtual Environment
 * ติดตั้ง Dependencies
 * ตั้งค่า `.env`
-* ตั้งค่า PostgreSQL
-* ตั้งค่า Redis
+* เชื่อมต่อฐานข้อมูล Supabase
 * Database Migration
 * Seed Database
 * รัน Backend
@@ -34,6 +33,8 @@ and provide centralized assignment, course, notification, and synchronization ma
 * ตั้งค่า Google OAuth
 * ตั้งค่า Microsoft OAuth
 * Troubleshooting
+
+> **หมายเหตุ:** โปรเจกต์ใช้ PostgreSQL บน Supabase เป็นฐานข้อมูล ไม่จำเป็นต้องติดตั้ง PostgreSQL Local เพื่อใช้งานตามการตั้งค่าปัจจุบันของโปรเจกต์
 
 ---
 
@@ -102,7 +103,7 @@ and provide centralized assignment, course, notification, and synchronization ma
 | Backend         | Python                  |
 | API Framework   | FastAPI                 |
 | ORM             | SQLAlchemy              |
-| Database        | PostgreSQL              |
+| Database        | PostgreSQL / Supabase   |
 | Migration       | Alembic                 |
 | Cache / Queue   | Redis                   |
 | Background Jobs | Celery                  |
@@ -111,7 +112,7 @@ and provide centralized assignment, course, notification, and synchronization ma
 | Frontend        | HTML / CSS / JavaScript |
 | API Server      | Uvicorn                 |
 | Testing         | Pytest                  |
-| Container       | Docker / Docker Compose |
+| Version Control | Git / GitHub            |
 
 ---
 
@@ -135,7 +136,6 @@ MultiPlatform-Assignment-Tracking-and-Notification-System/
 │   ├── scripts/
 │   ├── tests/
 │   ├── .env.example
-│   ├── docker-compose.yml
 │   └── requirements.txt
 │
 └── frontend/
@@ -149,14 +149,16 @@ MultiPlatform-Assignment-Tracking-and-Notification-System/
 
 # 📚 Documentation
 
-| Document                                                                              | Description                                        |
-| ------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| 🚀 [SETUP.md](SETUP.md)                                                               | Installation, configuration and running the system |
-| 📡 [API1_DESIGN.md](API1_DESIGN.md)                                                   | API specification and environment variables        |
-| 🔐 [README_ONBOARDING.md](README_ONBOARDING.md)                                       | OAuth onboarding documentation                     |
-| 📊 [dashboard_flow.md](dashboard_flow.md)                                             | Dashboard flow                                     |
-| 📁 [PROJECT_DOC](PROJECT_DOC/)                                                        | Project documentation                              |
-| 📋 [System Capability Analysis](System_Capability_Analysis_MultiPlatform_Tracking.md) | System capability analysis                         |
+เอกสารประกอบโครงการทั้งหมด:
+
+| **เอกสาร**                                                                            | **คำอธิบาย**                                                                                                                                                   |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🚀 [SETUP.md](SETUP.md)                                                               | คู่มือการติดตั้ง การตั้งค่า และการรันระบบสำหรับนักพัฒนา                                                                                                        |
+| 📡 [API1_DESIGN.md](API1_DESIGN.md)                                                   | เอกสารรายละเอียดโครงสร้าง API Endpoint รูปแบบการเรียกใช้งาน และตัวแปรสภาพแวดล้อมที่ระบบต้องใช้                                                                 |
+| 🔐 [README_ONBOARDING.md](README_ONBOARDING.md)                                       | เอกสารขั้นตอนการเชื่อมต่อแพลตฟอร์มภายนอกผ่าน OAuth เช่น Google Classroom และ Microsoft Teams                                                                   |
+| 📊 [dashboard_flow.md](dashboard_flow.md)                                             | เอกสารอธิบายลำดับการทำงานของ Dashboard การโหลดข้อมูล การแสดงรายวิชา งาน การแจ้งเตือน และการเชื่อมต่อกับ API                                                    |
+| 📁 [PROJECT_DOC](PROJECT_DOC/)                                                        | เอกสารประกอบโครงงาน เช่น การวิเคราะห์ ออกแบบระบบ Requirements และเอกสารทางเทคนิคต่าง ๆ                                                                         |
+| 📋 [System Capability Analysis](System_Capability_Analysis_MultiPlatform_Tracking.md) | เอกสารวิเคราะห์ความสามารถของระบบ ครอบคลุมขอบเขตการทำงาน ความต้องการของระบบ User Flow ฟีเจอร์ การแจ้งเตือน ความปลอดภัย การทดสอบ ความเสี่ยง และแนวทางพัฒนาต่อยอด |
 
 ---
 
@@ -194,7 +196,7 @@ MultiPlatform-Assignment-Tracking-and-Notification-System/
 * [x] Notification settings
 * [x] Notification API
 * [x] Sync job infrastructure
-* [x] PostgreSQL integration
+* [x] PostgreSQL / Supabase integration
 * [x] Alembic migrations
 * [x] Redis infrastructure
 * [x] Celery infrastructure
@@ -235,6 +237,33 @@ git push origin feature/google-classroom-sync
 
 จากนั้นสร้าง Pull Request กลับมายัง Repository หลัก
 
+### อัปเดตโค้ดจาก Repository หลัก
+
+หากทำงานผ่าน Fork ให้เพิ่ม Repository หลักเป็น `upstream`:
+
+```bash
+git remote add upstream https://github.com/csongph/MultiPlatform-Assignment-Tracking-and-Notification-System.git
+```
+
+ตรวจสอบ:
+
+```bash
+git remote -v
+```
+
+ดึงการเปลี่ยนแปลงล่าสุด:
+
+```bash
+git fetch upstream
+```
+
+อัปเดต `main`:
+
+```bash
+git checkout main
+git merge upstream/main
+```
+
 ---
 
 # 🔐 Security
@@ -263,6 +292,225 @@ git push origin feature/google-classroom-sync
 * Access Tokens
 * Refresh Tokens
 
+หาก Secret ถูก Commit ขึ้น GitHub โดยไม่ตั้งใจ ควรเปลี่ยนหรือ Revoke Secret นั้นทันที
+
+---
+
+# 🗄️ Database
+
+โปรเจกต์ใช้:
+
+```text
+PostgreSQL
+```
+
+โดย Development Database ของทีมใช้:
+
+```text
+Supabase PostgreSQL
+```
+
+สมาชิกทีมไม่จำเป็นต้องสร้าง PostgreSQL Database ใหม่สำหรับโปรเจกต์
+
+ให้สร้างไฟล์:
+
+```text
+backend/.env
+```
+
+จาก:
+
+```text
+backend/.env.example
+```
+
+แล้วกำหนด:
+
+```env
+DATABASE_URL=your-supabase-database-url
+```
+
+> ห้ามนำ `DATABASE_URL` ที่มีรหัสผ่านจริงขึ้น GitHub
+
+---
+
+# 📦 Dependencies
+
+Backend Dependencies อยู่ที่:
+
+```text
+backend/requirements.txt
+```
+
+ติดตั้งด้วย:
+
+```bash
+pip install -r requirements.txt
+```
+
+หากมีการเพิ่ม Library ใหม่ ต้องอัปเดต `requirements.txt` ก่อน Commit:
+
+```bash
+pip freeze > requirements.txt
+```
+
+หรือเพิ่มเฉพาะ Package ที่โปรเจกต์ใช้งานจริงตามรูปแบบของทีม
+
+---
+
+# 🧪 Testing
+
+รัน Test จากโฟลเดอร์ `backend`:
+
+```bash
+pytest
+```
+
+หรือ:
+
+```bash
+pytest -v
+```
+
+ระบบควรมีการทดสอบอย่างน้อย:
+
+* Authentication
+* OAuth
+* Course API
+* Assignment API
+* Notification API
+* Sync
+* Database
+* Error Handling
+
+---
+
+# 📡 API Documentation
+
+เมื่อ Backend ทำงานแล้ว สามารถเปิด Swagger UI ได้ที่:
+
+```text
+http://localhost:8000/docs
+```
+
+ReDoc:
+
+```text
+http://localhost:8000/redoc
+```
+
+รายละเอียด API:
+
+👉 **[API1_DESIGN.md](API1_DESIGN.md)**
+
+---
+
+# 🔐 OAuth Onboarding
+
+ระบบรองรับการเชื่อมต่อ:
+
+* Google Classroom
+* Microsoft Teams
+
+รายละเอียดการตั้งค่า OAuth:
+
+👉 **[README_ONBOARDING.md](README_ONBOARDING.md)**
+
+OAuth Flow:
+
+```text
+User
+  │
+  ▼
+KMAPS Frontend
+  │
+  ▼
+KMAPS Backend
+  │
+  ▼
+OAuth Provider
+  │
+  ▼
+Authorization
+  │
+  ▼
+Callback
+  │
+  ▼
+Token Exchange
+  │
+  ▼
+Token Encryption
+  │
+  ▼
+Database
+```
+
+---
+
+# 📊 Dashboard Flow
+
+รายละเอียดการทำงานของ Dashboard:
+
+👉 **[dashboard_flow.md](dashboard_flow.md)**
+
+Flow หลัก:
+
+```text
+Login
+  ↓
+Dashboard
+  ↓
+Load Summary
+  ↓
+Courses / Assignments / Notifications
+  ↓
+Display Dashboard
+```
+
+---
+
+# 📖 System Documentation
+
+เอกสารวิเคราะห์ระบบฉบับเต็ม:
+
+👉 **[System Capability Analysis](System_Capability_Analysis_MultiPlatform_Tracking.md)**
+
+ครอบคลุม:
+
+* System Overview
+* Functional Requirements
+* Non-Functional Requirements
+* User Stories
+* User Flow
+* Feature Matrix
+* Database Design
+* API Design
+* Security
+* Notification Flow
+* Background Jobs
+* Monitoring
+* Error Handling
+* Test Cases
+* Future Features
+* Risk Analysis
+
+---
+
+# 🚧 Future Development
+
+แนวทางพัฒนาระบบในอนาคต:
+
+* Moodle Integration
+* Canvas LMS Integration
+* LINE OA Notification
+* AI Assignment Prioritization
+* Learning Analytics
+* Real-time Webhook
+* Mobile Application
+* Data Export
+* Advanced Notification System
+
 ---
 
 # 📦 Repository
@@ -278,3 +526,5 @@ https://github.com/csongph/MultiPlatform-Assignment-Tracking-and-Notification-Sy
 **KMAPS — Multi-Platform Assignment Tracking and Notification System**
 
 A thesis project for integrating assignment information from multiple learning platforms into a centralized system.
+
+---
