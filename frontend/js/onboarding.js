@@ -1,6 +1,7 @@
 import { getOnboardingStatus, updateOnboardingConnection, connectGoogleClassroom, connectMicrosoft } from './api.js';
 import { requireAuth, logout } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
+import { initNavigation } from './navigation.js';
 
 const providerLabels = {
   google: 'Google Classroom',
@@ -9,6 +10,9 @@ const providerLabels = {
 
 async function init() {
   if (!requireAuth()) return;
+
+  // โหลด Navigation Bar (Sidebar สีม่วง + Topbar สีเขียวมะนาว)
+  initNavigation('overview');
 
   document.getElementById('logout-button')?.addEventListener('click', logout);
 

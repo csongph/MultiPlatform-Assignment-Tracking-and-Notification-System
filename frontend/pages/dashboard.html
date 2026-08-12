@@ -8,25 +8,27 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/navigation.css" />
   <link rel="stylesheet" href="../css/dashboard.css" />
 </head>
 <body class="app-page">
-  <main class="app-shell" role="main">
-    <header class="app-header">
-      <div class="brand-row">
-        <img src="../assets/siet-kmitl.svg" alt="SIET | KMITL" class="brand-logo left" />
-      </div>
-      <div>
-        <p class="app-eyebrow">Assignment dashboard</p>
-        <h1 id="dashboard-title">Welcome to KMAPS</h1>
-        <p id="dashboard-subtitle">Your connected assignment feed is ready.</p>
-      </div>
-      <div class="header-actions">
-        <a class="btn btn-secondary app-link-button" href="onboarding.html">Connections</a>
-        <button type="button" class="btn btn-secondary" id="logout-button">Sign Out</button>
-      </div>
-    </header>
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <div class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <main class="app-shell" role="main" style="width: 100%; max-width: 1200px; padding: 0.5rem 0;">
+        <header class="app-header">
+          <div>
+            <p class="app-eyebrow">Assignment dashboard</p>
+            <h1 id="dashboard-title">Welcome to KMAPS</h1>
+            <p id="dashboard-subtitle">Your connected assignment feed is ready.</p>
+          </div>
+          <div class="header-actions">
+            <a class="btn btn-secondary app-link-button" href="onboarding.html">Connections</a>
+          </div>
+        </header>
 
     <section class="metrics-grid" aria-label="Assignment overview">
       <article class="metric-card metric-due">
@@ -108,6 +110,8 @@
       </div>
     </section>
   </main>
+</div>
+</div>
 
   <script>
     window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';

@@ -8,22 +8,27 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/navigation.css" />
   <link rel="stylesheet" href="../css/admin.css" />
 </head>
 <body class="app-page">
-  <main class="app-shell admin-shell" role="main" style="max-width: 1180px;">
-    <header class="app-header">
-      <div>
-        <p class="app-eyebrow">Administrator</p>
-        <h1 id="admin-title">Admin Console</h1>
-        <p id="admin-subtitle">User, connection, audit, and system oversight for KMAPS.</p>
-      </div>
-      <div class="header-actions">
-        <a class="btn btn-secondary app-link-button" href="dashboard.html">Back to Dashboard</a>
-        <button type="button" class="btn btn-secondary" id="logout-button">Sign Out</button>
-      </div>
-    </header>
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <div class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <main class="app-shell admin-shell" role="main" style="max-width: 1180px; padding-top: 0.5rem;">
+        <header class="app-header">
+          <div>
+            <p class="app-eyebrow">Administrator</p>
+            <h1 id="admin-title">Admin Console</h1>
+            <p id="admin-subtitle">User, connection, audit, and system oversight for KMAPS.</p>
+          </div>
+          <div class="header-actions">
+            <a class="btn btn-secondary app-link-button" href="dashboard.html">Back to Dashboard</a>
+          </div>
+        </header>
 
     <nav class="admin-tabs" role="tablist" aria-label="Admin sections">
       <button class="admin-tab is-active" data-tab="users" role="tab" aria-selected="true">Users &amp; Roles</button>
@@ -237,6 +242,8 @@
       </div>
     </section>
   </main>
+</div>
+</div>
 
   <script>
     window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';

@@ -1,0 +1,363 @@
+/* ==========================================================================
+   KMAPS Navigation System — CSS3 & Tailwind CSS Custom Design Tokens
+   จัดการสไตล์สำหรับ Sidebar สีม่วงเข้ม และ Topbar สีเขียวมะนาวตามภาพตัวอย่าง
+   ========================================================================== */
+
+:root {
+  /* โทนสีม่วงเข้มสำหรับ Sidebar */
+  --sidebar-bg-start: #1e1338;
+  --sidebar-bg-end: #2a1b4e;
+  --sidebar-width: 250px;
+
+  /* โทนสีเขียวมะนาว (Neon/Lime Green) สำหรับ Active Pill & Topbar Badges */
+  --color-lime-active: #b6f520;
+  --color-lime-hover: #c4fb35;
+  --color-lime-text: #0f172a;
+
+  /* ข้อความใน Sidebar เมื่อยังไม่เลือก */
+  --sidebar-text-muted: #a39bb8;
+  --sidebar-text-hover: #ffffff;
+  --sidebar-item-hover-bg: rgba(255, 255, 255, 0.08);
+
+  /* โทนสีพื้นหลังหลักของแอป */
+  --app-content-bg: #e2e5ec;
+}
+
+/* --------------------------------------------------------------------------
+   Layout Structure (โครงสร้างจัดวาง Sidebar ด้านซ้าย และ Topbar ด้านบน)
+   -------------------------------------------------------------------------- */
+.app-viewport-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--app-content-bg);
+  font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+}
+
+/* เลย์เอาต์ส่วน Sidebar */
+.app-sidebar-container {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  padding: 1.25rem 0.75rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* เลย์เอาต์ส่วนพื้นที่ทำงานหลักด้านขวา (Topbar + Content) */
+.app-main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.25rem 1.25rem 1.25rem 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar Component (แถบเมนูด้านซ้าย แบบลอยและมนโค้ง)
+   -------------------------------------------------------------------------- */
+.kmaps-sidebar {
+  background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-end) 100%);
+  border-radius: 1.5rem;
+  height: calc(100vh - 2.5rem);
+  position: sticky;
+  top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1rem;
+  box-shadow: 0 10px 30px rgba(15, 10, 30, 0.35);
+  color: #ffffff;
+  transition: all 0.3s ease;
+  z-index: 40;
+}
+
+/* โลโก้ LMS / KMAPS ด้านบนของ Sidebar */
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 1.5rem;
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  background: linear-gradient(135deg, #7c3aed 0%, #d946ef 100%);
+  border-radius: 1.25rem;
+  box-shadow: 0 0 20px rgba(217, 70, 239, 0.4);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.brand-badge svg {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+/* เมนูหลักรายการใน Sidebar */
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+}
+
+.sidebar-menu-item {
+  width: 100%;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  border-radius: 9999px; /* รูปทรง Pill แบบในรูปภาพ */
+  color: var(--sidebar-text-muted);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.sidebar-link:hover {
+  color: var(--sidebar-text-hover);
+  background: var(--sidebar-item-hover-bg);
+  transform: translateX(3px);
+}
+
+.sidebar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+}
+
+.sidebar-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  stroke-width: 2.2;
+}
+
+/* สเตตัส Active (เมนูที่ถูกเลือกอยู่ - สีเขียวมะนาวเด่นชัด) */
+.sidebar-link.active {
+  background-color: var(--color-lime-active);
+  color: var(--color-lime-text) !important;
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(182, 245, 32, 0.35);
+}
+
+.sidebar-link.active .sidebar-icon svg {
+  stroke: var(--color-lime-text);
+}
+
+/* --------------------------------------------------------------------------
+   Topbar Component (แถบแนวนอนด้านบน ค้นหา + Profile + Logout)
+   -------------------------------------------------------------------------- */
+.kmaps-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding: 0.5rem 0.25rem;
+}
+
+/* ช่องค้นหารายวิชา (Search Bar แบบ Pill มนโค้ง) */
+.topbar-search-container {
+  flex: 1;
+  max-width: 480px;
+  position: relative;
+  margin: 0 auto;
+}
+
+.topbar-search-input {
+  width: 100%;
+  padding: 0.65rem 2.75rem 0.65rem 1.25rem;
+  background-color: #ffffff;
+  border: 1.5px solid #d1d5db;
+  border-radius: 9999px;
+  font-size: 0.9375rem;
+  color: #1f2937;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.topbar-search-input:focus {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+.topbar-search-button {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+}
+
+.topbar-search-button:hover {
+  color: #1f2937;
+}
+
+/* ส่วนแสดง Profile และ ปุ่ม Logout ทางขวามือ */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ป้าย Profile สีเขียวมะนาว */
+.user-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.35rem 1.125rem 0.35rem 0.4rem;
+  background-color: var(--color-lime-active);
+  color: var(--color-lime-text);
+  border-radius: 9999px;
+  font-weight: 600;
+  box-shadow: 0 3px 10px rgba(182, 245, 32, 0.3);
+  text-decoration: none;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.user-profile-badge:hover {
+  background-color: var(--color-lime-hover);
+  transform: translateY(-1px);
+}
+
+.profile-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid rgba(15, 23, 42, 0.15);
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.profile-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.profile-role {
+  font-size: 0.7rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+/* ปุ่ม Logout สีเขียวมะนาวทรงสี่เหลี่ยมโค้ง */
+.topbar-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  background-color: var(--color-lime-active);
+  color: var(--color-lime-text);
+  border: none;
+  border-radius: 0.875rem;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(182, 245, 32, 0.3);
+  transition: all 0.2s ease;
+}
+
+.topbar-logout-btn:hover {
+  background-color: var(--color-lime-hover);
+  transform: translateY(-1px);
+}
+
+.topbar-logout-btn svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  stroke: var(--color-lime-text);
+  stroke-width: 2.5;
+}
+
+/* ปุ่ม Toggle สำหรับมือถือ */
+.mobile-sidebar-toggle {
+  display: none;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Layout (รองรับการใช้งานบนแท็บเล็ตและมือถือ)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .app-sidebar-container {
+    position: fixed;
+    top: 0;
+    left: -100%;
+    height: 100vh;
+    z-index: 50;
+    transition: left 0.3s ease;
+    padding: 0;
+    width: 260px;
+  }
+
+  .app-sidebar-container.open {
+    left: 0;
+  }
+
+  .kmaps-sidebar {
+    height: 100vh;
+    border-radius: 0;
+    top: 0;
+  }
+
+  .app-main-container {
+    padding: 1rem;
+  }
+
+  .mobile-sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .topbar-search-container {
+    max-width: 100%;
+  }
+}

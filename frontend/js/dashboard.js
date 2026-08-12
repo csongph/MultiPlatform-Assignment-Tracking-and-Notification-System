@@ -11,12 +11,23 @@ import {
 } from './api.js';
 import { requireAuth, getSignedInUser, logout } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
+import { initNavigation } from './navigation.js';
 
 let allAssignments = [];
 let connectionsState = {};
+let currentSearchQuery = '';
 
 async function init() {
   if (!requireAuth()) return;
+
+  // โหลด Navigation Bar (Sidebar สีม่วง + Topbar สีเขียวมะนาว)
+  initNavigation('courses');
+
+  // ฟัง Event การค้นหาจาก Topbar
+  window.addEventListener('kmaps-search', (e) => {
+    currentSearchQuery = (e.detail?.query || '').toLowerCase();
+    renderFeed();
+  });
 
   // Setup header events
   document.getElementById('logout-button')?.addEventListener('click', logout);
@@ -151,6 +162,15 @@ function renderFeed() {
   const sortBy = document.getElementById('sort-by')?.value || 'due';
 
   let filtered = [...allAssignments];
+
+  // ค้นหาตามข้อความ Search จาก Topbar
+  if (currentSearchQuery) {
+    filtered = filtered.filter(
+      (a) =>
+        (a.title || '').toLowerCase().includes(currentSearchQuery) ||
+        (a.course || '').toLowerCase().includes(currentSearchQuery)
+    );
+  }
 
   // Filter by platform
   if (platformFilter !== 'all') {

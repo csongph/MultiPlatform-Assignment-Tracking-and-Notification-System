@@ -8,18 +8,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/navigation.css" />
 </head>
 <body class="app-page">
-  <main class="app-shell" role="main">
-    <header class="app-header">
-      <div>
-        <p class="app-eyebrow">KMAPS setup</p>
-        <h1>Connect Your Platforms</h1>
-        <p>Link at least one classroom platform to start tracking assignments.</p>
-      </div>
-      <button type="button" class="btn btn-secondary" id="logout-button">Sign Out</button>
-    </header>
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <div class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <main class="app-shell" role="main" style="width: 100%; max-width: 1120px; padding-top: 0.5rem;">
+        <header class="app-header">
+          <div>
+            <p class="app-eyebrow">KMAPS setup</p>
+            <h1>Connect Your Platforms</h1>
+            <p>Link at least one classroom platform to start tracking assignments.</p>
+          </div>
+        </header>
 
     <section class="setup-grid" aria-label="Platform connection options">
 
@@ -76,6 +81,8 @@
       </a>
     </section>
   </main>
+</div>
+</div>
 
   <script>
     window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';

@@ -15,6 +15,7 @@ import {
 } from './api.js';
 import { getSignedInUser, logout, requireAuth } from './auth.js';
 import { showToast } from './ui.js';
+import { initNavigation } from './navigation.js';
 
 const state = {
   users: { page: 1, total: 0, search: '' },
@@ -23,6 +24,9 @@ const state = {
 
 async function init() {
   if (!requireAuth()) return;
+
+  // โหลด Navigation Bar (Sidebar สีม่วง + Topbar สีเขียวมะนาว)
+  initNavigation('admin');
 
   const user = await getSignedInUser().catch(() => null);
   if (!user || user.role !== 'admin') {
