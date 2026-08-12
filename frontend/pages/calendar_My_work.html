@@ -42,3 +42,141 @@
         </li>
       </ul>
     </aside>
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+      
+      <!-- TOP HEADER -->
+      <header class="top-header">
+        <div class="search-container">
+          <input type="text" class="search-input" placeholder="ค้นหารายวิชา">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        </div>
+
+        <div class="header-right">
+          <div class="user-pill">
+            <div class="avatar">
+              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Kunagron" alt="Avatar">
+            </div>
+            <div class="user-details">
+              <span class="user-name">K.Kunagron</span>
+              <span class="user-role">นักเรียน</span>
+            </div>
+          </div>
+
+          <button class="logout-btn" title="ออกจากระบบ">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- STATS CARDS -->
+      <section class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-title">งานทั้งหมด</span>
+          <span class="stat-value">3</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">ส่งแล้ว</span>
+          <span class="stat-value">1</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">รอดำเนินการ</span>
+          <span class="stat-value">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">อัตราการส่งงาน</span>
+          <span class="stat-value">33.33%</span>
+        </div>
+      </section>
+
+      <!-- CALENDAR BOARD -->
+      <section class="calendar-card">
+        
+        <!-- Controls Header -->
+        <div class="calendar-controls">
+          <button class="nav-arrow" id="prev-month"><i class="fa-solid fa-chevron-left"></i></button>
+          
+          <div class="select-boxes">
+            <select class="custom-select" id="month-select">
+              <option value="Sep" selected>Sep</option>
+              <option value="Oct">Oct</option>
+              <option value="Nov">Nov</option>
+            </select>
+            <select class="custom-select" id="year-select">
+              <option value="2026" selected>2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+
+          <button class="nav-arrow" id="next-month"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+
+        <!-- Grid Dates -->
+        <div class="calendar-grid-wrapper">
+          <div class="weekdays-row">
+            <div>Su</div>
+            <div>Mo</div>
+            <div>Tu</div>
+            <div>We</div>
+            <div>Th</div>
+            <div>Fr</div>
+            <div>Sa</div>
+          </div>
+
+          <div class="days-grid">
+            <!-- Row 1 -->
+            <div class="day-cell"></div>
+            <div class="day-cell">1</div>
+            <div class="day-cell">2</div>
+            <div class="day-cell">3</div>
+            <div class="day-cell">4</div>
+            <div class="day-cell">5</div>
+            <div class="day-cell">6</div>
+
+            <!-- Row 2 -->
+            <div class="day-cell">7</div>
+            <div class="day-cell">8</div>
+            <div class="day-cell"><div class="badge-black">9</div></div>
+            <div class="day-cell">10</div>
+            <div class="day-cell">11</div>
+            <div class="day-cell">12</div>
+            <div class="day-cell"><div class="badge-black">13</div></div>
+
+            <!-- Row 3 -->
+            <div class="day-cell">14</div>
+            <div class="day-cell">15</div>
+            <div class="day-cell">16</div>
+            <div class="day-cell">17</div>
+            <div class="day-cell">18</div>
+            <div class="day-cell">19</div>
+            <div class="day-cell">20</div>
+
+            <!-- Row 4 -->
+            <div class="day-cell">21</div>
+            <div class="day-cell">22</div>
+            <div class="day-cell">23</div>
+            <div class="day-cell">24</div>
+            <div class="day-cell">25</div>
+            <div class="day-cell">26</div>
+            <div class="day-cell">27</div>
+
+            <!-- Row 5 -->
+            <div class="day-cell">28</div>
+            <div class="day-cell">29</div>
+            <div class="day-cell">30</div>
+            <div class="day-cell other-month">1</div>
+            <div class="day-cell other-month">2</div>
+            <div class="day-cell other-month">3</div>
+            <div class="day-cell other-month">4</div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
