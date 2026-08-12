@@ -12,3 +12,119 @@
   <link rel="stylesheet" href="../css/notification.css">
 </head>
 <body>
+    
+    <div class="app-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo-box">
+        <div class="logo-icon">
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span class="logo-text">LMS</span>
+        </div>
+      </div>
+
+      <ul class="menu-list">
+        <li class="menu-item">
+          <a href="dashboard.html"><i class="fa-solid fa-border-all"></i> ภาพรวม</a>
+        </li>
+        <li class="menu-item">
+          <a href="#"><i class="fa-solid fa-book-open"></i> รายวิชา</a>
+        </li>
+        <li class="menu-item">
+          <a href="#"><i class="fa-regular fa-square-check"></i> งานที่ได้รับมอบหมาย</a>
+        </li>
+        <li class="menu-item active">
+          <a href="notification.html">
+            <i class="fa-regular fa-bell"></i> การแจ้งเตือน
+            <span class="menu-badge" id="sidebar-unread-badge">0</span>
+          </a>
+        </li>
+        <li class="menu-item">
+          <a href="calendar_My_work.html"><i class="fa-regular fa-calendar-days"></i> ปฏิทิน</a>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+
+      <!-- TOP HEADER -->
+      <header class="top-header">
+        <div class="search-container">
+          <input type="text" class="search-input" placeholder="ค้นหารายวิชา">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        </div>
+
+        <div class="header-right">
+          <div class="user-pill">
+            <div class="avatar">
+              <img id="user-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Kunagron" alt="Avatar">
+            </div>
+            <div class="user-details">
+              <span class="user-name" id="user-name">K.Kunagron</span>
+              <span class="user-role">นักเรียน</span>
+            </div>
+          </div>
+
+          <button class="logout-btn" id="logout-button" title="ออกจากระบบ">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- STATS CARDS -->
+      <section class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-title">งานทั้งหมด</span>
+          <span class="stat-value" id="stat-total">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">ส่งแล้ว</span>
+          <span class="stat-value" id="stat-submitted">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">รอดำเนินการ</span>
+          <span class="stat-value" id="stat-pending">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">อัตราการส่งงาน</span>
+          <span class="stat-value" id="stat-rate">0%</span>
+        </div>
+      </section>
+
+      <!-- NOTIFICATIONS BOARD -->
+      <section class="notification-card">
+
+        <div class="notification-controls">
+          <div class="notification-tabs" role="tablist" aria-label="กรองการแจ้งเตือน">
+            <button type="button" class="notification-tab active" data-filter="all" role="tab" aria-selected="true">
+              ทั้งหมด <span class="count-pill" id="tab-count-all">0</span>
+            </button>
+            <button type="button" class="notification-tab" data-filter="unread" role="tab" aria-selected="false">
+              ยังไม่อ่าน <span class="count-pill" id="tab-count-unread">0</span>
+            </button>
+          </div>
+
+          <button type="button" class="mark-all-btn" id="mark-all-btn">
+            <i class="fa-solid fa-check-double"></i> ทำเครื่องหมายว่าอ่านทั้งหมด
+          </button>
+        </div>
+
+        <div id="notification-list" class="notification-list">
+          <div class="notification-loading">กำลังโหลดการแจ้งเตือน...</div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <script>
+    window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
+    window.KMAPS_USE_MOCK_API = false;
+  </script>
+  <script type="module" src="../js/notification.js"></script>
+</body>
+</html>
