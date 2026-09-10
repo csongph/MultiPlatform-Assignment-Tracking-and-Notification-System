@@ -1,5 +1,5 @@
 from app.models.base import Base
-from app.models.auth import Role, User, UserRole
+from app.models.auth import PasswordRecoveryToken, Role, User, UserRole
 from app.models.core import (
     Assignment,
     Course,
@@ -15,6 +15,7 @@ __all__ = [
     "Role",
     "User",
     "UserRole",
+    "PasswordRecoveryToken",
     "Platform",
     "OAuthConnection",
     "Course",
@@ -23,4 +24,4 @@ __all__ = [
     "Notification",
     "SyncLog",
     "AuditLog",
-]
+]

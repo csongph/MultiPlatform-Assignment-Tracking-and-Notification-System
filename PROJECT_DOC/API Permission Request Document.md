@@ -1,142 +1,117 @@
-# API Permission Request Document
+# เอกสารคำขอสิทธิ์การใช้งาน API (API Permission Request Document)
 
-## โครงการ
+## ข้อมูลโครงการ
 
-**KMITL Multi-Platform Assignment Tracking and Notification System
-(KMAPS)**
+* **ชื่อโครงการ:** KMITL Multi-Platform Assignment Tracking and Notification System (KMAPS)
+* **ประเภทระบบ:** Web Application (FastAPI Backend + HTML5/CSS3/JS Frontend)
+* **หน่วยงาน/สถาบัน:** สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง (KMITL)
+* **ผู้รับผิดชอบหลัก (Main Backend & Infra):** ชยางกูร สองพิมพ์ (ทีม KMAPS)
+* **ผู้ติดต่อฝ่ายความปลอดภัย/IT:** security@kmitl.ac.th
 
-## 1. วัตถุประสงค์
+---
 
-ระบบ KMAPS ทำหน้าที่รวบรวมข้อมูลจาก Microsoft Teams และ Google Classroom
-เพื่อแสดงงานที่ได้รับมอบหมาย ประกาศ และแจ้งเตือนกำหนดส่งงาน โดยระบบทำงานแบบ
-**Read-only** และไม่มีการแก้ไขข้อมูลบนแพลตฟอร์มต้นทาง
+## 1. วัตถุประสงค์โครงการและขอบเขตการใช้งาน
 
-## 2. Microsoft Graph API (Delegated Permissions)
+ระบบ **KMAPS** ทำหน้าที่รวบรวมข้อมูลรายการงานที่ได้รับมอบหมาย (Assignments), กำหนดส่งงาน (Due dates), และสถานะการส่งงาน จากแพลตฟอร์มการเรียนรู้ออนไลน์ต่างระบบ ได้แก่ **Google Classroom** และ **Microsoft Teams** เพื่อนำมาแสดงผลรวมศูนย์ที่จุดเดียว (Centralized Dashboard) และแจ้งเตือนนักศึกษาล่วงหน้าก่อนถึงกำหนดส่ง
 
-| Permission Identifier | Display Name | Admin Consent | FR | วัตถุประสงค์ |
-|-----------------------|--------------|---------------:|----|---------------|
-| `openid` | Sign users in | ❌ | FR-001, FR-005 | ยืนยันตัวตนผู้ใช้ |
-| `profile` | View users' basic profile | ❌ | FR-005 | อ่านข้อมูลโปรไฟล์ |
-| `email` | View users' email address | ❌ | FR-005 | อ่านอีเมล |
-| `offline_access` | Maintain access to data you have given it access to | ❌ | FR-023, FR-024 | ใช้ Refresh Token |
-| `User.Read` | Sign in and read user profile | ❌ | FR-005 | อ่านข้อมูลผู้ใช้ |
-| `EduAssignments.ReadBasic` | Read users' class assignments without grades | ✅ | FR-010, FR-011 | อ่านข้อมูลงานพื้นฐาน |
-| `EduAssignments.Read` | Read users' class assignments and their grades | ✅ | FR-010, FR-011, FR-012 | อ่านรายละเอียดงานและสถานะ |
-| `EduRoster.Read` | Read the organization's roster | ✅ | FR-008 | อ่านข้อมูลรายวิชา |
-| `Group.Read.All` | Read all groups | ✅ | FR-008 | อ่านข้อมูล Teams |
-| `ChannelMessage.Read.All` | Read all channel messages | ✅* | FR-015 | อ่านประกาศจาก Teams |
-| `Files.Read.All` | Read files in all site collections | ✅* | FR-011 | อ่านไฟล์แนบ |
-| `Sites.Read.All` | Read items in all site collections | ✅* | FR-011 | อ่านข้อมูล SharePoint |
+### หลักการเข้าถึงข้อมูล (Data Access Principles):
+1. **Read-only 100%:** ระบบอ่านเฉพาะข้อมูลรายวิชา งานที่มอบหมาย และสถานะการส่งงานเท่านั้น ไม่มีฟังก์ชันการแก้ไข สร้าง ลบ หรือส่งงานแทนผู้ใช้บนแพลตฟอร์มต้นทาง
+2. **Least Privilege Principle:** ร้องขอเฉพาะ OAuth Scopes และ Delegated Permissions เท่าที่จำเป็นต่อการใช้งานตาม Functional Requirements (FR) เท่านั้น
+3. **User-Centric Data Scope:** ข้อมูลถูกดึงตามสิทธิ์บัญชีของนักศึกษาผู้ล็อกอิน (Delegated User Access) ไม่มีการดึงข้อมูลของผู้อื่นที่ไม่ได้รับอนุญาต
 
-> *ใช้เมื่อระบบรองรับการอ่านประกาศหรือไฟล์แนบ
+---
 
-## 3. Google Classroom API (OAuth Scopes)
+## 2. รายการสิทธิ์ Microsoft Graph API (Delegated Permissions)
 
-| OAuth Scope | FR | วัตถุประสงค์ |
-|-------------|----:|---------------|
-| `openid` | FR-001, FR-004 | ยืนยันตัวตน |
-| `profile` | FR-004 | อ่านข้อมูลโปรไฟล์ |
-| `email` | FR-004 | อ่านอีเมล |
-| `https://www.googleapis.com/auth/classroom.courses.readonly` | FR-008 | อ่านรายวิชา |
-| `https://www.googleapis.com/auth/classroom.coursework.me.readonly` | FR-010, FR-011 | อ่านงาน |
-| `https://www.googleapis.com/auth/classroom.student-submissions.me.readonly` | FR-012 | อ่านสถานะการส่งงาน |
-| `https://www.googleapis.com/auth/classroom.announcements.readonly` | FR-015 | อ่านประกาศ |
+แอปพลิเคชันลงทะเบียนบน **Microsoft Entra ID (Azure AD)** ในรูปแบบ Multi-Tenant (รองรับสถาบันและบัญชีองค์กร) โดยขอสิทธิ์ระดับ Delegated Permissions ดังนี้:
 
-## 4. Mapping Functional Requirements
+| Permission Identifier | Display Name | Admin Consent | อ้างอิง FR | วัตถุประสงค์และเหตุผลการใช้งาน |
+|---|---|:---:|:---:|---|
+| `openid` | Sign users in | ❌ | FR-001, FR-005 | ยืนยันตัวตนผู้ใช้ตามมาตรฐาน OpenID Connect |
+| `profile` | View users' basic profile | ❌ | FR-005 | อ่านชื่อและโปรไฟล์พื้นฐานสำหรับแสดงผลในระบบ |
+| `email` | View users' email address | ❌ | FR-005 | อ่านอีเมลสถาบัน (@kmitl.ac.th) เพื่อระบุตัวตนผู้ใช้ |
+| `offline_access` | Maintain access to data | ❌ | FR-023, FR-024 | ขอ Refresh Token เพื่อซิงก์ข้อมูลการบ้านอัตโนมัติเบื้องหลัง |
+| `User.Read` | Sign in and read user profile | ❌ | FR-005 | อ่านข้อมูลบัญชีผู้ใช้ที่กำลังเข้าสู่ระบบ |
+| `EduAssignments.ReadBasic` | Read users' class assignments without grades | ❌ | FR-010, FR-011 | อ่านหัวข้อการบ้าน คำอธิบาย วันกำหนดส่ง (ไม่รวมเกรด) |
+| `EduAssignments.Read` | Read users' class assignments and their grades | ✅ | FR-010, FR-011, FR-012 | อ่านรายละเอียดงานและสถานะการส่งงานของนักศึกษา |
+| `Team.ReadBasic.All` | Read basic information of teams | ❌ | FR-008 | อ่านชื่อทีม/วิชาที่นักศึกษาเป็นสมาชิกอยู่ |
+| `EduRoster.Read` | Read the organization's roster | ✅ | FR-008 | อ่านข้อมูลรายวิชาและบทบาทสมาชิกในชั้นเรียน |
 
-| FR | Microsoft Graph | Google Classroom |
-|----:|-----------------|------------------|
-| FR-001 | openid, profile, email | openid, profile, email |
-| FR-004 | - | OAuth Scopes ทั้งหมด |
-| FR-005 | openid, profile, email, User.Read | - |
-| FR-008 | EduRoster.Read, Group.Read.All | classroom.courses.readonly |
-| FR-010 | EduAssignments.ReadBasic, EduAssignments.Read | classroom.coursework.me.readonly |
-| FR-011 | EduAssignments.Read | classroom.coursework.me.readonly |
-| FR-012 | EduAssignments.Read | classroom.student-submissions.me.readonly |
-| FR-015 | ChannelMessage.Read.All | classroom.announcements.readonly |
-| FR-019 ถึง FR-021 | EduAssignments.Read | classroom.coursework.me.readonly, classroom.student-submissions.me.readonly |
-| FR-023 | offline_access | Refresh Token |
-| FR-024 | Permission เดิม | Permission เดิม |
+> 📌 **หมายเหตุ:** สิทธิ์กลุ่ม `ChannelMessage.Read.All` และ `Files.Read.All` ถูกตัดออกในเวอร์ชันเปิดตัวแรก (MVP) เพื่อลดความเสี่ยงด้านความเป็นส่วนตัวและไม่ต้องผ่านกระบวนการ Microsoft Protected API Request
 
-## 5. สิทธิ์ที่ไม่ร้องขอ
+---
 
-| ลำดับ | สิทธิ์ที่ไม่ร้องขอ |
-|-------|---------------------|
-| 1 | สร้าง แก้ไข หรือลบ Assignment |
-| 2 | ส่งงานแทนผู้ใช้ |
-| 3 | ให้คะแนน |
-| 4 | โพสต์ข้อความใน Microsoft Teams |
-| 5 | แก้ไขประกาศ |
-| 6 | เข้าถึงอีเมลหรือปฏิทิน |
-| 7 | จัดการสมาชิกของรายวิชา |
+## 3. รายการสิทธิ์ Google Classroom API (OAuth Scopes)
 
-## 6. สรุป
+แอปพลิเคชันขออนุมัติผ่าน **Google Cloud Console OAuth Verification** สำหรับขอบเขตข้อมูลต่อไปนี้:
 
-ระบบใช้เฉพาะ **Delegated Permissions** และ **OAuth Scopes**
-ที่จำเป็นสำหรับการอ่านข้อมูล (Read-only) ตามหลัก Least Privilege Principle
-เพื่อรองรับการรวบรวมข้อมูล การแจ้งเตือน และการซิงโครไนซ์ข้อมูล
-โดยไม่มีการแก้ไขข้อมูลบนแพลตฟอร์มต้นทาง
+| OAuth Scope | ประเภท Scope | อ้างอิง FR | วัตถุประสงค์และเหตุผลการใช้งาน |
+|---|:---:|:---:|---|
+| `openid` | Sensitive | FR-001, FR-004 | ยืนยันตัวตนผ่าน Google Identity Platform |
+| `email` | Sensitive | FR-004 | อ่านอีเมลเพื่อเชื่อมโยงกับบัญชี KMAPS |
+| `profile` | Sensitive | FR-004 | อ่านชื่อและรูปโปรไฟล์ผู้ใช้ |
+| `.../auth/classroom.courses.readonly` | Sensitive | FR-008 | อ่านรายชื่อวิชาที่นักศึกษาลงทะเบียน (ACTIVE) |
+| `.../auth/classroom.coursework.me.readonly` | Sensitive | FR-010, FR-011 | อ่านรายการงาน (courseWork) ในรายวิชาของผู้ใช้ |
+| `.../auth/classroom.student-submissions.me.readonly` | Sensitive | FR-012 | อ่านสถานะการส่งงาน (`TURNED_IN`, `NEW`, `RETURNED`) เฉพาะของตนเอง |
 
-## 7. ข้อเสนอแนะเพิ่มเติม
+---
 
-- ตรวจสอบและระบุการอนุญาตจากผู้ดูแล (Admin consent) ให้ชัดเจนสำหรับสิทธิ์ที่มีเครื่องหมาย ✅ หรือ ✅* และระบุเหตุผลที่ต้องใช้สิทธิ์เหล่านั้น
-- ยืนยันขอบเขตข้อมูล (data scope) ที่ระบบจะอ่าน เช่น ระยะเวลาข้อมูลย้อนหลังที่ต้องการ และชนิดของไฟล์แนบที่จำเป็น
-- เพิ่มนโยบายการเก็บรักษาข้อมูล (data retention) และการลบข้อมูลเมื่อไม่ใช้งาน
-- ระบุวิธีการจัดการ Refresh Token และมาตรการด้านความปลอดภัย (เช่น การเข้ารหัสและการหมุนรอบของ token)
-- กำหนดขั้นตอนการทดสอบ (test plan) ในสภาพแวดล้อมที่จำกัดก่อนขอสิทธิ์จริงในระบบ production
-- ระบุการแจ้งผู้ใช้และการขอความยินยอม (consent screen) ให้ชัดเจนว่าระบบอ่านข้อมูลใดบ้างและเพื่อวัตถุประสงค์ใด
-- หากมีการอ่านประกาศหรือไฟล์แนบ ให้ประเมินผลกระทบด้านความเป็นส่วนตัวและสิทธิ์เข้าถึง SharePoint/Teams
-- ระบุผู้ติดต่อฝ่ายความปลอดภัยหรือผู้ดูแลระบบสำหรับการขอสิทธิ์หรือประเด็นด้านความเป็นส่วนตัว
-- เพิ่มหมายเหตุด้าน localization/ภาษา เพื่อให้ข้อความ consent และ UI เหมาะสมกับผู้ใช้ไทย
+## 4. ตารางจับคู่สิทธิ์กับ Functional Requirements (FR Mapping)
 
-## ภาคผนวก: รายละเอียดเชิงปฏิบัติการและนโยบาย
+| FR ID | รายละเอียดความต้องการระบบ (FR) | Microsoft Graph Permissions | Google Classroom Scopes |
+|:---:|---|---|---|
+| **FR-001** | ระบบต้องรองรับการสมัคร/ล็อกอินผู้ใช้ | `openid`, `profile`, `email` | `openid`, `profile`, `email` |
+| **FR-004** | ระบบต้องรองรับการเชื่อมต่อ Google Classroom | - | Scopes ในข้อ 3 ทั้งหมด |
+| **FR-005** | ระบบต้องรองรับการเชื่อมต่อ Microsoft Teams | `openid`, `profile`, `email`, `User.Read` | - |
+| **FR-008** | ดึงข้อมูลรายวิชา (Courses / Teams) | `Team.ReadBasic.All`, `EduRoster.Read` | `classroom.courses.readonly` |
+| **FR-010** | ดึงรายการงานที่ได้รับมอบหมาย (Assignments) | `EduAssignments.ReadBasic` | `classroom.coursework.me.readonly` |
+| **FR-011** | ดึงรายละเอียดงาน คำอธิบาย และวันกำหนดส่ง | `EduAssignments.ReadBasic`, `EduAssignments.Read` | `classroom.coursework.me.readonly` |
+| **FR-012** | ตรวจสอบสถานะการส่งงานของผู้ใช้ | `EduAssignments.Read` | `classroom.student-submissions.me.readonly` |
+| **FR-023** | ซิงก์ข้อมูลและ Refresh Token เบื้องหลัง | `offline_access` | Access Type: `offline` (Refresh Token) |
+| **FR-024** | รองรับการยกเลิกการเชื่อมต่อแพลตฟอร์ม (Disconnect) | ลบ Token จาก DB / Revoke Session | ลบ Token จาก DB / Revoke Session |
 
-- ผู้ติดต่อฝ่ายความปลอดภัย/ผู้ดูแลระบบ:
-  - ชื่อ: ทีมความปลอดภัยสารสนเทศ KMITL
-  - อีเมล: security@kmitl.ac.th
-  - เบอร์โทรศัพท์: +66-2-xxx-xxxx (ฝ่ายสนับสนุน IT)
+---
 
-- การขอ Admin Consent:
-  - ระบุสิทธิ์ที่ต้องการพร้อมเหตุผลเชิงธุรกิจ และระบุขอบเขต (scope) เช่น เฉพาะ tenant ของสถาบัน
-  - ให้แนบรายการ FR ที่สัมพันธ์กับแต่ละสิทธิ์เพื่อการตรวจสอบความจำเป็น
+## 5. รายการสิทธิ์ที่ไม่ร้องขอ (Explicitly Not Requested)
 
-- ขอบเขตข้อมูล (Data scope):
-  - ช่วงข้อมูลย้อนหลังที่ระบบอ่าน: ค่าเริ่มต้น 1 ปี (สามารถปรับตามความต้องการ)
-  - ประเภทไฟล์แนบที่อ่านได้: เอกสาร (.pdf, .docx, .pptx), รูปภาพ (.jpg, .png)
-  - ข้อยกเว้น: ไฟล์ที่เข้ารหัสหรือมีสิทธิ์พิเศษจะไม่ถูกอ่าน
+เพื่อความโปร่งใสและปฏิบัติตามหลักความเป็นส่วนตัว ระบบ KMAPS **ขอยืนยันว่าจะไม่ขอสิทธิ์** ต่อไปนี้:
 
-- นโยบายการเก็บรักษาข้อมูล (Data retention):
-  - ข้อมูลชั่วคราว (cache): เก็บไม่เกิน 7 วัน
-  - ข้อมูลเชิงดัชนี/เมตาดาต้า: เก็บไม่เกิน 1 ปี
-  - หากผู้ใช้ยกเลิกการอนุญาต ให้ลบข้อมูลผู้ใช้ทั้งหมดภายใน 30 วัน
+1. ❌ ไม่ขอสิทธิ์สร้าง แก้ไข ลบ หรือส่งงานแทนผู้ใช้ (`...coursework.students` แบบ Write)
+2. ❌ ไม่ขอสิทธิ์เข้าถึงหรือแก้ไขเกรดของผู้เรียนท่านอื่น
+3. ❌ ไม่ขอสิทธิ์โพสต์ข้อความหรือสร้างเนื้อหาใน Microsoft Teams หรือ Google Classroom
+4. ❌ ไม่ขอสิทธิ์เข้าถึงรับ-ส่ง อีเมลส่วนตัว (Mail.Read / Gmail API)
+5. ❌ ไม่ขอสิทธิ์เข้าถึงอ่าน/เขียน ไฟล์ใน Google Drive หรือ OneDrive / SharePoint ส่วนตัว
+6. ❌ ไม่ขอสิทธิ์จัดการสมาชิก ผู้สอน หรือผู้เรียนในชั้นเรียน
 
-- การจัดการ Refresh Token และความปลอดภัย:
-  - ใช้การเข้ารหัสที่มาตรฐาน (AES-256) สำหรับการเก็บ token
-  - หมุนรอบ (rotate) Refresh Token เป็นระยะ เช่น ทุก 90 วัน
-  - เก็บ/เข้าถึง token ใน secure vault (เช่น Azure Key Vault)
+---
 
-- แผนการทดสอบ (Test plan) ก่อน production:
-  - จัดสภาพแวดล้อม sandbox/test tenant ของ Microsoft/AWS/Google
-  - ทดสอบกรณีการใช้งานหลัก (login, ดึง assignment, ดึงประกาศ, ตรวจสถานะส่งงาน)
-  - ทดสอบสถานการณ์ error handling และการหมดอายุของ token
+## 6. มาตรการรักษาความปลอดภัยและการจัดการ Token (Security & Token Governance)
 
-- ความเป็นส่วนตัว (Privacy Impact Assessment):
-  - ประเมินข้อมูลที่อ่านว่าเป็น PII หรือไม่ และกำหนดมาตรการปกป้อง
-  - ระบุผู้มีสิทธิ์เข้าถึงข้อมูลภายในระบบ และบันทึกการเข้าถึง (access log)
+1. **การเข้ารหัสข้อมูลขณะจัดเก็บ (Encryption at Rest):**
+   - Access Token และ Refresh Token ของ Google และ Microsoft จะถูกเข้ารหัสด้วย **AES-256 (Fernet Symmetric Encryption)** ก่อนบันทึกลงตาราง `oauth_connections` ใน PostgreSQL (Supabase)
+   - Master Encryption Key ถูกจัดเก็บในสภาพแวดล้อมระบบ (`.env` / Environment Secrets) ไม่ถูกคอมมิตขึ้น Git
+2. **การจัดการเมื่อ Token หมดอายุหรือถูกยกเลิก (Token Revocation & Expiration):**
+   - เมื่อระบบพบ HTTP `401 Unauthorized` หรือ `TokenExpiredError` ระบบจะทำการใช้ Refresh Token เพื่อขอ Access Token ใหม่อัตโนมัติ (`_fetch_with_refresh`)
+   - หากผู้ใช้สั่งถอนสิทธิ์จาก Google/Microsoft Security Dashboard ระบบจะเปลี่ยนสถานะการเชื่อมต่อเป็น `broken` หรือ `disconnected` ทันทีในการซิงก์รอบถัดไป
+3. **นโยบายการเก็บรักษาข้อมูล (Data Retention & PDPA Compliance):**
+   - ข้อมูลการบ้านที่ซิงก์มาจะเก็บไว้ตราบเท่าที่ผู้ใช้ยังคงเชื่อมต่อบัญชีอยู่
+   - หากผู้ใช้กด **"Disconnect Platform"** หรือ **"Delete Account"** ระบบจะทำการ Soft-delete / Hard-delete ข้อมูลการบ้านและลบ OAuth Tokens ทั้งหมดออกจากฐานข้อมูลภายใน 30 วัน
 
-- ข้อความ Consent Screen (ตัวอย่างภาษาไทย):
-  - หัวข้อ: ขออนุญาตเข้าถึงข้อมูลเพื่อการแจ้งเตือนการมอบหมายงาน
-  - รายละเอียด: ระบบ KMAPS จะอ่านข้อมูลโปรไฟล์ รายวิชา งานที่มอบหมาย ประกาศ และสถานะการส่งงานจาก Microsoft Teams และ Google Classroom โดยใช้สิทธิ์ที่จำเป็นเท่านั้นเพื่อแสดงข้อมูลและแจ้งเตือนให้ทราบ ระบบจะไม่แก้ไขหรือส่งงานแทนผู้ใช้
+---
 
-- Localization / UI:
-  - แปลข้อความ consent, ข้อความแจ้งข้อผิดพลาด และ UI เป็นภาษาไทยอย่างเป็นทางการ
-  - ให้มีลิงก์ไปยังนโยบายความเป็นส่วนตัว (ภาษาไทยและอังกฤษ)
+## 7. ลิงก์นโยบายและข้อความขอความยินยอม (Consent Screen & Public Policies)
 
-- หมายเหตุด้านสิทธิ์พิเศษ (Admin-only scopes):
-  - scopes ที่มีเครื่องหมาย ✅ ควรระบุว่าต้องขอ Admin consent และจำกัดเฉพาะ tenant ของสถาบัน
-  - หากเป็นไปได้ ให้ขอสิทธิ์แบบ least-privileged เช่น ขอบเขตการอ่านเฉพาะ site/group ที่จำเป็น
+* **URL นโยบายความเป็นส่วนตัว (Privacy Policy):** `https://kmaps.kmitl.ac.th/privacy`
+* **URL ข้อกำหนดการใช้งาน (Terms of Service):** `https://kmaps.kmitl.ac.th/terms`
+
+### ตัวอย่างข้อความ Consent Screen ภาษาไทย:
+> **ขออนุญาตเข้าถึงข้อมูลการเรียนเพื่อการแจ้งเตือนการมอบหมายงาน (KMAPS)**
+> ระบบ KMAPS ขออนุญาตอ่านข้อมูลรายวิชา รายการงานที่ได้รับมอบหมาย กำหนดส่งงาน และสถานะการส่งงานจากบัญชีของคุณ เพื่อนำมาจัดแสดงบน Dashboard รวมและแจ้งเตือนกำหนดส่งงานผ่านระบบ ระบบทำงานในรูปแบบ **อ่านอย่างเดียว (Read-only)** โดยจะไม่แก้ไข ลบ หรือส่งงานแทนคุณในทุกกรณี
+
+---
 
 ## เอกสารอ้างอิง
 
-- Microsoft Graph permissions reference: https://learn.microsoft.com/graph/permissions-reference
-- Google Classroom API scopes: https://developers.google.com/classroom/guides/auth
+1. Microsoft Graph Permissions Reference: https://learn.microsoft.com/graph/permissions-reference
+2. Google Classroom API Authentication & Scopes: https://developers.google.com/classroom/guides/auth
+3. KMAPS System Capability Analysis Document (System_Capability_Analysis_MultiPlatform_Tracking.md)

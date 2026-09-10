@@ -1,15 +1,14 @@
 from logging.config import fileConfig
+from pathlib import Path
+import sys
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import create_engine  # type: ignore
+from sqlalchemy import pool  # type: ignore
 
 from alembic import context
-import sys
-from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from alembic import context
 from app.core.config import settings
 from app.models import Base
 
@@ -17,14 +16,18 @@ from app.models import Base
 # access to the values within the .ini file in use.
 config = context.config
 
-# ✅ set sqlalchemy.url จาก settings ทันที ก่อนเรียก offline/online
-# ทำให้ทั้งสองโหมดใช้ค่า URL จาก .env เสมอ ไม่ใช้ placeholder จาก alembic.ini
-# - ตัด +asyncpg ออก เพราะ alembic ใช้ psycopg2 (sync driver)
-# - แปลง ssl=require เป็น sslmode=require เพราะ psycopg2 ไม่รู้จัก "ssl"
-config.set_main_option(
-    "sqlalchemy.url",
-    settings.DATABASE_URL.replace("+asyncpg", "").replace("ssl=require", "sslmode=require")
-)
+# ✅ Convert DATABASE_URL from asyncpg format to a psycopg2-compatible URL for Alembic.
+# - Remove the +asyncpg driver prefix.
+# - Remove ?ssl=require because psycopg2 does not support that query string.
+# - Use connect_args={'sslmode': 'require'} inside the engine for Neon PostgreSQL.
+_raw_url = settings.DATABASE_URL.replace("+asyncpg", "")
+if "?ssl=require" in _raw_url:
+    _raw_url = _raw_url.replace("?ssl=require", "")
+    _SYNC_SSL = True
+else:
+    _SYNC_SSL = False
+
+config.set_main_option("sqlalchemy.url", _raw_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -70,19 +73,16 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
+    Use create_engine directly so sslmode=require works correctly with Neon PostgreSQL.
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    url = config.get_main_option("sqlalchemy.url")
+    connect_args = {"sslmode": "require"} if _SYNC_SSL else {}
+    connectable = create_engine(url, poolclass=pool.NullPool, connect_args=connect_args)
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
         )
 
         with context.begin_transaction():
