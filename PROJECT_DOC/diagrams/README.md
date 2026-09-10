@@ -155,8 +155,8 @@ erDiagram
     }
 
     USER_ROLES {
-        uuid user_id PK_FK
-        smallint role_id PK_FK
+        uuid user_id PK, FK
+        smallint role_id PK, FK
     }
 
     PASSWORD_RECOVERY_TOKENS {
@@ -211,7 +211,7 @@ erDiagram
 
     NOTIFICATION_SETTINGS {
         uuid id PK
-        uuid user_id FK_UK
+        uuid user_id FK, UK
         integer lead_time_minutes
         jsonb reminder_intervals
         boolean new_assignment_enabled
