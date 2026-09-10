@@ -1,0 +1,135 @@
+erDiagram
+    USERS ||--o{ USER_ROLES : "assigned_roles"
+    ROLES ||--o{ USER_ROLES : "granted_via"
+
+    USERS ||--o{ PASSWORD_RECOVERY_TOKENS : "has_tokens"
+
+    USERS ||--o{ OAUTH_CONNECTIONS : "authorizes"
+    PLATFORMS ||--o{ OAUTH_CONNECTIONS : "connected_to"
+
+    USERS ||--o{ COURSES : "owns_courses"
+    PLATFORMS ||--o{ COURSES : "origin_platform"
+
+    COURSES ||--o{ ASSIGNMENTS : "contains"
+
+    USERS ||--|| NOTIFICATION_SETTINGS : "configures"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    ASSIGNMENTS ||--o{ NOTIFICATIONS : "triggers"
+
+    USERS ||--o{ SYNC_LOGS : "subject_of"
+    PLATFORMS ||--o{ SYNC_LOGS : "sync_from"
+
+    USERS ||--o{ AUDIT_LOGS : "performed_by"
+
+    USERS {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar display_name
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    ROLES {
+        smallint id PK
+        varchar name UK
+    }
+
+    USER_ROLES {
+        uuid user_id PK_FK
+        smallint role_id PK_FK
+    }
+
+    PASSWORD_RECOVERY_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash
+        timestamptz expires_at
+        boolean is_used
+        timestamptz created_at
+    }
+
+    PLATFORMS {
+        smallint id PK
+        varchar name UK
+    }
+
+    OAUTH_CONNECTIONS {
+        uuid id PK
+        uuid user_id FK
+        smallint platform_id FK
+        text access_token_enc
+        text refresh_token_enc
+        timestamptz token_expires_at
+        varchar status
+        timestamptz connected_at
+    }
+
+    COURSES {
+        uuid id PK
+        uuid user_id FK
+        smallint platform_id FK
+        varchar external_course_id
+        varchar name
+        text description
+        varchar instructor_name
+        boolean is_deleted
+    }
+
+    ASSIGNMENTS {
+        uuid id PK
+        uuid course_id FK
+        varchar external_assignment_id
+        varchar title
+        text description
+        timestamptz due_at
+        varchar source_status
+        varchar computed_status
+        text source_url
+        boolean is_deleted
+        timestamptz last_synced_at
+    }
+
+    NOTIFICATION_SETTINGS {
+        uuid id PK
+        uuid user_id FK_UK
+        integer lead_time_minutes
+        jsonb reminder_intervals
+        boolean new_assignment_enabled
+        boolean due_soon_enabled
+        boolean overdue_enabled
+        varchar channel
+    }
+
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id FK
+        uuid assignment_id FK
+        varchar type
+        smallint tier
+        varchar status
+        smallint retry_count
+        timestamptz scheduled_at
+        timestamptz delivered_at
+    }
+
+    SYNC_LOGS {
+        uuid id PK
+        uuid user_id FK
+        smallint platform_id FK
+        varchar status
+        integer items_synced
+        jsonb error_detail
+        timestamptz started_at
+        timestamptz finished_at
+    }
+
+    AUDIT_LOGS {
+        uuid id PK
+        uuid actor_user_id FK
+        varchar action
+        varchar target
+        jsonb metadata
+        timestamptz created_at
+    }

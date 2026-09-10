@@ -1,0 +1,55 @@
+flowchart LR
+    classDef iam fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef lms fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef task fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    classDef notif fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef ops fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+
+    subgraph G_IAM["1. Identity & Security"]
+        Role["<b>ROLE</b><br/>(บทบาท)"]:::iam
+        User["<b>USER</b><br/>(ผู้ใช้งาน)"]:::iam
+        Recovery["<b>PASSWORD_RECOVERY_TOKEN</b><br/>(กู้คืนรหัสผ่าน)"]:::iam
+    end
+
+    subgraph G_LMS["2. LMS & Course Integration"]
+        Platform["<b>PLATFORM</b><br/>(Google/Teams)"]:::lms
+        OAuth["<b>OAUTH_CONNECTION</b><br/>(Token เชื่อมต่อ)"]:::lms
+        Course["<b>COURSE</b><br/>(รายวิชา)"]:::lms
+        Assignment["<b>ASSIGNMENT</b><br/>(ชิ้นงานกลาง)"]:::lms
+    end
+
+    subgraph G_TASK["3. Personal Task Tracking"]
+        TaskState["<b>USER_TASK_STATE</b><br/>(สถานะงานรายคน)"]:::task
+    end
+
+    subgraph G_NOTIF["4. Tiered Notification Engine"]
+        NotifSetting["<b>NOTIFICATION_SETTING</b><br/>(การตั้งค่าหลัก)"]:::notif
+        IntervalRule["<b>NOTIFICATION_INTERVAL_RULE</b><br/>(กฎช่วงเวลา Tier 1/2/3)"]:::notif
+        NotifDispatch["<b>NOTIFICATION_DISPATCH</b><br/>(ประวัติการแจ้งเตือน)"]:::notif
+    end
+
+    subgraph G_OPS["5. System Observability"]
+        SyncLog["<b>SYNC_LOG</b><br/>(ประวัติการ Sync)"]:::ops
+        AuditLog["<b>AUDIT_LOG</b><br/>(บันทึก Audit Trail)"]:::ops
+    end
+
+    User -->|"1 : N"| Role
+    User -->|"1 : N"| Recovery
+    
+    User -->|"1 : N"| OAuth
+    Platform -->|"1 : N"| OAuth
+    Platform -->|"1 : N"| Course
+    Course -->|"1 : N"| Assignment
+    
+    User -->|"1 : N"| TaskState
+    Assignment -->|"1 : N"| TaskState
+
+    User -->|"1 : 1"| NotifSetting
+    NotifSetting -->|"1 : N"| IntervalRule
+    IntervalRule -.->|"triggers"| NotifDispatch
+    Assignment -.->|"ref"| NotifDispatch
+    User -->|"1 : N"| NotifDispatch
+
+    User -.->|"1 : N"| AuditLog
+    User -.->|"1 : N"| SyncLog
+    Platform -.->|"1 : N"| SyncLog

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Architecture & Diagrams Gallery - MultiPlatform Tracking</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+        .card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        .card h2 { color: #1e40af; margin-top: 0; }
+        .card p { color: #64748b; }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            background: #ffffff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px dashed #cbd5e1;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 แกลเลอรีรูปภาพสถาปัตยกรรมและแบบจำลองระบบ (System Diagrams Gallery)</h1>
+    <p>ดับเบิลคลิกไฟล์นี้เพื่อดูแผนภาพทุกตัวในรูปแบบภาพคมชัดสูง (High Definition Vector)</p>
+
+    <div class="card">
+        <h2>1. แผนภาพปัญหาหลัก (5 Core Pain Points)</h2>
+        <p>ไฟล์: <code>01_core_pain_points.mmd</code></p>
+        <div class="mermaid">
+flowchart LR
+    classDef center fill:#fce4ec,stroke:#c2185b,stroke-width:3px,color:#880e4f;
+    classDef p1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#0d47a1;
+    classDef p2 fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#b71c1c;
+    classDef p3 fill:#fff8e1,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    classDef p4 fill:#ede7f6,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+    classDef p5 fill:#efebe9,stroke:#5d4037,stroke-width:2px,color:#3e2723;
+
+    Root(("<b>5 Core Pain Points</b><br/>ปัญหาหลักของระบบ")):::center
+
+    Root --> P1["<b>1. Digital Fragmentation</b><br/>• Google Classroom vs MS Teams<br/>• ข้อมูลกระจัดกระจาย ไร้ศูนย์กลาง<br/>• Cognitive Overload จากการสลับแอป"]:::p1
+    Root --> P2["<b>2. Silent Missed Deadlines</b><br/>• ไม่เห็นภาพรวม Timeline ทุกวิชา<br/>• งานด่วนถูกกลืนในฟีดประกาศ<br/>• พลาดกำหนดส่งโดยไม่รู้ตัว"]:::p2
+    Root --> P3["<b>3. Rigid & Ineffective Alerting</b><br/>• LMS เตือนครั้งเดียวตอนโพสต์แล้วลืม<br/>• แจ้งเตือนกระชั้นชิดเกินไป<br/>• ขาดการเตือนซ้ำแบบ Escalation"]:::p3
+    Root --> P4["<b>4. Data Coupling & Ambiguity</b><br/>• สับสนระหว่างงานวิชา vs งานตนเอง<br/>• ไม่มี Checklist หรือโน้ตส่วนตัว"]:::p4
+    Root --> P5["<b>5. Admin Blindness</b><br/>• Admin ไม่รู้ว่า Token ใครหลุด<br/>• ไม่รู้ว่า Sync ค้างหรือติด Rate Limit"]:::p5
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>2. แบบจำลองแนวคิดภาพรวมทั้งระบบ (Unified Conceptual Data Model)</h2>
+        <p>ไฟล์: <code>02_unified_conceptual_data_model_cdm.mmd</code></p>
+        <div class="mermaid">
+flowchart LR
+    classDef iam fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef lms fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef task fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    classDef notif fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef ops fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+
+    subgraph G_IAM["1. Identity & Security"]
+        Role["<b>ROLE</b><br/>(บทบาท)"]:::iam
+        User["<b>USER</b><br/>(ผู้ใช้งาน)"]:::iam
+        Recovery["<b>PASSWORD_RECOVERY_TOKEN</b><br/>(กู้คืนรหัสผ่าน)"]:::iam
+    end
+
+    subgraph G_LMS["2. LMS & Course Integration"]
+        Platform["<b>PLATFORM</b><br/>(Google/Teams)"]:::lms
+        OAuth["<b>OAUTH_CONNECTION</b><br/>(Token เชื่อมต่อ)"]:::lms
+        Course["<b>COURSE</b><br/>(รายวิชา)"]:::lms
+        Assignment["<b>ASSIGNMENT</b><br/>(ชิ้นงานกลาง)"]:::lms
+    end
+
+    subgraph G_TASK["3. Personal Task Tracking"]
+        TaskState["<b>USER_TASK_STATE</b><br/>(สถานะงานรายคน)"]:::task
+    end
+
+    subgraph G_NOTIF["4. Tiered Notification Engine"]
+        NotifSetting["<b>NOTIFICATION_SETTING</b><br/>(การตั้งค่าหลัก)"]:::notif
+        IntervalRule["<b>NOTIFICATION_INTERVAL_RULE</b><br/>(กฎช่วงเวลา Tier 1/2/3)"]:::notif
+        NotifDispatch["<b>NOTIFICATION_DISPATCH</b><br/>(ประวัติการแจ้งเตือน)"]:::notif
+    end
+
+    subgraph G_OPS["5. System Observability"]
+        SyncLog["<b>SYNC_LOG</b><br/>(ประวัติการ Sync)"]:::ops
+        AuditLog["<b>AUDIT_LOG</b><br/>(บันทึก Audit Trail)"]:::ops
+    end
+
+    User -->|"1 : N"| Role
+    User -->|"1 : N"| Recovery
+    
+    User -->|"1 : N"| OAuth
+    Platform -->|"1 : N"| OAuth
+    Platform -->|"1 : N"| Course
+    Course -->|"1 : N"| Assignment
+    
+    User -->|"1 : N"| TaskState
+    Assignment -->|"1 : N"| TaskState
+
+    User -->|"1 : 1"| NotifSetting
+    NotifSetting -->|"1 : N"| IntervalRule
+    IntervalRule -.->|"triggers"| NotifDispatch
+    Assignment -.->|"ref"| NotifDispatch
+    User -->|"1 : N"| NotifDispatch
+
+    User -.->|"1 : N"| AuditLog
+    User -.->|"1 : N"| SyncLog
+    Platform -.->|"1 : N"| SyncLog
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>3. แผนภาพฐานข้อมูลจริงทั้ง 12 ตาราง (System-wide Physical ERD)</h2>
+        <p>ไฟล์: <code>14_system_wide_physical_erd_12_tables.mmd</code></p>
+        <div class="mermaid">
+erDiagram
+    USERS ||--o{ USER_ROLES : "assigned_roles"
+    ROLES ||--o{ USER_ROLES : "granted_via"
+
+    USERS ||--o{ PASSWORD_RECOVERY_TOKENS : "has_tokens"
+
+    USERS ||--o{ OAUTH_CONNECTIONS : "authorizes"
+    PLATFORMS ||--o{ OAUTH_CONNECTIONS : "connected_to"
+
+    USERS ||--o{ COURSES : "owns_courses"
+    PLATFORMS ||--o{ COURSES : "origin_platform"
+
+    COURSES ||--o{ ASSIGNMENTS : "contains"
+
+    USERS ||--|| NOTIFICATION_SETTINGS : "configures"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    ASSIGNMENTS ||--o{ NOTIFICATIONS : "triggers"
+
+    USERS ||--o{ SYNC_LOGS : "subject_of"
+    PLATFORMS ||--o{ SYNC_LOGS : "sync_from"
+
+    USERS ||--o{ AUDIT_LOGS : "performed_by"
+
+    USERS {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar display_name
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    ROLES {
+        smallint id PK
+        varchar name UK
+    }
+
+    USER_ROLES {
+        uuid user_id PK_FK
+        smallint role_id PK_FK
+    }
+
+    PASSWORD_RECOVERY_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash
+        timestamptz expires_at
+        boolean is_used
+        timestamptz created_at
+    }
+
+    PLATFORMS {
+        smallint id PK
+        varchar name UK
+    }
+
+    OAUTH_CONNECTIONS {
+        uuid id PK
+        uuid user_id FK
+        smallint platform_id FK
+        text access_token_enc
+        text refresh_token_enc
+        timestamptz token_expires_at
+        varchar status
+        timestamptz connected_at
+    }
+
+    COURSES {
+        uuid id PK
+        uuid user_id FK
+        smallint platform_id FK
+        varchar external_course_id
+        varchar name
+        text description
+        varchar instructor_name
+        boolean is_deleted
+    }
+
+    ASSIGNMENTS {
+        uuid id PK
+        uuid course_id FK
+        varchar external_assignment_id
+        varchar title
+        text description
+        timestamptz due_at
+        varchar source_status
+        varchar computed_status
+        text source_url
+        boolean is_deleted
+        timestamptz last_synced_at
+    }
+
+    NOTIFICATION_SETTINGS {
+        uuid id PK
+        uuid user_id FK_UK
+        integer lead_time_minutes
+        jsonb reminder_intervals
+        boolean new_assignment_enabled
+        boolean due_soon_enabled
+        boolean overdue_enabled
+        varchar channel
+    }
+
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id FK
+        uuid assignment_id FK
+        varchar type
+        smallint tier
+        varchar status
+        smallint retry_count
+        timestamptz scheduled_at
+        timestamptz delivered_at
+    }
+
+    SYNC_LOGS {
+        uuid id PK
+        uuid user_id FK
+        smallint platform_id FK
+        varchar status
+        integer items_synced
+        jsonb error_detail
+        timestamptz started_at
+        timestamptz finished_at
+    }
+
+    AUDIT_LOGS {
+        uuid id PK
+        uuid actor_user_id FK
+        varchar action
+        varchar target
+        jsonb metadata
+        timestamptz created_at
+    }
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>4. สถาปัตยกรรม C4 Container Architecture</h2>
+        <p>ไฟล์: <code>15_c4_container_architecture.mmd</code></p>
+        <div class="mermaid">
+flowchart TB
+    classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef container fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef db fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+    classDef ext fill:#eceff1,stroke:#455a64,stroke-width:2px,color:#263238;
+
+    U_Student["👨‍🎓 <b>Student (ผู้เรียน)</b>"]:::user
+    U_Admin["👨‍💼 <b>Administrator (ผู้ดูแลระบบ)</b>"]:::user
+
+    subgraph AppContainer["ระบบ MultiPlatform Assignment Tracking System"]
+        SPA["<b>Web Application (SPA Frontend)</b><br/>[React / Vite / TypeScript / TailwindCSS]<br/>แสดงผล Dashboard, Task List, Calendar, Admin Panels"]:::container
+        
+        API["<b>Core API Application</b><br/>[FastAPI / Python 3.11 / AsyncIO]<br/>ให้บริการ REST APIs, Authentication, RBAC, Data Orchestration"]:::container
+        
+        Worker_Sync["<b>Sync Engine Worker</b><br/>[Python Background Service / APScheduler]<br/>ดึงข้อมูล LMS Delta-Sync ทุก 10-15 นาที"]:::container
+        
+        Worker_Notif["<b>Notification Dispatcher</b><br/>[Python Cron Worker]<br/>ประมวลผล Multi-tier Queue ทุก 1 นาที"]:::container
+
+        Redis["<b>Cache & Rate Limiter</b><br/>[Redis 7]<br/>Session Storage, Rate Limit Counter, Course Cache 5m"]:::db
+        
+        NeonDB[("<b>Primary Database</b><br/>[Neon Serverless PostgreSQL 16]<br/>จัดเก็บ 12 ตารางข้อมูล และ Encrypted Tokens")]:::db
+    end
+
+    subgraph ExtServices["ระบบและบริการภายนอก (External Integrations)"]
+        GC["<b>Google Classroom API</b><br/>OAuth2, CourseWork Endpoints"]:::ext
+        MS["<b>Microsoft Graph API</b><br/>OAuth2, Education Teams Endpoints"]:::ext
+        SMTP["<b>Email Provider</b><br/>[SMTP / SendGrid API]"]:::ext
+    end
+
+    U_Student & U_Admin -->|"HTTPS / TLS 1.3"| SPA
+    SPA -->|"JSON / REST API (JWT Bearer)"| API
+
+    API -->|"Async Read/Write (SQLAlchemy ORM)"| NeonDB
+    API -->|"Cache Read/Write & Rate Limit Check"| Redis
+    
+    Worker_Sync -->|"Upsert Courses / Assignments / Sync Logs"| NeonDB
+    Worker_Sync -->|"Invalidate Course Cache"| Redis
+    
+    Worker_Notif -->|"Poll Pending Tiers / Update Delivered"| NeonDB
+
+    API -->|"OAuth Authorization Code Flow"| GC & MS
+    Worker_Sync -->|"Fetch Assignments (Encrypted Refresh Token)"| GC & MS
+    Worker_Notif -->|"Send Dispatch Email / Push"| SMTP
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+flowchart TD
+    classDef l1 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+    classDef l2 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
+    classDef l3 fill:#fff8e1,stroke:#f9a825,stroke-width:2px,color:#f57f17;
+    classDef l4 fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f;
+
+    subgraph Layer1["1. Presentation Layer (API Routers & Middleware)"]
+        R_Auth["auth_router.py (Login, Register, Recovery)"]:::l1
+        R_Learn["learning_router.py (Courses, Tasks, Calendar)"]:::l1
+        R_Notif["notifications_router.py (Settings, History)"]:::l1
+        R_Admin["admin_router.py (Connections, Monitoring, Logs)"]:::l1
+        M_Rate["Middleware: RateLimiter & AuditInterceptor"]:::l1
+    end
+
+    subgraph Layer2["2. Application Service Layer (Business Logic)"]
+        S_Auth["AuthService (JWT, Password Hashing, Token TTL)"]:::l2
+        S_Sync["SyncService (Delta Engine, Deduplication)"]:::l2
+        S_Task["TaskService (Status Computation: Overdue/Submitted)"]:::l2
+        S_Notif["NotificationService (Multi-tier Scheduling)"]:::l2
+        S_Admin["AdminService (Health Check, Connection Stats)"]:::l2
+    end
+
+    subgraph Layer3["3. Integration Adapter Layer (External LMS Connectors)"]
+        A_Base["BaseAdapter (Interface)"]:::l3
+        A_GC["GoogleClassroomAdapter (courses.readonly, coursework.readonly)"]:::l3
+        A_MS["MicrosoftTeamsAdapter (education.assignments.readonly)"]:::l3
+    end
+
+    subgraph Layer4["4. Infrastructure & Data Layer (Persistence & Security)"]
+        Repo["Repositories (UserRepository, LearningRepository, SyncRepository)"]:::l4
+        ORM["SQLAlchemy Async ORM Models (12 Tables)"]:::l4
+        Vault["Crypto Vault (AES-256-GCM Token Encryption)"]:::l4
+    end
+
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer2 --> Layer4
+    Layer3 --> Layer4
