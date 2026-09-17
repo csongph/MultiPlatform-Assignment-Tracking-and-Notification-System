@@ -67,6 +67,29 @@ def upgrade() -> None:
         "ON user_assignment_status(user_id, assignment_id) WHERE is_overdue = TRUE"
     )
     op.execute("CREATE INDEX IF NOT EXISTS ix_notifications_notification_rule_id ON notifications(notification_rule_id)")
+    op.execute("""
+        INSERT INTO notification_rules (
+            id, user_id, type, lead_time_minutes, sequence_order, is_enabled, created_at, updated_at
+        )
+        SELECT
+            gen_random_uuid(),
+            users.id,
+            'due_soon',
+            COALESCE(notification_settings.lead_time_minutes, 60),
+            1,
+            TRUE,
+            now(),
+            now()
+        FROM users
+        LEFT JOIN notification_settings ON notification_settings.user_id = users.id
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM notification_rules rules
+            WHERE rules.user_id = users.id
+              AND rules.type = 'due_soon'
+              AND rules.sequence_order = 1
+        )
+    """)
 
 
 def downgrade() -> None:

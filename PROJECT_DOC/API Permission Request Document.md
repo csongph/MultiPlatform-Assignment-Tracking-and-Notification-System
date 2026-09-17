@@ -81,7 +81,7 @@
 1. ❌ ไม่ขอสิทธิ์สร้าง แก้ไข ลบ หรือส่งงานแทนผู้ใช้ (`...coursework.students` แบบ Write)
 2. ❌ ไม่ขอสิทธิ์เข้าถึงหรือแก้ไขเกรดของผู้เรียนท่านอื่น
 3. ❌ ไม่ขอสิทธิ์โพสต์ข้อความหรือสร้างเนื้อหาใน Microsoft Teams หรือ Google Classroom
-4. ❌ ไม่ขอสิทธิ์เข้าถึงรับ-ส่ง อีเมลส่วนตัว (Mail.Read / Gmail API)
+4. ❌ ไม่ขอสิทธิ์อ่านอีเมลส่วนตัวของผู้ใช้ (`Mail.Read`, `gmail.readonly`, `gmail.modify`) ระบบใช้บัญชี Gmail กลางของ KMAPS แยกต่างหาก พร้อมสิทธิ์ `gmail.send` สำหรับส่งข้อความแจ้งเตือนออกจากบัญชีระบบเท่านั้น
 5. ❌ ไม่ขอสิทธิ์เข้าถึงอ่าน/เขียน ไฟล์ใน Google Drive หรือ OneDrive / SharePoint ส่วนตัว
 6. ❌ ไม่ขอสิทธิ์จัดการสมาชิก ผู้สอน หรือผู้เรียนในชั้นเรียน
 
@@ -111,6 +111,16 @@
 > **ขออนุญาตเข้าถึงข้อมูลการเรียนเพื่อการแจ้งเตือนการมอบหมายงาน (KMAPS)**
 > ระบบ KMAPS ขออนุญาตอ่านข้อมูลรายวิชา รายการงานที่ได้รับมอบหมาย กำหนดส่งงาน และสถานะการส่งงานจากบัญชีของคุณ เพื่อนำมาจัดแสดงบน Dashboard รวมและแจ้งเตือนกำหนดส่งงานผ่านระบบ ระบบทำงานในรูปแบบ **อ่านอย่างเดียว (Read-only)** โดยจะไม่แก้ไข ลบ หรือส่งงานแทนคุณบน Google Classroom หรือ Microsoft Teams ในทุกกรณี
 
+### Gmail API สำหรับบัญชีผู้ส่งของระบบ
+
+ระบบใช้ Gmail API จากบัญชี Gmail กลางของ KMAPS เพื่อส่งอีเมลแจ้งเตือนถึงอีเมลที่ผู้ใช้ลงทะเบียนไว้ โดยใช้ OAuth scope ต่อไปนี้กับ **บัญชีผู้ส่งของระบบเพียงบัญชีเดียว**:
+
+| OAuth Scope | วัตถุประสงค์ |
+|---|---|
+| `https://www.googleapis.com/auth/gmail.send` | ส่งอีเมลแจ้งเตือนจากบัญชี Gmail กลางของ KMAPS โดยไม่อ่าน แก้ไข หรือลบอีเมลใน mailbox |
+
+บัญชีผู้ใช้ KMAPS จะไม่ถูกขอ Gmail scope ใด ๆ และ OAuth token ของ Google Classroom จะไม่ถูกนำไปส่งอีเมล
+
 ---
 
 ## เอกสารอ้างอิง
@@ -127,5 +137,20 @@
 - [ ] เผยแพร่ Privacy Policy และ Terms of Service ตาม URL ที่ระบุ
 - [ ] ตรวจ Redirect URI ใน Google Cloud Console และ Microsoft Entra ID ให้ตรงกับ environment ที่ deploy จริง
 - [ ] ตรวจว่า Consent Screen แสดงเฉพาะ scopes ที่ระบุในเอกสารนี้
+- [ ] เปิด Gmail API ใน Google Cloud project สำหรับบัญชีผู้ส่งของ KMAPS
+- [ ] สร้าง OAuth client สำหรับบัญชีผู้ส่ง และขอ `gmail.send` เฉพาะครั้งแรกเพื่อรับ refresh token
+- [ ] เก็บ Gmail sender client secret และ refresh token เป็น environment secret เท่านั้น
+
+### ขั้นตอนตั้งค่า Gmail API ผู้ส่ง (ทำครั้งเดียว)
+
+1. เปิด **Gmail API** ใน Google Cloud project ของ KMAPS
+2. สร้าง OAuth Client สำหรับบัญชี Gmail กลางของระบบ และเพิ่ม Redirect URI `http://localhost:8085` (หรือค่าที่ตั้งใน `GMAIL_SENDER_REDIRECT_URI`)
+3. ใส่ `GMAIL_SENDER_CLIENT_ID` และ `GMAIL_SENDER_CLIENT_SECRET` ใน `backend/.env`
+4. รัน `python -m scripts.gmail_sender_oauth authorize` จากโฟลเดอร์ `backend` แล้วเปิด URL ที่แสดงผลด้วยบัญชี Gmail กลางของ KMAPS
+5. เมื่อ redirect กลับ `http://localhost:8085/?code=...` ให้คัดลอกเฉพาะค่า `code`
+6. รัน `python -m scripts.gmail_sender_oauth exchange "<code>"` แล้วเก็บ refresh token ที่ได้ใน `GMAIL_SENDER_REFRESH_TOKEN`
+7. ตั้ง `GMAIL_SENDER_FROM_EMAIL` ให้เป็นอีเมลเดียวกับบัญชีที่อนุญาต OAuth และ restart API/Celery worker/beat
+
+> Scope `gmail.send` ใช้ส่งเมลออกเท่านั้น แต่เป็น Google restricted scope; ก่อนเปิดใช้ production ต้องประกาศ scope ใน OAuth consent screen และดำเนินการ verification ตามนโยบายของ Google
 - [ ] Microsoft Teams Sync ต้องพัฒนาให้ครบก่อนเปิดปุ่มเชื่อมต่อใน production เนื่องจาก Consent Screen ขอสิทธิ์ Education API ทั้งหมดตามเอกสารนี้
 - [ ] ห้ามเพิ่ม scope ใหม่โดยไม่อัปเดตเอกสาร, API1_DESIGN.md และ code review

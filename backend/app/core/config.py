@@ -31,6 +31,16 @@ class Settings(BaseSettings):
 
     SYNC_INTERVAL_MINUTES: int = 10
     NOTIFICATION_POLL_INTERVAL_SECONDS: int = 60
+    NOTIFICATION_MAX_RETRIES: int = 3
+
+    # Dedicated KMAPS sender account, authorized once with the Gmail API's
+    # gmail.send scope.  This is deliberately separate from student OAuth.
+    GMAIL_SENDER_CLIENT_ID: str = ""
+    GMAIL_SENDER_CLIENT_SECRET: str = ""
+    GMAIL_SENDER_REFRESH_TOKEN: str = ""
+    GMAIL_SENDER_FROM_EMAIL: str = ""
+    GMAIL_SENDER_FROM_NAME: str = "KMAPS Notifications"
+    GMAIL_SENDER_REDIRECT_URI: str = "http://localhost:8085"
     TOKEN_REFRESH_LEAD_MINUTES: int = 15
     CACHE_TTL_SECONDS: int = 300
 

@@ -55,6 +55,32 @@ CREATE INDEX IF NOT EXISTS ix_password_recovery_tokens_token_hash
 -- BLOCK 2: migration a1b2c3d4e5f6 (ใหม่ — missing columns + indexes)
 -- ─────────────────────────────────────────────────────────────────────────────────
 
+-- 2a. ตารางนี้อาจไม่อยู่ใน Neon รุ่นเก่า: สถานะงานเฉพาะบุคคล
+CREATE TABLE IF NOT EXISTS public.user_assignment_status (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.users(id),
+    assignment_id UUID NOT NULL REFERENCES public.assignments(id),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    read_at TIMESTAMPTZ,
+    last_viewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_user_assignment_status UNIQUE (user_id, assignment_id)
+);
+
+-- 2b. ตารางกฎช่วงเวลาแจ้งเตือนของผู้ใช้แต่ละคน
+CREATE TABLE IF NOT EXISTS public.notification_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.users(id),
+    type VARCHAR(20) NOT NULL DEFAULT 'due_soon',
+    lead_time_minutes INTEGER NOT NULL,
+    sequence_order SMALLINT NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_notification_rule_user_type_seq UNIQUE (user_id, type, sequence_order)
+);
+
 -- 2a. เพิ่ม columns ใน user_assignment_status
 ALTER TABLE public.user_assignment_status
     ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ,
@@ -169,17 +195,80 @@ CREATE INDEX IF NOT EXISTS ix_uas_user_overdue
 CREATE INDEX IF NOT EXISTS ix_notifications_notification_rule_id
     ON public.notifications(notification_rule_id);
 
+-- 4e. สร้าง rule เริ่มต้นรอบที่ 1 ให้ผู้ใช้เดิมที่ยังไม่มี
+INSERT INTO public.notification_rules (
+    id, user_id, type, lead_time_minutes, sequence_order, is_enabled, created_at, updated_at
+)
+SELECT
+    gen_random_uuid(),
+    u.id,
+    'due_soon',
+    COALESCE(ns.lead_time_minutes, 60),
+    1,
+    TRUE,
+    now(),
+    now()
+FROM public.users u
+LEFT JOIN public.notification_settings ns ON ns.user_id = u.id
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.notification_rules r
+    WHERE r.user_id = u.id
+      AND r.type = 'due_soon'
+      AND r.sequence_order = 1
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────────
--- BLOCK 5: Sync Alembic revision
+-- BLOCK 5: แสดงช่วงแจ้งเตือนเป็นจำนวน + หน่วยเวลา (day/hour/minute)
+-- lead_time_minutes ยังคงไว้สำหรับ worker คำนวณเวลาเดิม
+-- ─────────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.notification_rules
+    ADD COLUMN IF NOT EXISTS lead_time_value INTEGER,
+    ADD COLUMN IF NOT EXISTS lead_time_unit VARCHAR(10);
+
+UPDATE public.notification_rules
+SET
+    lead_time_value = CASE
+        WHEN lead_time_minutes % 1440 = 0 THEN lead_time_minutes / 1440
+        WHEN lead_time_minutes % 60 = 0 THEN lead_time_minutes / 60
+        ELSE lead_time_minutes
+    END,
+    lead_time_unit = CASE
+        WHEN lead_time_minutes % 1440 = 0 THEN 'day'
+        WHEN lead_time_minutes % 60 = 0 THEN 'hour'
+        ELSE 'minute'
+    END
+WHERE lead_time_value IS NULL OR lead_time_unit IS NULL;
+
+ALTER TABLE public.notification_rules
+    ALTER COLUMN lead_time_value SET NOT NULL,
+    ALTER COLUMN lead_time_unit SET NOT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_notification_rule_time_unit') THEN
+        ALTER TABLE public.notification_rules
+            ADD CONSTRAINT ck_notification_rule_time_unit
+            CHECK (lead_time_unit IN ('day', 'hour', 'minute'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_notification_rule_time_value') THEN
+        ALTER TABLE public.notification_rules
+            ADD CONSTRAINT ck_notification_rule_time_value
+            CHECK (lead_time_value BETWEEN 1 AND 30);
+    END IF;
+END $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- BLOCK 6: Sync Alembic revision
 -- แนะนำ: หลังรัน SQL นี้ ให้รัน `alembic upgrade head` จากเครื่องแทน
 -- เพราะ migration ถูกเขียนให้รันซ้ำได้และ Alembic จะบันทึก revision ให้อัตโนมัติ
 -- ─────────────────────────────────────────────────────────────────────────────────
--- UPDATE public.alembic_version SET version_num = 'b2c3d4e5f6a';
+-- UPDATE public.alembic_version SET version_num = 'c3d4e5f6a7b';
 
 -- ====================================================================================
 -- END OF MIGRATION PATCH
 -- ตรวจสอบผลลัพธ์:
---   SELECT * FROM alembic_version;               → ควรแสดง b2c3d4e5f6a หลังรัน alembic upgrade head
+--   SELECT * FROM alembic_version;               → ควรแสดง c3d4e5f6a7b หลังรัน alembic upgrade head
 --   SELECT column_name FROM information_schema.columns WHERE table_name = 'notification_rules';
 --   SELECT COUNT(*) FROM notification_settings;  → ควรเท่ากับจำนวน users
 -- ====================================================================================

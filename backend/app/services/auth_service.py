@@ -12,7 +12,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import Role, User, UserRole
-from app.models.core import NotificationSettings
+from app.models.core import NotificationRule, NotificationSettings
 from app.repositories.admin_repository import AuditLogRepository
 from app.schemas.auth import RegisterRequest
 
@@ -61,6 +61,17 @@ async def register_user(db: AsyncSession, data: RegisterRequest) -> User:
         due_soon_enabled=True,         # แจ้งก่อนถึงกำหนด
         overdue_enabled=True,          # แจ้งเมื่อเลยกำหนด
         channel="push",                # ช่องทาง push notification
+    ))
+    # Default rule keeps the notification pipeline useful immediately while
+    # allowing the user to add/edit later rules through Notification Rules API.
+    db.add(NotificationRule(
+        user_id=user.id,
+        type="due_soon",
+        lead_time_value=1,
+        lead_time_unit="hour",
+        lead_time_minutes=60,
+        sequence_order=1,
+        is_enabled=True,
     ))
 
     await db.commit()

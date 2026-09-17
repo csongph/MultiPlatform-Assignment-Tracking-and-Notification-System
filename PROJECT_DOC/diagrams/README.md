@@ -283,7 +283,7 @@ flowchart TB
     subgraph ExtServices["ระบบและบริการภายนอก (External Integrations)"]
         GC["<b>Google Classroom API</b><br/>OAuth2, CourseWork Endpoints"]:::ext
         MS["<b>Microsoft Graph API</b><br/>OAuth2, Education Teams Endpoints"]:::ext
-        SMTP["<b>Email Provider</b><br/>[SMTP / SendGrid API]"]:::ext
+        GmailAPI["<b>Email Provider</b><br/>[Gmail API / gmail.send]"]:::ext
     end
 
     U_Student & U_Admin -->|"HTTPS / TLS 1.3"| SPA
@@ -299,7 +299,7 @@ flowchart TB
 
     API -->|"OAuth Authorization Code Flow"| GC & MS
     Worker_Sync -->|"Fetch Assignments (Encrypted Refresh Token)"| GC & MS
-    Worker_Notif -->|"Send Dispatch Email / Push"| SMTP
+    Worker_Notif -->|"Send Email Notification"| GmailAPI
 ```
 
 ---

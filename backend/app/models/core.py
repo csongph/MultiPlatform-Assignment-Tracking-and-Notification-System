@@ -129,6 +129,8 @@ class NotificationRule(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     type: Mapped[str] = mapped_column(String(20), default="due_soon", nullable=False)
+    lead_time_value: Mapped[int] = mapped_column(Integer, nullable=False)
+    lead_time_unit: Mapped[str] = mapped_column(String(10), nullable=False)  # day/hour/minute
     lead_time_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     sequence_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

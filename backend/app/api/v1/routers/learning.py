@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user, get_db
@@ -12,6 +12,9 @@ from app.schemas.learning import (
     CourseOut,
     DashboardSummary,
     NotificationOut,
+    NotificationRuleCreate,
+    NotificationRuleOut,
+    NotificationRuleUpdate,
     NotificationSettingsOut,
     NotificationSettingsUpdate,
     SyncJobOut,
@@ -88,6 +91,54 @@ async def update_notification_settings(
     db: AsyncSession = Depends(get_db),
 ):
     return await LearningService(db).update_notification_settings(current_user.id, payload)
+
+
+@router.get("/notification-rules", response_model=list[NotificationRuleOut])
+async def list_notification_rules(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await LearningService(db).list_notification_rules(current_user.id)
+
+
+@router.post("/notification-rules", response_model=NotificationRuleOut, status_code=status.HTTP_201_CREATED)
+async def create_notification_rule(
+    payload: NotificationRuleCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await LearningService(db).create_notification_rule(current_user.id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.patch("/notification-rules/{rule_id}", response_model=NotificationRuleOut)
+async def update_notification_rule(
+    rule_id: uuid.UUID,
+    payload: NotificationRuleUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await LearningService(db).update_notification_rule(current_user.id, rule_id, payload)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/notification-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_notification_rule(
+    rule_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await LearningService(db).delete_notification_rule(current_user.id, rule_id)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/notifications", response_model=list[NotificationOut])
