@@ -84,7 +84,7 @@ export class SidebarComponent {
 
     const menuItems = [
       { key: 'overview', label: 'ภาพรวม', href: 'dashboard.html', icon: this.getOverviewIcon() },
-      { key: 'courses', label: 'รายวิชา', href: 'dashboard.html#courses', icon: this.getCoursesIcon() },
+      { key: 'courses', label: 'รายวิชา', href: 'courses.html', icon: this.getCoursesIcon() },
       { key: 'submissions', label: 'การส่งงาน', href: 'dashboard.html#submissions', icon: this.getSubmissionsIcon() },
       { key: 'notifications', label: 'การแจ้งเตือน', href: 'dashboard.html#notifications', icon: this.getNotificationsIcon() },
       { key: 'calendar', label: 'ปฏิทิน', href: 'dashboard.html#calendar', icon: this.getCalendarIcon() },

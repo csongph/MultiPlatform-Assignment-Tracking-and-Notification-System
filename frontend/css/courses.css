@@ -1,0 +1,288 @@
+/* ==========================================================================
+   KMAPS Courses Page — CSS3 Design Tokens & Styles
+   สไตล์สำหรับการ์ดรายวิชา (Course Cards), แถบกรองแพลตฟอร์ม (Platform Filter)
+   และตัวเลขสถิติ (Stat Overview) ตรงตาม UI Reference / Figma
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Stat Summary Cards Grid (การ์ดสรุปสถิติ 4 ช่องด้านบน)
+   -------------------------------------------------------------------------- */
+.courses-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 640px) {
+  .courses-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .courses-stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.course-stat-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.course-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+}
+
+.course-stat-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 0.5rem;
+}
+
+.course-stat-value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.1;
+  font-family: 'Outfit', sans-serif;
+}
+
+/* --------------------------------------------------------------------------
+   2. Platform Filter Toolbar (แถบตัวกรองแพลตฟอร์ม)
+   -------------------------------------------------------------------------- */
+.platform-filter-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+  background: #ffffff;
+  padding: 0.85rem 1.25rem;
+  border-radius: 1.25rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.filter-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.platform-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+/* ปุ่มตัวเลือกแพลตฟอร์ม (Filter Chip Button) */
+.platform-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  background-color: #f1f5f9;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.platform-chip-btn:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+/* สถานะเมื่อปุ่มถูกเลือก (Active Filter State) */
+.platform-chip-btn.active-all {
+  background-color: #1e1338;
+  color: #ffffff;
+  border-color: #1e1338;
+  box-shadow: 0 4px 12px rgba(30, 19, 56, 0.2);
+}
+
+.platform-chip-btn.active-google {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-color: #f59e0b;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.platform-chip-btn.active-microsoft {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+  border-color: #9333ea;
+  box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   3. Course Cards Grid Layout (ตารางการ์ดรายวิชา)
+   -------------------------------------------------------------------------- */
+.courses-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .courses-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .courses-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. Course Card Component (การ์ดรายวิชาตรงตาม UI Reference)
+   -------------------------------------------------------------------------- */
+.course-card {
+  background-color: #ffffff;
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(241, 245, 249, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  min-height: 180px;
+}
+
+.course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+/* แถบส่วนบนของการ์ด: ไอคอนแพลตฟอร์มซ้าย + Badge วงกลมแดงขวา */
+.course-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+/* วงกลมไอคอนแพลตฟอร์ม (Google Classroom / Microsoft Teams) */
+.platform-badge-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.platform-badge-icon.google {
+  background-color: #fffbeb;
+  border: 2px solid #fde68a;
+}
+
+.platform-badge-icon.microsoft {
+  background-color: #f5f3ff;
+  border: 2px solid #ddd6fe;
+}
+
+/* Badge แจ้งเตือนงานค้าง วงกลมสีแดงสด */
+.pending-badge {
+  width: 1.75rem;
+  height: 1.75rem;
+  background-color: #ef4444;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+}
+
+/* ส่วนเนื้อหาในการ์ด */
+.course-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.course-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.course-card-code {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  margin: 0;
+}
+
+.course-card-instructor {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   5. Empty State (กรณีไม่พบรายวิชา)
+   -------------------------------------------------------------------------- */
+.courses-empty-state {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border-radius: 1.25rem;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  color: #64748b;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  border: 1px dashed #cbd5e1;
+}
+
+.empty-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 auto 1rem;
+  color: #94a3b8;
+}
+
+.empty-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.empty-description {
+  font-size: 0.9rem;
+  color: #64748b;
+}
