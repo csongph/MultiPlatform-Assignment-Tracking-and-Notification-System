@@ -4,9 +4,11 @@ from app.models.core import (
     Assignment,
     Course,
     Notification,
+    NotificationRule,
     NotificationSettings,
     OAuthConnection,
     Platform,
+    UserAssignmentStatus,
 )
 from app.models.logs import AuditLog, SyncLog
 
@@ -20,8 +22,10 @@ __all__ = [
     "OAuthConnection",
     "Course",
     "Assignment",
+    "UserAssignmentStatus",
+    "NotificationRule",
     "NotificationSettings",
     "Notification",
     "SyncLog",
     "AuditLog",
-]
+]

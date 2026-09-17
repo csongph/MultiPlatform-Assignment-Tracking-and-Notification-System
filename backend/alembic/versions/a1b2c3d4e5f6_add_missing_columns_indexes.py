@@ -8,8 +8,6 @@ Create Date: 2026-09-01 08:25:00.000000
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'a1b2c3d4e5f6'
@@ -19,107 +17,66 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ─────────────────────────────────────────────────────────────────
-    # 1. user_assignment_status — เพิ่ม columns ที่ ORM มีแต่ DB ยังไม่มี
-    # ─────────────────────────────────────────────────────────────────
-    op.add_column(
-        'user_assignment_status',
-        sa.Column('read_at', sa.DateTime(timezone=True), nullable=True)
-    )
-    op.add_column(
-        'user_assignment_status',
-        sa.Column('last_viewed_at', sa.DateTime(timezone=True), nullable=True)
-    )
-    op.add_column(
-        'user_assignment_status',
-        sa.Column(
-            'created_at',
-            sa.DateTime(timezone=True),
-            server_default=sa.text('now()'),
-            nullable=False
+    # This revision originally assumed that two tables were created by an
+    # untracked migration.  Make a clean `alembic upgrade head` reliable by
+    # creating the missing tables and then applying every additive change
+    # idempotently.  Existing Neon databases already at this revision are
+    # unaffected because Alembic will not run it again.
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS user_assignment_status (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id),
+            assignment_id UUID NOT NULL REFERENCES assignments(id),
+            is_read BOOLEAN NOT NULL DEFAULT FALSE,
+            read_at TIMESTAMPTZ,
+            last_viewed_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CONSTRAINT uq_user_assignment_status UNIQUE (user_id, assignment_id)
         )
-    )
-    op.add_column(
-        'user_assignment_status',
-        sa.Column(
-            'updated_at',
-            sa.DateTime(timezone=True),
-            server_default=sa.text('now()'),
-            nullable=False
+    """)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS notification_rules (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id),
+            type VARCHAR(20) NOT NULL DEFAULT 'due_soon',
+            lead_time_minutes INTEGER NOT NULL,
+            sequence_order SMALLINT NOT NULL,
+            is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CONSTRAINT uq_notification_rule_user_type_seq
+                UNIQUE (user_id, type, sequence_order)
         )
-    )
+    """)
 
-    # ─────────────────────────────────────────────────────────────────
-    # 2. notification_rules — เพิ่ม columns + unique constraint
-    # ─────────────────────────────────────────────────────────────────
-    op.add_column(
-        'notification_rules',
-        sa.Column('type', sa.String(length=20), server_default='due_soon', nullable=False)
-    )
-    op.add_column(
-        'notification_rules',
-        sa.Column(
-            'created_at',
-            sa.DateTime(timezone=True),
-            server_default=sa.text('now()'),
-            nullable=False
-        )
-    )
-    op.add_column(
-        'notification_rules',
-        sa.Column(
-            'updated_at',
-            sa.DateTime(timezone=True),
-            server_default=sa.text('now()'),
-            nullable=False
-        )
-    )
-    # เพิ่ม unique constraint ป้องกัน duplicate rules ต่อ user+type+order
-    op.create_unique_constraint(
-        'uq_notification_rule_user_type_seq',
-        'notification_rules',
-        ['user_id', 'type', 'sequence_order']
-    )
+    op.execute("ALTER TABLE user_assignment_status ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ")
+    op.execute("ALTER TABLE user_assignment_status ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMPTZ")
+    op.execute("ALTER TABLE user_assignment_status ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()")
+    op.execute("ALTER TABLE user_assignment_status ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()")
+    op.execute("ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'due_soon'")
+    op.execute("ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()")
+    op.execute("ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()")
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'uq_notification_rule_user_type_seq'
+            ) THEN
+                ALTER TABLE notification_rules
+                    ADD CONSTRAINT uq_notification_rule_user_type_seq
+                    UNIQUE (user_id, type, sequence_order);
+            END IF;
+        END $$;
+    """)
 
-    # ─────────────────────────────────────────────────────────────────
-    # 3. Performance Indexes บน user_id ของตารางที่ query บ่อย
-    # ─────────────────────────────────────────────────────────────────
-    op.create_index(
-        'ix_notifications_user_id',
-        'notifications',
-        ['user_id'],
-        unique=False
-    )
-    op.create_index(
-        'ix_courses_user_id',
-        'courses',
-        ['user_id'],
-        unique=False
-    )
-    op.create_index(
-        'ix_uas_user_id',
-        'user_assignment_status',
-        ['user_id'],
-        unique=False
-    )
-    op.create_index(
-        'ix_uas_assignment_id',
-        'user_assignment_status',
-        ['assignment_id'],
-        unique=False
-    )
-    op.create_index(
-        'ix_oauth_connections_user_id',
-        'oauth_connections',
-        ['user_id'],
-        unique=False
-    )
-    op.create_index(
-        'ix_sync_logs_user_id',
-        'sync_logs',
-        ['user_id'],
-        unique=False
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_notifications_user_id ON notifications(user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_courses_user_id ON courses(user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_uas_user_id ON user_assignment_status(user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_uas_assignment_id ON user_assignment_status(assignment_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_oauth_connections_user_id ON oauth_connections(user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_sync_logs_user_id ON sync_logs(user_id)")
 
 
 def downgrade() -> None:

@@ -15,7 +15,9 @@ SCOPES = [
     "profile",
     "https://graph.microsoft.com/User.Read",
     "https://graph.microsoft.com/EduAssignments.ReadBasic",
+    "https://graph.microsoft.com/EduAssignments.Read",
     "https://graph.microsoft.com/Team.ReadBasic.All",
+    "https://graph.microsoft.com/EduRoster.Read",
 ]
 
 

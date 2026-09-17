@@ -1,5 +1,5 @@
 -- ====================================================================================
--- FULL MIGRATION PATCH v2 — รวมทุก migration ที่ยังค้างอยู่
+-- FULL MIGRATION PATCH v3 — รวมทุก migration ที่ยังค้างอยู่
 -- Project: MultiPlatform Assignment Tracking and Notification System
 -- รันไฟล์นี้บน Neon SQL Console หรือ Supabase SQL Editor
 -- ====================================================================================
@@ -95,13 +95,7 @@ CREATE INDEX IF NOT EXISTS ix_sync_logs_user_id
     ON public.sync_logs(user_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────────
--- BLOCK 3: อัพเดต alembic_version ให้ตรงกับ migration head ล่าสุด
--- ─────────────────────────────────────────────────────────────────────────────────
--- (รันหลังจาก BLOCK 1 และ 2 ผ่านทั้งหมด)
-UPDATE public.alembic_version SET version_num = 'a1b2c3d4e5f6';
-
--- ─────────────────────────────────────────────────────────────────────────────────
--- BLOCK 4: Backfill notification_settings สำหรับ users ที่ยังไม่มี (existing users)
+-- BLOCK 3: Backfill notification_settings สำหรับ users ที่ยังไม่มี (existing users)
 -- ─────────────────────────────────────────────────────────────────────────────────
 INSERT INTO public.notification_settings (id, user_id, lead_time_minutes, new_assignment_enabled, due_soon_enabled, overdue_enabled, channel)
 SELECT 
@@ -118,10 +112,74 @@ WHERE NOT EXISTS (
 )
 ON CONFLICT DO NOTHING;
 
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- BLOCK 4: migration b2c3d4e5f6a — สถานะงานรายบุคคลและการเชื่อม Notification Rule
+-- ─────────────────────────────────────────────────────────────────────────────────
+
+-- 4a. รหัสรายวิชา
+ALTER TABLE public.courses
+    ADD COLUMN IF NOT EXISTS course_code VARCHAR(50);
+
+-- 4b. สถานะ Assignment เฉพาะผู้ใช้
+ALTER TABLE public.user_assignment_status
+    ADD COLUMN IF NOT EXISTS submitted BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS is_overdue BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS personal_note TEXT;
+
+-- submitted_at จะมีค่าได้ต่อเมื่อผู้ใช้ส่งงานแล้วเท่านั้น
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'ck_user_assignment_submission_time'
+    ) THEN
+        ALTER TABLE public.user_assignment_status
+        ADD CONSTRAINT ck_user_assignment_submission_time
+        CHECK (submitted = TRUE OR submitted_at IS NULL);
+    END IF;
+END $$;
+
+-- 4c. เชื่อม Notification กับ Notification Rule ที่ทำให้เกิดการแจ้งเตือน
+ALTER TABLE public.notifications
+    ADD COLUMN IF NOT EXISTS notification_rule_id UUID;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'notifications_rule_id_fkey'
+    ) THEN
+        ALTER TABLE public.notifications
+        ADD CONSTRAINT notifications_rule_id_fkey
+        FOREIGN KEY (notification_rule_id)
+        REFERENCES public.notification_rules(id);
+    END IF;
+END $$;
+
+-- 4d. Index สำหรับ Dashboard, Task Tracking และ Notification Worker
+CREATE INDEX IF NOT EXISTS ix_uas_user_pending
+    ON public.user_assignment_status(user_id, assignment_id)
+    WHERE submitted = FALSE;
+
+CREATE INDEX IF NOT EXISTS ix_uas_user_overdue
+    ON public.user_assignment_status(user_id, assignment_id)
+    WHERE is_overdue = TRUE;
+
+CREATE INDEX IF NOT EXISTS ix_notifications_notification_rule_id
+    ON public.notifications(notification_rule_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- BLOCK 5: Sync Alembic revision
+-- แนะนำ: หลังรัน SQL นี้ ให้รัน `alembic upgrade head` จากเครื่องแทน
+-- เพราะ migration ถูกเขียนให้รันซ้ำได้และ Alembic จะบันทึก revision ให้อัตโนมัติ
+-- ─────────────────────────────────────────────────────────────────────────────────
+-- UPDATE public.alembic_version SET version_num = 'b2c3d4e5f6a';
+
 -- ====================================================================================
 -- END OF MIGRATION PATCH
 -- ตรวจสอบผลลัพธ์:
---   SELECT * FROM alembic_version;               → ควรแสดง a1b2c3d4e5f6
+--   SELECT * FROM alembic_version;               → ควรแสดง b2c3d4e5f6a หลังรัน alembic upgrade head
 --   SELECT column_name FROM information_schema.columns WHERE table_name = 'notification_rules';
 --   SELECT COUNT(*) FROM notification_settings;  → ควรเท่ากับจำนวน users
 -- ====================================================================================

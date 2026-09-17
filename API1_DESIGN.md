@@ -67,7 +67,9 @@ Microsoft Graph scopes:
 | `openid email profile` | Basic identity |
 | `https://graph.microsoft.com/User.Read` | Read current user |
 | `https://graph.microsoft.com/EduAssignments.ReadBasic` | Read education assignments |
+| `https://graph.microsoft.com/EduAssignments.Read` | Read education assignments and submission status |
 | `https://graph.microsoft.com/Team.ReadBasic.All` | Read basic team information |
+| `https://graph.microsoft.com/EduRoster.Read` | Read the user's education roster and class structure |
 
 OAuth endpoints used by code:
 

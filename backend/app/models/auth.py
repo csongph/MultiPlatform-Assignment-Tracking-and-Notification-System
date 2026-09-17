@@ -9,7 +9,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
-    from app.models.core import Course, Notification, NotificationSettings, OAuthConnection
+    from app.models.core import (
+        Course,
+        Notification,
+        NotificationRule,
+        NotificationSettings,
+        OAuthConnection,
+        UserAssignmentStatus,
+    )
 
 
 class Role(Base):
@@ -38,6 +45,12 @@ class User(Base):
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
     notification_settings: Mapped["NotificationSettings"] = relationship(
         back_populates="user", uselist=False
+    )
+    notification_rules: Mapped[list["NotificationRule"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    assignment_statuses: Mapped[list["UserAssignmentStatus"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
     )
     recovery_tokens: Mapped[list["PasswordRecoveryToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -68,4 +81,4 @@ class PasswordRecoveryToken(Base):
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    user: Mapped["User"] = relationship(back_populates="recovery_tokens")
+    user: Mapped["User"] = relationship(back_populates="recovery_tokens")

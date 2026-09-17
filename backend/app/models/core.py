@@ -107,6 +107,10 @@ class UserAssignmentStatus(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_overdue: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    personal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -179,4 +183,4 @@ class Notification(Base):
 
     user: Mapped["User"] = relationship(back_populates="notifications")
     assignment: Mapped["Assignment"] = relationship(back_populates="notifications")
-    rule: Mapped["NotificationRule | None"] = relationship(back_populates="notifications")
+    rule: Mapped["NotificationRule | None"] = relationship(back_populates="notifications")

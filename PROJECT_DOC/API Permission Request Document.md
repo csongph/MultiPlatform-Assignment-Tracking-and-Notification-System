@@ -6,13 +6,15 @@
 * **ประเภทระบบ:** Web Application (FastAPI Backend + HTML5/CSS3/JS Frontend)
 * **หน่วยงาน/สถาบัน:** สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง (KMITL)
 * **ผู้รับผิดชอบหลัก (Main Backend & Infra):** ชยางกูร สองพิมพ์ (ทีม KMAPS)
-* **ผู้ติดต่อฝ่ายความปลอดภัย/IT:** security@kmitl.ac.th
+* **ผู้ติดต่อฝ่ายความปลอดภัย/IT:** ช่องทางติดต่อโครงการ KMAPS (ต้องระบุอีเมลที่ติดต่อได้จริงก่อนส่งคำขอ)
 
 ---
 
 ## 1. วัตถุประสงค์โครงการและขอบเขตการใช้งาน
 
-ระบบ **KMAPS** ทำหน้าที่รวบรวมข้อมูลรายการงานที่ได้รับมอบหมาย (Assignments), กำหนดส่งงาน (Due dates), และสถานะการส่งงาน จากแพลตฟอร์มการเรียนรู้ออนไลน์ต่างระบบ ได้แก่ **Google Classroom** และ **Microsoft Teams** เพื่อนำมาแสดงผลรวมศูนย์ที่จุดเดียว (Centralized Dashboard) และแจ้งเตือนนักศึกษาล่วงหน้าก่อนถึงกำหนดส่ง
+ระบบ **KMAPS** ทำหน้าที่รวบรวมข้อมูลรายการงานที่ได้รับมอบหมาย (Assignments), กำหนดส่งงาน (Due dates), และสถานะการส่งงานจากแพลตฟอร์มการเรียนรู้ออนไลน์ เพื่อนำมาแสดงผลรวมศูนย์ที่จุดเดียว (Centralized Dashboard) และแจ้งเตือนนักศึกษาล่วงหน้าก่อนถึงกำหนดส่ง
+
+**สถานะการรองรับ ณ ปัจจุบัน:** Google Classroom รองรับการเชื่อมต่อและดึงรายวิชา/งาน/สถานะการส่งของผู้ใช้แล้ว ส่วน Microsoft Teams รองรับ OAuth และ Refresh Token แล้ว แต่การดึงรายวิชาและงานผ่าน Microsoft Graph Education API ยังอยู่ระหว่างพัฒนา จึงยังไม่เปิดใช้เป็นฟังก์ชัน Sync ใน MVP
 
 ### หลักการเข้าถึงข้อมูล (Data Access Principles):
 1. **Read-only 100%:** ระบบอ่านเฉพาะข้อมูลรายวิชา งานที่มอบหมาย และสถานะการส่งงานเท่านั้น ไม่มีฟังก์ชันการแก้ไข สร้าง ลบ หรือส่งงานแทนผู้ใช้บนแพลตฟอร์มต้นทาง
@@ -32,10 +34,10 @@
 | `email` | View users' email address | ❌ | FR-005 | อ่านอีเมลสถาบัน (@kmitl.ac.th) เพื่อระบุตัวตนผู้ใช้ |
 | `offline_access` | Maintain access to data | ❌ | FR-023, FR-024 | ขอ Refresh Token เพื่อซิงก์ข้อมูลการบ้านอัตโนมัติเบื้องหลัง |
 | `User.Read` | Sign in and read user profile | ❌ | FR-005 | อ่านข้อมูลบัญชีผู้ใช้ที่กำลังเข้าสู่ระบบ |
-| `EduAssignments.ReadBasic` | Read users' class assignments without grades | ❌ | FR-010, FR-011 | อ่านหัวข้อการบ้าน คำอธิบาย วันกำหนดส่ง (ไม่รวมเกรด) |
-| `EduAssignments.Read` | Read users' class assignments and their grades | ✅ | FR-010, FR-011, FR-012 | อ่านรายละเอียดงานและสถานะการส่งงานของนักศึกษา |
+| `EduAssignments.ReadBasic` | Read users' class assignments without grades | ✅ | FR-010, FR-011 | อ่านหัวข้อ คำอธิบาย และวันกำหนดส่งของงานโดยไม่อ่านเกรด |
+| `EduAssignments.Read` | Read users' class assignments and their grades | ✅ | FR-010, FR-011, FR-012 | อ่านรายละเอียดงานและสถานะการส่งงานของผู้ใช้ เพื่อแสดงสถานะงานใน KMAPS |
 | `Team.ReadBasic.All` | Read basic information of teams | ❌ | FR-008 | อ่านชื่อทีม/วิชาที่นักศึกษาเป็นสมาชิกอยู่ |
-| `EduRoster.Read` | Read the organization's roster | ✅ | FR-008 | อ่านข้อมูลรายวิชาและบทบาทสมาชิกในชั้นเรียน |
+| `EduRoster.Read` | Read users' view of the roster | ✅ | FR-008 | อ่านโครงสร้างชั้นเรียนและข้อมูลบทบาทที่จำเป็นสำหรับเชื่อม Team กับรายวิชา |
 
 > 📌 **หมายเหตุ:** สิทธิ์กลุ่ม `ChannelMessage.Read.All` และ `Files.Read.All` ถูกตัดออกในเวอร์ชันเปิดตัวแรก (MVP) เพื่อลดความเสี่ยงด้านความเป็นส่วนตัวและไม่ต้องผ่านกระบวนการ Microsoft Protected API Request
 
@@ -88,25 +90,26 @@
 ## 6. มาตรการรักษาความปลอดภัยและการจัดการ Token (Security & Token Governance)
 
 1. **การเข้ารหัสข้อมูลขณะจัดเก็บ (Encryption at Rest):**
-   - Access Token และ Refresh Token ของ Google และ Microsoft จะถูกเข้ารหัสด้วย **AES-256 (Fernet Symmetric Encryption)** ก่อนบันทึกลงตาราง `oauth_connections` ใน PostgreSQL (Supabase)
+   - Access Token และ Refresh Token ของ Google และ Microsoft จะถูกเข้ารหัสด้วย **Fernet symmetric encryption** ก่อนบันทึกลงตาราง `oauth_connections` ใน PostgreSQL บน **Neon**
    - Master Encryption Key ถูกจัดเก็บในสภาพแวดล้อมระบบ (`.env` / Environment Secrets) ไม่ถูกคอมมิตขึ้น Git
 2. **การจัดการเมื่อ Token หมดอายุหรือถูกยกเลิก (Token Revocation & Expiration):**
    - เมื่อระบบพบ HTTP `401 Unauthorized` หรือ `TokenExpiredError` ระบบจะทำการใช้ Refresh Token เพื่อขอ Access Token ใหม่อัตโนมัติ (`_fetch_with_refresh`)
-   - หากผู้ใช้สั่งถอนสิทธิ์จาก Google/Microsoft Security Dashboard ระบบจะเปลี่ยนสถานะการเชื่อมต่อเป็น `broken` หรือ `disconnected` ทันทีในการซิงก์รอบถัดไป
+   - หากการซิงก์ล้มเหลว เช่น Provider ปฏิเสธ Token ระบบจะบันทึกผลการซิงก์เป็น failed และเปลี่ยนสถานะการเชื่อมต่อเป็น `broken` เพื่อให้ Admin ตรวจสอบได้
 3. **นโยบายการเก็บรักษาข้อมูล (Data Retention & PDPA Compliance):**
-   - ข้อมูลการบ้านที่ซิงก์มาจะเก็บไว้ตราบเท่าที่ผู้ใช้ยังคงเชื่อมต่อบัญชีอยู่
-   - หากผู้ใช้กด **"Disconnect Platform"** หรือ **"Delete Account"** ระบบจะทำการ Soft-delete / Hard-delete ข้อมูลการบ้านและลบ OAuth Tokens ทั้งหมดออกจากฐานข้อมูลภายใน 30 วัน
+   - ข้อมูลการบ้านที่ซิงก์มาจะเก็บไว้ในฐานข้อมูลของ KMAPS เพื่อใช้แสดง Dashboard และประวัติการแจ้งเตือน
+   - เมื่อผู้ใช้กด **"Disconnect Platform"** ระบบปัจจุบันลบ OAuth connection และ Token ที่เข้ารหัสของแพลตฟอร์มนั้นออกจากฐานข้อมูลทันที
+   - ฟังก์ชัน **Delete Account**, การลบข้อมูลรายวิชา/งานที่เกี่ยวข้อง และนโยบายลบข้อมูลภายใน 30 วัน ยังอยู่ระหว่างพัฒนา จึงจะไม่อ้างว่าเปิดใช้งานแล้วจนกว่าจะมี endpoint และ job ลบข้อมูลจริง
 
 ---
 
 ## 7. ลิงก์นโยบายและข้อความขอความยินยอม (Consent Screen & Public Policies)
 
-* **URL นโยบายความเป็นส่วนตัว (Privacy Policy):** `https://kmaps.kmitl.ac.th/privacy`
-* **URL ข้อกำหนดการใช้งาน (Terms of Service):** `https://kmaps.kmitl.ac.th/terms`
+* **URL นโยบายความเป็นส่วนตัว (Privacy Policy):** `https://kmaps.kmitl.ac.th/privacy` — ต้องเผยแพร่และตรวจว่าเข้าถึงได้จริงก่อนส่ง OAuth verification
+* **URL ข้อกำหนดการใช้งาน (Terms of Service):** `https://kmaps.kmitl.ac.th/terms` — ต้องเผยแพร่และตรวจว่าเข้าถึงได้จริงก่อนส่ง OAuth verification
 
 ### ตัวอย่างข้อความ Consent Screen ภาษาไทย:
 > **ขออนุญาตเข้าถึงข้อมูลการเรียนเพื่อการแจ้งเตือนการมอบหมายงาน (KMAPS)**
-> ระบบ KMAPS ขออนุญาตอ่านข้อมูลรายวิชา รายการงานที่ได้รับมอบหมาย กำหนดส่งงาน และสถานะการส่งงานจากบัญชีของคุณ เพื่อนำมาจัดแสดงบน Dashboard รวมและแจ้งเตือนกำหนดส่งงานผ่านระบบ ระบบทำงานในรูปแบบ **อ่านอย่างเดียว (Read-only)** โดยจะไม่แก้ไข ลบ หรือส่งงานแทนคุณในทุกกรณี
+> ระบบ KMAPS ขออนุญาตอ่านข้อมูลรายวิชา รายการงานที่ได้รับมอบหมาย กำหนดส่งงาน และสถานะการส่งงานจากบัญชีของคุณ เพื่อนำมาจัดแสดงบน Dashboard รวมและแจ้งเตือนกำหนดส่งงานผ่านระบบ ระบบทำงานในรูปแบบ **อ่านอย่างเดียว (Read-only)** โดยจะไม่แก้ไข ลบ หรือส่งงานแทนคุณบน Google Classroom หรือ Microsoft Teams ในทุกกรณี
 
 ---
 
@@ -115,3 +118,14 @@
 1. Microsoft Graph Permissions Reference: https://learn.microsoft.com/graph/permissions-reference
 2. Google Classroom API Authentication & Scopes: https://developers.google.com/classroom/guides/auth
 3. KMAPS System Capability Analysis Document (System_Capability_Analysis_MultiPlatform_Tracking.md)
+
+---
+
+## Checklist ก่อนส่งคำขอ OAuth Verification / Admin Consent
+
+- [ ] ระบุอีเมลติดต่อโครงการที่ติดต่อได้จริง
+- [ ] เผยแพร่ Privacy Policy และ Terms of Service ตาม URL ที่ระบุ
+- [ ] ตรวจ Redirect URI ใน Google Cloud Console และ Microsoft Entra ID ให้ตรงกับ environment ที่ deploy จริง
+- [ ] ตรวจว่า Consent Screen แสดงเฉพาะ scopes ที่ระบุในเอกสารนี้
+- [ ] Microsoft Teams Sync ต้องพัฒนาให้ครบก่อนเปิดปุ่มเชื่อมต่อใน production เนื่องจาก Consent Screen ขอสิทธิ์ Education API ทั้งหมดตามเอกสารนี้
+- [ ] ห้ามเพิ่ม scope ใหม่โดยไม่อัปเดตเอกสาร, API1_DESIGN.md และ code review
