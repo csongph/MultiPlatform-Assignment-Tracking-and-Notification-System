@@ -76,7 +76,8 @@ export function isTokenExpired() {
 }
 
 export function isAuthenticated() {
-  if (!getAccessToken()) return false;
+  const token = getAccessToken();
+  if (!token || token === 'mock-preview-session-token') return false;
 
   if (isTokenExpired()) {
     clearAuthSession();
