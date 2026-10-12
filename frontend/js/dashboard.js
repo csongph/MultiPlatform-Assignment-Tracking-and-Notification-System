@@ -11,10 +11,19 @@ import {
   createAssignment,
   updateAssignmentStatus,
   deleteAssignment,
+  getCurrentUser,
 } from './api.js';
 import { requireAuth, getSignedInUser, logout } from './auth.js';
-import { isAuthenticated, setAccessToken, setUserProfile } from './storage.js';
+import {
+  isAuthenticated,
+  getAccessToken,
+  clearAuthSession,
+  getUserProfile,
+  setAccessToken,
+  setUserProfile,
+} from './storage.js';
 import { showToast, setButtonLoading } from './ui.js';
+import { initSidebar, setActiveNavItem, updateSidebarAdminStatus } from './sidebar.js';
 
 // State
 let allAssignments = [];
@@ -56,8 +65,21 @@ async function init() {
 
   if (!requireAuth()) return;
 
+  // Read initial tab from URL query (?view=assignments / ?view=calendar) or hash
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialTab = urlParams.get('view') || window.location.hash.replace('#', '') || 'overview';
+
+  // Initialize centralized sidebar component
+  await initSidebar({
+    container: 'sidebar-container',
+    active: initialTab,
+    onNavigate: (tabId) => {
+      switchViewTab(tabId);
+    },
+  });
+
   // Setup UI event listeners
-  setupNavigationEvents();
+  setupNavigationEvents(initialTab);
   setupHeaderEvents();
   setupFilterAndSortEvents();
   setupCustomTaskForm();
@@ -68,44 +90,53 @@ async function init() {
 }
 
 /**
- * Navigation tabs switcher (Overview, Assignments, Calendar)
+ * Switch view tab between Overview, Assignments, Calendar
  */
-function setupNavigationEvents() {
-  const btnOverview = document.getElementById('nav-btn-overview');
-  const btnAssignments = document.getElementById('nav-btn-assignments');
-  const btnCalendar = document.getElementById('nav-btn-calendar');
-
+function switchViewTab(tabId) {
   const viewOverview = document.getElementById('view-overview');
   const viewAssignments = document.getElementById('view-assignments');
   const viewCalendar = document.getElementById('view-calendar');
 
-  function setActiveTab(activeBtn, activeView) {
-    [btnOverview, btnAssignments, btnCalendar].forEach((btn) => {
-      if (!btn) return;
-      btn.classList.remove('md3-nav-pill-active', 'text-[#152402]');
-      btn.classList.add('text-white/80');
-    });
+  const views = {
+    overview: viewOverview,
+    assignments: viewAssignments,
+    calendar: viewCalendar,
+  };
 
-    [viewOverview, viewAssignments, viewCalendar].forEach((view) => {
-      if (!view) return;
+  Object.entries(views).forEach(([id, view]) => {
+    if (!view) return;
+    if (id === tabId) {
+      view.classList.remove('hidden');
+    } else {
       view.classList.add('hidden');
-    });
-
-    if (activeBtn) {
-      activeBtn.classList.add('md3-nav-pill-active');
-      activeBtn.classList.remove('text-white/80');
     }
+  });
 
-    if (activeView) {
-      activeView.classList.remove('hidden');
-    }
+  setActiveNavItem(tabId);
+
+  if (tabId === 'calendar') {
+    renderCalendarTimeline();
   }
 
-  btnOverview?.addEventListener('click', () => setActiveTab(btnOverview, viewOverview));
-  btnAssignments?.addEventListener('click', () => setActiveTab(btnAssignments, viewAssignments));
-  btnCalendar?.addEventListener('click', () => {
-    setActiveTab(btnCalendar, viewCalendar);
-    renderCalendarTimeline();
+  // Deep-link URL sync without reloading
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', tabId);
+  window.history.replaceState({}, '', url.toString());
+}
+
+/**
+ * Navigation tabs switcher (Overview, Assignments, Calendar)
+ */
+function setupNavigationEvents(initialTab = 'overview') {
+  if (initialTab && initialTab !== 'overview') {
+    switchViewTab(initialTab);
+  }
+
+  // Listen to custom tab change events dispatched by sidebar or other components
+  window.addEventListener('kmaps:tabchange', (e) => {
+    if (e.detail?.tabId) {
+      switchViewTab(e.detail.tabId);
+    }
   });
 }
 
@@ -165,16 +196,9 @@ async function loadUserData() {
         roleEl.textContent = user.role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักเรียน';
       }
 
-      // If admin, add quick link
+      // If admin, update sidebar admin console link
       if (user.role === 'admin') {
-        const slot = document.getElementById('admin-sidebar-slot');
-        if (slot) {
-          slot.innerHTML = `
-            <a href="admin.html" class="flex items-center gap-2 text-brand-lime font-bold hover:underline py-1">
-              <span>⚙️ แผงควบคุมผู้ดูแล</span>
-            </a>
-          `;
-        }
+        updateSidebarAdminStatus(true);
       }
     }
   } catch (err) {
