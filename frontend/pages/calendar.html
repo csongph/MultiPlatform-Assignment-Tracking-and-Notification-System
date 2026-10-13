@@ -12,3 +12,104 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="app-container">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="brand-logo">
+        <div class="brand-logo-icon">
+          <i class="fa-solid fa-graduation-cap" style="color: white;"></i>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#" class="nav-item">
+          <i class="fa-solid fa-border-all"></i>
+          <span>ภาพรวม</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i class="fa-solid fa-square-check"></i>
+          <span>งานที่ได้รับมอบหมาย</span>
+        </a>
+        <a href="#" class="nav-item active">
+          <i class="fa-solid fa-calendar-days"></i>
+          <span>ปฏิทินและการแจ้งเตือน</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Right Main Content -->
+    <main class="main-content">
+      <!-- Top Bar Header -->
+      <header class="top-bar">
+        <div class="search-box">
+          <input type="text" placeholder="ค้นหารายวิชา">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </div>
+
+        <div class="user-profile">
+          <div class="avatar">
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Kunagron" alt="User Avatar">
+          </div>
+          <div class="user-info">
+            <span class="user-name">K.Kunagron</span>
+            <span class="user-role">นักเรียน</span>
+          </div>
+        </div>
+
+        <!-- ปุ่มออกจากระบบ (พากลับไปหน้า Login ของเพื่อน) -->
+        <a href="login.html" class="logout-btn" title="ออกจากระบบ">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </a>
+      </header>
+
+      <!-- Dashboard Stats Cards -->
+      <section class="summary-cards">
+        <div class="card card-yellow">
+          <span class="card-title">งานที่ได้รับมอบหมายทั้งหมด</span>
+          <span class="card-number" id="total-tasks">6</span>
+        </div>
+        <div class="card card-red">
+          <span class="card-title">ครบกำหนดวันนี้</span>
+          <span class="card-number" id="due-tasks">1</span>
+        </div>
+        <div class="card card-green">
+          <span class="card-title">งานที่ส่งแล้ว</span>
+          <span class="card-number" id="submitted-tasks">5</span>
+        </div>
+      </section>
+
+      <!-- Calendar Section -->
+      <section class="calendar-wrapper">
+        <div class="calendar-header-controls">
+          <select id="monthSelect" class="select-control">
+            <option value="6" selected>กรกฎาคม</option>
+            <option value="7">สิงหาคม</option>
+            <option value="8">กันยายน</option>
+          </select>
+
+          <select id="yearSelect" class="select-control">
+            <option value="2026" selected>2569</option>
+            <option value="2027">2570</option>
+          </select>
+        </div>
+
+        <div class="calendar-card">
+          <!-- Days Header -->
+          <div class="weekdays-grid">
+            <div>อา.</div>
+            <div>จ.</div>
+            <div>อ.</div>
+            <div>พ.</div>
+            <div>พฤ.</div>
+            <div>ศ.</div>
+            <div>ส.</div>
+          </div>
+
+          <!-- Calendar Days Grid -->
+          <div class="days-grid" id="daysGrid">
+            <!-- Rendered dynamically by JavaScript -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
