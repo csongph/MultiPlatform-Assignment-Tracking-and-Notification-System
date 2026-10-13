@@ -113,3 +113,32 @@
       </section>
     </main>
   </div>
+  <!-- Modal for Day Details and Task Submission -->
+  <div class="modal-overlay" id="taskModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modalDateTitle">การส่งงานวันที่ -</h3>
+        <i class="fa-solid fa-xmark close-modal" onclick="closeModal()"></i>
+      </div>
+
+      <div id="modalTaskContent">
+        <!-- Dynamic content for tasks -->
+      </div>
+
+      <form class="submission-form" id="submissionForm" onsubmit="handleTaskSubmit(event)">
+        <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
+        <label for="taskNote">ข้อความส่งงาน / หมายเหตุ:</label>
+        <input type="text" id="taskNote" placeholder="ระบุข้อความ..." required>
+
+        <label for="fileUpload">แนบไฟล์งาน:</label>
+        <input type="file" id="fileUpload" required>
+
+        <button type="submit" class="submit-btn">ยืนยันการส่งงาน</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript File -->
+  <script src="script.js"></script>
+</body>
+</html>
