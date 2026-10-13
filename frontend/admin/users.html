@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>จัดการผู้ใช้งาน | LMS Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-page="users">
+  <div class="app">
+    <main class="main">
+      <div class="page-head">
+        <h1 class="page-title">จัดการผู้ใช้งาน</h1>
+        <form class="search" id="searchForm">
+          <input type="text" id="searchInput" placeholder="ค้นหา" />
+          <button type="submit" id="searchBtn" title="ค้นหา"></button>
+        </form>
+      </div>
+
+      <section class="card table-card">
+        <table class="table users-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>First Name</th>
+              <th>Last Name</th>
+              <th>Email</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="layout.js"></script>
+  <script src="users.js"></script>
+</body>
+</html>
