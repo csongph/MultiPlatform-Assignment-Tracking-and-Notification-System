@@ -69,11 +69,21 @@ async function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const initialTab = urlParams.get('view') || window.location.hash.replace('#', '') || 'overview';
 
+  // "งานที่ได้รับมอบหมาย" now lives on its own page (assignments.html) so every entry point looks the same
+  if (initialTab === 'assignments') {
+    window.location.replace('assignments.html');
+    return;
+  }
+
   // Initialize centralized sidebar component
   await initSidebar({
     container: 'sidebar-container',
     active: initialTab,
     onNavigate: (tabId) => {
+      if (tabId === 'assignments') {
+        window.location.href = 'assignments.html';
+        return;
+      }
       switchViewTab(tabId);
     },
   });

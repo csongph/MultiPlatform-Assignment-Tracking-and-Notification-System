@@ -544,6 +544,7 @@ function getMockAssignmentsFromStorage(userId) {
     allAssignments = {};
   }
   let userAssignments = allAssignments[userId];
+  if (!userAssignments) {
     userAssignments = [
       {
         id: 'mock-1',

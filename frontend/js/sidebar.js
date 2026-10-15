@@ -11,14 +11,7 @@ export const DEFAULT_SIDEBAR_HTML = `
   <!-- LMS Logo -->
   <div class="flex flex-col items-center mb-8">
     <a href="dashboard.html" class="group flex flex-col items-center focus:outline-none" aria-label="ไปที่หน้าแรก">
-      <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-[#9932cc] via-[#ff69b4] to-[#4da6ff] p-[3px] shadow-lg shadow-purple-900/50 flex items-center justify-center transition-transform group-hover:scale-105">
-        <div class="w-full h-full rounded-full bg-[#1e0f38] flex flex-col items-center justify-center relative overflow-hidden">
-          <svg class="w-7 h-7 text-pink-400 mb-0.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18C5 19.94 8.13 22 12 22C15.87 22 19 19.94 19 17.18V13.18L12 17L5 13.18Z"/>
-          </svg>
-          <span class="text-[12px] font-bold font-outfit tracking-wider text-white">LMS</span>
-        </div>
-      </div>
+      <img src="../assets/image/logoweb-256.png" alt="LMS" width="96" height="96" class="w-24 h-24 object-contain transition-transform group-hover:scale-105" decoding="async" />
     </a>
   </div>
 
