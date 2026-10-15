@@ -15,6 +15,7 @@ const ICONS = {
 // TODO: ดึงจาก session ของผู้ล็อกอินจริง
 const CURRENT_ADMIN = { name: "K.Saranyapat", role: "ผู้ดูแลระบบ" };
 
+
 function renderLayout() {
   const page = document.body.dataset.page;
   const main = document.querySelector(".main");

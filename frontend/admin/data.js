@@ -7,7 +7,6 @@
    ให้เรียก fetch() ไปที่ Backend แทน localStorage
    ========================================================= */
 
-// เปลี่ยนเป็น true ถ้าอยากเห็นข้อมูลตัวอย่างตามแบบ Figma
 const USE_MOCK = false;
 
 const STORAGE_KEY = "lms_admin_users";
