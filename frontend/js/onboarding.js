@@ -38,6 +38,8 @@ async function init() {
       google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
       microsoft_denied: 'ยกเลิกการเข้าสู่ระบบ Microsoft แล้ว',
       microsoft_failed: 'เชื่อมต่อ Microsoft ไม่สำเร็จ กรุณาลองใหม่',
+      microsoft_admin_consent_required: 'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      admin_consent_required: 'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
       invalid_state: 'Session หมดอายุ กรุณาลองใหม่',
       session_expired: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่',
     };
