@@ -1,0 +1,165 @@
+/* Assignments & Courses page - additive styles only.
+   Reuses tokens/classes from dashboard.css and sidebar.css (md3-*, stat-card-*). */
+
+.asg-stat-overdue {
+  background-color: #2d1b4e;
+  color: #ffffff;
+}
+
+/* Filter tabs */
+.asg-tab {
+  padding: 0.4rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.asg-tab:hover { border-color: #94a3b8; }
+.asg-tab.is-active {
+  background: var(--color-brand-lime, #c8f561);
+  border-color: transparent;
+  color: #152402;
+  font-weight: 600;
+}
+.asg-tab .asg-count {
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+/* Course chips */
+.asg-course-chip {
+  flex-shrink: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.asg-course-chip:hover { border-color: #94a3b8; }
+.asg-course-chip.is-active {
+  border-color: var(--color-brand-purple, #2d1b4e);
+  box-shadow: 0 0 0 2px rgba(45, 27, 78, 0.15);
+}
+
+/* Task card */
+.asg-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+.asg-card-header {
+  width: 100%;
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+.asg-card-header:focus-visible { outline: 2px solid #2d1b4e; outline-offset: -2px; }
+.asg-chevron { transition: transform 0.2s ease; }
+.asg-card.is-open .asg-chevron { transform: rotate(180deg); }
+
+.asg-card-body {
+  display: none;
+  padding: 0 1.25rem 1.25rem 1.25rem;
+  border-top: 1px dashed #e2e8f0;
+}
+.asg-card.is-open .asg-card-body {
+  display: block;
+  animation: asgFade 0.2s ease;
+}
+@keyframes asgFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Status badges */
+.asg-badge {
+  display: inline-block;
+  padding: 0.15rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.asg-badge-pending { background: #fef3c7; color: #92400e; }
+.asg-badge-soon { background: #ffedd5; color: #9a3412; }
+.asg-badge-overdue { background: #fee2e2; color: #b91c1c; }
+.asg-badge-submitted { background: #d1fae5; color: #065f46; }
+
+/* Platform logo bubble */
+.asg-platform {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+}
+.asg-platform-google { background: #e8f5e9; border-color: #fbbc04; }
+.asg-platform-microsoft { background: #ede9fe; border-color: #6264a7; }
+.asg-platform-custom { background: #f1f5f9; border-color: #cbd5e1; }
+
+/* Buttons */
+.asg-btn {
+  padding: 0.5rem 1.1rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #0f172a;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.asg-btn:hover { background: #f1f5f9; }
+.asg-btn-primary {
+  background: var(--color-brand-lime, #c8f561);
+  border-color: transparent;
+  color: #152402;
+}
+.asg-btn-primary:hover { background: var(--color-brand-lime-hover, #b8e850); }
+
+/* Modal */
+.asg-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+}
+.asg-modal-backdrop.is-open { display: flex; }
+.asg-modal {
+  background: #ffffff;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 420px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.asg-dev-banner {
+  background: #fff7ed;
+  border: 1px dashed #fb923c;
+  color: #9a3412;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.9rem;
+}

@@ -151,6 +151,15 @@ function formatDue(dueAt) {
   });
 }
 
+export async function getDashboardSummary() {
+  return request('/dashboard/summary', { auth: true });
+}
+
+export async function getCourses(platform = null) {
+  const query = platform ? `?platform=${encodeURIComponent(platform)}` : '';
+  return request(`/courses${query}`, { auth: true });
+}
+
 export async function getAssignments() {
   const data = await request('/assignments', { auth: true });
   // Backend returns a raw array, not { assignments: [...] } like the mock API.
@@ -400,6 +409,28 @@ async function mockRequest(endpoint, options = {}) {
     };
   }
 
+  if (endpoint === '/dashboard/summary' && method === 'GET') {
+    const mockAssignments = getMockAssignmentsFromStorage(session?.id || 'default');
+    const courses = [...new Set(mockAssignments.map((a) => a.course))];
+    const completed = mockAssignments.filter((a) => ['completed', 'submitted'].includes((a.status || '').toLowerCase())).length;
+    return {
+      total_courses: courses.length || 3,
+      total_assignments: mockAssignments.length || 6,
+      due_soon: 1,
+      overdue: 0,
+      completed: completed || 5,
+      connected_platforms: ['google_classroom', 'microsoft_teams'],
+    };
+  }
+
+  if (endpoint.startsWith('/courses') && method === 'GET') {
+    return [
+      { id: 'c1', name: 'ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ', platform: 'google_classroom', is_deleted: false },
+      { id: 'c2', name: 'การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น', platform: 'google_classroom', is_deleted: false },
+      { id: 'c3', name: 'การออกแบบและพัฒนาเว็บไซต์', platform: 'microsoft_teams', is_deleted: false },
+    ];
+  }
+
   if (endpoint === '/assignments' && method === 'GET') {
     const connections = getMockConnections(session.id);
     const mockAssignments = getMockAssignmentsFromStorage(session.id);
@@ -516,52 +547,52 @@ function getMockAssignmentsFromStorage(userId) {
   if (!userAssignments) {
     userAssignments = [
       {
-        id: 'mock-g1',
-        title: "Data Modeling Case Study",
-        course: "Business Analytics",
+        id: 'mock-1',
+        title: "ออกแบบฐานข้อมูล Relational Database สำหรับระบบคลังสินค้า",
+        course: "ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ",
         platform: "google",
-        due: "Tomorrow, 23:59",
+        due: "วันนี้, 23:59",
         status: "Not started",
       },
       {
-        id: 'mock-g2',
-        title: "UX Research Summary",
-        course: "Human Computer Interaction",
+        id: 'mock-2',
+        title: "สร้างแบบสอบถาม SQL และ Indexing สำหรับระบบจัดการสินค้า",
+        course: "ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ",
         platform: "google",
-        due: "In 5 days, 12:00",
-        status: "Not started",
-      },
-      {
-        id: 'mock-g3',
-        title: "Machine Learning Lab 1",
-        course: "Advanced AI",
-        platform: "google",
-        due: "In 10 days, 23:59",
+        due: "ส่งแล้วเมื่อวานนี้",
         status: "Completed",
       },
       {
-        id: 'mock-m1',
-        title: "Sprint Retrospective Report",
-        course: "Software Project Management",
-        platform: "microsoft",
-        due: "In 3 days, 18:00",
-        status: "In progress",
+        id: 'mock-3',
+        title: "เขียนโปรแกรมคำนวณและประมวลผลข้อมูลด้วย Python",
+        course: "การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น",
+        platform: "google",
+        due: "ส่งแล้วเมื่อวานนี้",
+        status: "Completed",
       },
       {
-        id: 'mock-m2',
-        title: "API Integration Lab",
-        course: "Web Application Development",
+        id: 'mock-4',
+        title: "พัฒนาฟังก์ชันการทำงานแบบ OOP และโครงสร้างข้อมูลเบื้องต้น",
+        course: "การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น",
         platform: "microsoft",
-        due: "In 7 days, 23:59",
-        status: "In progress",
+        due: "ส่งแล้ว 2 วันก่อน",
+        status: "Completed",
       },
       {
-        id: 'mock-m3',
-        title: "Database Optimization Project",
-        course: "Database Systems",
+        id: 'mock-5',
+        title: "ออกแบบ Wireframe และ User Journey ด้วย Figma",
+        course: "การออกแบบและพัฒนาเว็บไซต์",
         platform: "microsoft",
-        due: "In 12 days, 17:00",
-        status: "Not started",
+        due: "ส่งแล้ว 3 วันก่อน",
+        status: "Completed",
+      },
+      {
+        id: 'mock-6',
+        title: "พัฒนาหน้า Dashboard ด้วย HTML, Tailwind CSS และ Material 3",
+        course: "การออกแบบและพัฒนาเว็บไซต์",
+        platform: "microsoft",
+        due: "ส่งแล้ว 4 วันก่อน",
+        status: "Completed",
       }
     ];
     allAssignments[userId] = userAssignments;
