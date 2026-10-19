@@ -79,10 +79,13 @@ function dismissToast(toast) {
   toast.addEventListener('animationend', () => toast.remove(), { once: true });
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+export function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export function setFormLoading(form, isLoading, loadingText = 'Loading...') {
