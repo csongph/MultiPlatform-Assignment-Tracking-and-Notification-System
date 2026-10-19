@@ -4,9 +4,9 @@ import {
   adminUpdateUserStatus,
   adminGetConnections,
   adminFlagConnectionStale,
-  adminConnectionsExportUrl,
+  downloadConnectionsCsv,
   adminListAuditLogs,
-  adminAuditLogsExportUrl,
+  downloadAuditLogsCsv,
   adminGetSyncStatus,
   adminGetErrorSummary,
   adminGetAlerts,
@@ -14,7 +14,7 @@ import {
   getHealth,
 } from './api.js';
 import { getSignedInUser, logout, requireAuth } from './auth.js';
-import { showToast } from './ui.js';
+import { showToast, escapeHtml } from './ui.js';
 
 const state = {
   users: { page: 1, total: 0, search: '' },
@@ -187,8 +187,18 @@ function setupConnectionsPanel() {
     loadConnections(e.target.value);
   });
 
-  const exportLink = document.getElementById('connections-export');
-  if (exportLink) exportLink.href = adminConnectionsExportUrl();
+  const exportBtn = document.getElementById('connections-export');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        await downloadConnectionsCsv();
+        showToast('ดาวน์โหลด Connections CSV สำเร็จ', 'success');
+      } catch (err) {
+        showToast(err.message || 'ไม่สามารถดาวน์โหลด Connections CSV ได้', 'error');
+      }
+    });
+  }
 }
 
 async function loadConnections(status = '') {
@@ -281,17 +291,22 @@ function setupAuditPanel() {
     }
   });
 
-  updateAuditExportLink();
-}
-
-function updateAuditExportLink() {
-  const link = document.getElementById('audit-export');
-  if (!link) return;
-  link.href = adminAuditLogsExportUrl({
-    user: state.audit.user,
-    action: state.audit.action,
-    date: state.audit.date,
-  });
+  const exportBtn = document.getElementById('audit-export');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        await downloadAuditLogsCsv({
+          user: state.audit.user,
+          action: state.audit.action,
+          date: state.audit.date,
+        });
+        showToast('ดาวน์โหลด Audit Logs CSV สำเร็จ', 'success');
+      } catch (err) {
+        showToast(err.message || 'ไม่สามารถดาวน์โหลด Audit Logs CSV ได้', 'error');
+      }
+    });
+  }
 }
 
 async function loadAuditLogs() {
@@ -301,7 +316,6 @@ async function loadAuditLogs() {
     renderAuditLogs(data.logs || []);
     const maxPage = Math.max(1, Math.ceil(state.audit.total / (data.page_size || 20)));
     document.getElementById('audit-page-info').textContent = `Page ${state.audit.page} of ${maxPage} · ${state.audit.total} entries`;
-    updateAuditExportLink();
   } catch (error) {
     showToast(error.message || 'Unable to load audit logs.', 'error');
   }
@@ -375,8 +389,8 @@ function renderErrors(errors) {
   byProviderEl.innerHTML = entries.length
     ? entries.map(([provider, count]) => `
         <div class="stat-card">
-          <span class="stat-label">${provider}</span>
-          <strong>${count}</strong>
+          <span class="stat-label">${escapeHtml(provider)}</span>
+          <strong>${Number(count) || 0}</strong>
         </div>
       `).join('')
     : `<div class="admin-empty">No failures recorded yet.</div>`;
@@ -472,15 +486,6 @@ async function loadServerLogs() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[char]));
-}
 
 function formatDate(value) {
   if (!value) return '—';

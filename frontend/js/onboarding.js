@@ -1,4 +1,10 @@
-import { getOnboardingStatus, updateOnboardingConnection, connectGoogleClassroom, connectMicrosoft } from './api.js';
+```javascript
+import {
+  getOnboardingStatus,
+  disconnectPlatform,
+  connectGoogleClassroom,
+  connectMicrosoft,
+} from './api.js';
 import { requireAuth, logout } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
 
@@ -18,32 +24,42 @@ async function init() {
 
   await refreshStatus();
 
-  // แสดงผลหลังจาก Google OAuth callback
+  // Read query parameters after returning from OAuth.
   const urlParams = new URLSearchParams(window.location.search);
   const oauthSuccess = urlParams.get('oauth_success');
   const oauthError = urlParams.get('oauth_error');
   const synced = urlParams.get('synced');
 
   if (oauthSuccess === 'google') {
-    const msg = synced ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ` : 'Google Classroom เชื่อมต่อสำเร็จ!';
+    const msg = synced
+      ? `เชื่อมต่อ Google Classroom สำเร็จ! ซิงก์งานได้ ${synced} รายการ`
+      : 'เชื่อมต่อ Google Classroom สำเร็จ!';
     showToast(msg, 'success');
     window.history.replaceState({}, '', window.location.pathname);
   } else if (oauthSuccess === 'microsoft') {
-    const msg = synced ? `Microsoft Teams / To Do เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ` : 'Microsoft Teams / To Do เชื่อมต่อสำเร็จ!';
+    const msg = synced
+      ? `เชื่อมต่อ Microsoft Teams สำเร็จ! ซิงก์งานได้ ${synced} รายการ`
+      : 'เชื่อมต่อ Microsoft Teams สำเร็จ!';
     showToast(msg, 'success');
     window.history.replaceState({}, '', window.location.pathname);
   } else if (oauthError) {
     const errorMessages = {
-      google_denied: 'ยกเลิกการเข้าสู่ระบบ Google แล้ว',
-      google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
-      microsoft_denied: 'ยกเลิกการเข้าสู่ระบบ Microsoft แล้ว',
-      microsoft_failed: 'เชื่อมต่อ Microsoft ไม่สำเร็จ กรุณาลองใหม่',
-      microsoft_admin_consent_required: 'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
-      admin_consent_required: 'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
-      invalid_state: 'Session หมดอายุ กรุณาลองใหม่',
-      session_expired: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่',
+      google_denied: 'ยกเลิกการให้สิทธิ์ Google Classroom แล้ว',
+      google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      microsoft_denied: 'ยกเลิกการให้สิทธิ์ Microsoft Teams แล้ว',
+      microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      microsoft_admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      invalid_state: 'เซสชันการเชื่อมต่อหมดอายุ กรุณาลองใหม่อีกครั้ง',
+      session_expired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
     };
-    showToast(errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่', 'error');
+
+    showToast(
+      errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
@@ -51,42 +67,62 @@ async function init() {
 async function refreshStatus() {
   try {
     const status = await getOnboardingStatus();
-    renderStatus(status.connections || {});
+    renderStatus(status?.connections || {});
   } catch {
-    showToast('Unable to load platform status. Please sign in again.', 'error');
+    showToast(
+      'ไม่สามารถดึงข้อมูลสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
   }
 }
 
 async function toggleProvider(button) {
   const provider = button.dataset.provider;
-  const card = document.querySelector(`[data-provider-card="${provider}"]`);
+  const card = document.querySelector(
+    `[data-provider-card="${provider}"]`,
+  );
   const isConnected = card?.classList.contains('connected');
 
-  // Google/Microsoft connect → ใช้ OAuth flow จริง
-  if ((provider === 'google' || provider === 'microsoft') && !isConnected) {
-    setButtonLoading(button, true, 'Connecting...');
-    if (provider === 'microsoft') {
-      connectMicrosoft();
-    } else {
-      connectGoogleClassroom();
+  // Connect platform through OAuth.
+  if (!isConnected) {
+    setButtonLoading(button, true, 'กำลังเชื่อมต่อ...');
+
+    try {
+      if (provider === 'microsoft') {
+        await connectMicrosoft();
+      } else if (provider === 'google') {
+        await connectGoogleClassroom();
+      } else {
+        throw new Error('ไม่รองรับแพลตฟอร์มนี้');
+      }
+    } catch {
+      showToast(
+        `ไม่สามารถเริ่มต้นการเชื่อมต่อ ${providerLabels[provider] || provider} ได้`,
+        'error',
+      );
+      setButtonLoading(button, false);
     }
+
     return;
   }
 
-  let nextStatus = null;
-  setButtonLoading(button, true, isConnected ? 'Disconnecting...' : 'Connecting...');
+  // Disconnect platform.
+  setButtonLoading(button, true, 'กำลังตัดการเชื่อมต่อ...');
 
   try {
-    nextStatus = await updateOnboardingConnection(provider, !isConnected);
+    await disconnectPlatform(provider);
     showToast(
-      `${providerLabels[provider]} ${isConnected ? 'disconnected' : 'connected'} successfully.`,
-      'success'
+      `ตัดการเชื่อมต่อ ${providerLabels[provider]} สำเร็จ`,
+      'success',
     );
-  } catch {
-    showToast('Unable to update connection. Please try again.', 'error');
+    await refreshStatus();
+  } catch (err) {
+    showToast(
+      err.message || 'ไม่สามารถตัดการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
   } finally {
     setButtonLoading(button, false);
-    if (nextStatus) renderStatus(nextStatus.connections || {});
   }
 }
 
@@ -96,14 +132,23 @@ function renderStatus(connections) {
   const summary = document.getElementById('connection-summary');
 
   Object.entries(providerLabels).forEach(([provider, label]) => {
-    const card = document.querySelector(`[data-provider-card="${provider}"]`);
-    const button = document.querySelector(`[data-provider="${provider}"]`);
+    const card = document.querySelector(
+      `[data-provider-card="${provider}"]`,
+    );
+    const button = document.querySelector(
+      `[data-provider="${provider}"]`,
+    );
     const connected = Boolean(connections[provider]);
 
     card?.classList.toggle('connected', connected);
 
     if (button) {
-      button.textContent = connected ? `Disconnect ${label.split(' ')[0]}` : `Connect ${label.split(' ')[0]}`;
+      const shortName = label.split(' ')[0];
+
+      button.textContent = connected
+        ? `Disconnect ${shortName}`
+        : `Connect ${shortName}`;
+
       button.classList.toggle('btn-danger', connected);
       button.classList.toggle('btn-primary', !connected);
     }
@@ -111,14 +156,18 @@ function renderStatus(connections) {
 
   if (summary) {
     summary.textContent = connectedCount
-      ? `${connectedCount} platform${connectedCount > 1 ? 's' : ''} connected. You can continue to the dashboard.`
-      : 'Connect one platform to unlock your dashboard.';
+      ? `เชื่อมต่อแล้ว ${connectedCount} แพลตฟอร์ม คุณสามารถเข้าสู่หน้าแดชบอร์ดได้ทันที`
+      : 'เชื่อมต่ออย่างน้อย 1 แพลตฟอร์มเพื่อเริ่มใช้งานแดชบอร์ด';
   }
 
   if (continueLink) {
     continueLink.classList.toggle('disabled', connectedCount === 0);
-    continueLink.setAttribute('aria-disabled', connectedCount === 0 ? 'true' : 'false');
+    continueLink.setAttribute(
+      'aria-disabled',
+      connectedCount === 0 ? 'true' : 'false',
+    );
   }
 }
 
 document.addEventListener('DOMContentLoaded', init);
+```

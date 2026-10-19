@@ -18,7 +18,7 @@ export function validateEmail(email) {
   return { valid: errors.length === 0, errors, value: trimmed };
 }
 
-export function validatePassword(password, { minLength = 8 } = {}) {
+export function validatePassword(password, { minLength = 8, maxLengthBytes = 72 } = {}) {
   const errors = [];
   const value = password || '';
 
@@ -26,6 +26,11 @@ export function validatePassword(password, { minLength = 8 } = {}) {
     errors.push('Password is required.');
   } else if (value.length < minLength) {
     errors.push(`Password must be at least ${minLength} characters.`);
+  } else {
+    const byteLength = new TextEncoder().encode(value).length;
+    if (byteLength > maxLengthBytes) {
+      errors.push(`Password must not exceed ${maxLengthBytes} bytes (currently ${byteLength} bytes).`);
+    }
   }
 
   return { valid: errors.length === 0, errors, value };
