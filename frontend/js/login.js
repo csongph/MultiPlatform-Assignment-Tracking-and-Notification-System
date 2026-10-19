@@ -36,6 +36,12 @@ async function init() {
   initPageAnimations();
   initAuthFooter('login');
 
+  const flashError = sessionStorage.getItem('kmaps_flash_error');
+  if (flashError) {
+    sessionStorage.removeItem('kmaps_flash_error');
+    showToast(flashError, 'warning');
+  }
+
   document.querySelector('.forgot-link')?.addEventListener('click', (e) => {
     e.preventDefault();
     showToast('Password reset will be available once the reset endpoint is configured.', 'info');

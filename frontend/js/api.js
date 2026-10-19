@@ -3,16 +3,15 @@
  * Centralized Fetch API wrapper for backend communication
  */
 
-import { getAccessToken } from './storage.js';
+import { getAccessToken, clearAuthSession } from './storage.js';
 
-const API_BASE_URL = (window.KMAPS_API_BASE && window.KMAPS_API_BASE.startsWith('http'))
+export const FEATURES = {
+  customTasks: false, // Backend does not support custom tasks creation/status update/delete
+};
+
+const API_BASE_URL = (typeof window !== 'undefined' && window.KMAPS_API_BASE && window.KMAPS_API_BASE.startsWith('http'))
   ? window.KMAPS_API_BASE
-  : "http://localhost:8000/api/v1";
-
-const USE_MOCK_API = window.KMAPS_USE_MOCK_API === true;
-const MOCK_DELAY_MS = 350;
-const MOCK_USERS_KEY = 'kmaps_mock_users';
-const MOCK_CONNECTIONS_KEY = 'kmaps_mock_connections';
+  : 'http://localhost:8000/api/v1';
 
 class ApiError extends Error {
   constructor(message, status, data = null) {
@@ -23,9 +22,18 @@ class ApiError extends Error {
   }
 }
 
-async function request(endpoint, options = {}) {
-  if (USE_MOCK_API) {
-    return mockRequest(endpoint, options);
+let mockModulePromise = null;
+function getMockModule() {
+  if (!mockModulePromise) {
+    mockModulePromise = import('./mock-api.js');
+  }
+  return mockModulePromise;
+}
+
+export async function request(endpoint, options = {}) {
+  if (typeof window !== 'undefined' && window.KMAPS_USE_MOCK_API === true) {
+    const mockModule = await getMockModule();
+    return mockModule.mockRequest(endpoint, options);
   }
 
   const { method = 'GET', body, auth = false, headers = {} } = options;
@@ -54,7 +62,24 @@ async function request(endpoint, options = {}) {
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, config);
   } catch {
-    throw new ApiError('Network error. Please check if the backend server is running at http://localhost:8000', 0);
+    throw new ApiError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้งในภายหลัง', 0);
+  }
+
+  // Handle 401 Unauthorized for authenticated requests
+  if (auth && response.status === 401) {
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+    const isAuthPage = currentPath.includes('login.html') || currentPath.includes('register.html');
+    if (!isAuthPage && typeof window !== 'undefined') {
+      clearAuthSession();
+      sessionStorage.setItem('kmaps_flash_error', 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+      window.location.href = 'login.html';
+      return null;
+    }
+  }
+
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return null;
   }
 
   let data = null;
@@ -84,15 +109,15 @@ async function request(endpoint, options = {}) {
 
 function getDefaultErrorMessage(status) {
   const messages = {
-    400: 'Invalid request. Please check your input.',
-    401: 'Invalid email or password.',
-    403: 'Your account has been disabled. Please contact support.',
-    404: 'Resource not found.',
-    409: 'Email already exists.',
-    422: 'Validation error. Please check your input format.',
-    500: 'Server error. Please try again later.',
+    400: 'คำขอไม่ถูกต้อง กรุณาตรวจสอบข้อมูล',
+    401: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+    403: 'บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
+    404: 'ไม่พบข้อมูลที่ต้องการ',
+    409: 'อีเมลนี้ถูกใช้งานในระบบแล้ว',
+    422: 'ข้อมูลไม่ถูกต้องตามรูปแบบที่กำหนด',
+    500: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง',
   };
-  return messages[status] || 'An unexpected error occurred.';
+  return messages[status] || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
 }
 
 export async function registerUser({ full_name, email, password }) {
@@ -117,33 +142,64 @@ export async function getCurrentUser() {
   return request('/users/me', { auth: true });
 }
 
-export async function updateOnboardingConnection(provider, connected) {
-  return request('/onboarding-status', {
-    method: 'POST',
+export async function disconnectPlatform(provider) {
+  // Provider can be short ('google', 'microsoft') or full backend platform name ('google_classroom', 'microsoft_teams')
+  const platformName = provider === 'microsoft'
+    ? 'microsoft_teams'
+    : provider === 'google'
+    ? 'google_classroom'
+    : provider;
+
+  return request(`/oauth/${encodeURIComponent(platformName)}`, {
+    method: 'DELETE',
     auth: true,
-    body: { provider, connected },
   });
 }
 
-// The real backend (app/api/v1/routers/learning.py) exposes assignments as
-// a plain array at GET /assignments, with different field names than the
-// dashboard UI expects (course_name/due_at/computed_status instead of
-// course/due/status). We normalize the shape here so dashboard.js keeps
-// working against the live API without needing to know about that.
-function normalizeAssignment(a) {
+export function normalizePlatform(platform) {
+  const p = String(platform || '').toLowerCase();
+  if (p === 'google_classroom' || p === 'google') return 'google';
+  if (p === 'microsoft_teams' || p === 'microsoft') return 'microsoft';
+  return platform || 'custom';
+}
+
+function isValidHttpUrl(string) {
+  if (!string || typeof string !== 'string') return false;
+  try {
+    const url = new URL(string);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeAssignment(a) {
+  const platformSlug = normalizePlatform(a.platform);
+  const dueRaw = a.due_at ?? a.due ?? null;
+  const dueDate = dueRaw ? new Date(dueRaw) : null;
+  const validDue = dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null;
+
   return {
     ...a,
-    course: a.course_name ?? a.course ?? 'Untitled Course',
-    due: formatDue(a.due_at) ?? a.due ?? 'No due date',
+    id: a.id,
+    title: a.title ?? '(ไม่มีชื่องาน)',
+    course: a.course_name ?? a.course ?? 'ไม่ระบุวิชา',
+    course_name: a.course_name ?? a.course ?? 'ไม่ระบุวิชา',
+    platform: platformSlug,
+    raw_platform: a.platform,
+    due_at: a.due_at ?? null,
+    due: formatDue(validDue),
+    dueDate: validDue,
     status: a.computed_status ?? a.status ?? 'Not started',
+    computed_status: a.computed_status ?? a.status ?? 'Not started',
+    source_status: a.source_status ?? '',
+    source_url: isValidHttpUrl(a.source_url) ? a.source_url : '',
   };
 }
 
-function formatDue(dueAt) {
-  if (!dueAt) return null;
-  const date = new Date(dueAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString([], {
+function formatDue(date) {
+  if (!date) return 'ไม่มีกำหนดส่ง';
+  return date.toLocaleString('th-TH', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -162,83 +218,52 @@ export async function getCourses(platform = null) {
 
 export async function getAssignments() {
   const data = await request('/assignments', { auth: true });
-  // Backend returns a raw array, not { assignments: [...] } like the mock API.
   const list = Array.isArray(data) ? data : data?.assignments || [];
   return { assignments: list.map(normalizeAssignment) };
 }
 
-// NOTE: The backend does not currently support manually editing, creating,
-// or deleting assignments (they are read-only records synced from Google
-// Classroom / Microsoft Teams — see app/services/learning_service.py and
-// the Assignment model, which has no user-editable status and no "custom"
-// platform). These three calls will 404 against the real API until that
-// backend feature is built. Left in place (matching the mock API) so the
-// UI still works in mock mode; wire them up once the backend adds:
-//   PATCH /assignments/{id}/status , POST /assignments , DELETE /assignments/{id}
-export async function updateAssignmentStatus(assignmentId, status) {
-  return request('/assignments/update-status', {
+export async function queueSync(platform = 'google_classroom') {
+  return request('/sync', {
     method: 'POST',
     auth: true,
-    body: { assignment_id: assignmentId, status },
+    body: { platform },
   });
 }
 
-export async function createAssignment({ title, course, due }) {
-  return request('/assignments/create', {
-    method: 'POST',
-    auth: true,
-    body: { title, course, due },
-  });
+export async function getSyncJob(jobId) {
+  return request(`/sync/${encodeURIComponent(jobId)}`, { auth: true });
 }
 
-export async function deleteAssignment(assignmentId) {
-  return request('/assignments/delete', {
-    method: 'POST',
-    auth: true,
-    body: { assignment_id: assignmentId },
-  });
-}
-
-/**
- * Redirect the user to the platform OAuth consent screen.
- * The backend will handle the token exchange and assignment sync.
- */
 export async function connectPlatform(provider) {
   const token = getAccessToken();
   if (!token) {
-    window.location.href = '/pages/login.html';
+    window.location.href = 'login.html';
     return;
   }
 
-  // The backend's Platform rows / adapters use "google_classroom" and
-  // "microsoft_teams" (see app/integrations/__init__.py), not the short
-  // "google"/"microsoft" names used elsewhere in the frontend.
   const platformSlug = provider === 'microsoft'
     ? 'microsoft_teams'
     : 'google_classroom';
 
-  // GET /oauth/{platform}/authorize does NOT itself redirect to Google/
-  // Microsoft — it's a JSON endpoint that *returns* the consent-screen URL
-  // (see AuthorizeUrlResponse in oauth.py). We have to fetch it first
-  // (auth required) and then send the browser to the URL it gives back.
   try {
-    const { authorization_url } = await request(`/oauth/${platformSlug}/authorize`, { auth: true });
-    window.location.href = authorization_url;
+    const res = await request(`/oauth/${platformSlug}/authorize`, { auth: true });
+    if (res?.authorization_url) {
+      window.location.href = res.authorization_url;
+      return res.authorization_url;
+    }
   } catch (err) {
     console.error('Failed to start OAuth flow:', err);
     throw err;
   }
 }
 
-export function connectGoogleClassroom() {
-  connectPlatform('google');
+export async function connectGoogleClassroom() {
+  return connectPlatform('google');
 }
 
-export function connectMicrosoft() {
-  connectPlatform('microsoft');
+export async function connectMicrosoft() {
+  return connectPlatform('microsoft');
 }
-
-export { ApiError };
 
 // ---------------------------------------------------------------------------
 // Admin Console (M12-M15)
@@ -278,25 +303,9 @@ export async function adminFlagConnectionStale(userId, platform) {
   });
 }
 
-export function adminConnectionsExportUrl() {
-  // A plain <a href> navigation can't set an Authorization header, so the
-  // access token has to ride along as a query param. The backend's
-  // get_current_user (app/api/v1/deps.py) accepts either.
-  const token = getAccessToken();
-  const query = new URLSearchParams(token ? { token } : {});
-  const suffix = query.toString() ? `?${query.toString()}` : '';
-  return `${API_BASE_URL}/admin/connections/export${suffix}`;
-}
-
 export async function adminListAuditLogs({ user = '', action = '', date = '', page = 1 } = {}) {
   const query = new URLSearchParams({ user, action, date, page: String(page) });
   return request(`/admin/audit-logs?${query.toString()}`, { auth: true });
-}
-
-export function adminAuditLogsExportUrl({ user = '', action = '', date = '' } = {}) {
-  const token = getAccessToken();
-  const query = new URLSearchParams({ user, action, date, ...(token ? { token } : {}) });
-  return `${API_BASE_URL}/admin/audit-logs/export?${query.toString()}`;
 }
 
 export async function adminGetSyncStatus() {
@@ -316,299 +325,78 @@ export async function adminGetServerLogs() {
 }
 
 export async function getHealth() {
-  // /health is mounted at the app root in backend/app/main.py, NOT under
-  // /api/v1 like every other route, so it can't go through request().
   const response = await fetch(`${API_BASE_URL.replace(/\/api\/v1$/, '')}/health`);
   if (!response.ok) {
-    throw new ApiError('Health check failed.', response.status);
+    throw new ApiError('การตรวจสอบสถานะระบบล้มเหลว', response.status);
   }
   return response.json();
 }
 
-async function mockRequest(endpoint, options = {}) {
-  await delay(MOCK_DELAY_MS);
-
-  const { method = 'GET', body = {}, auth = false } = options;
-  const session = getMockSession();
-
-  if (auth && !session) {
-    throw new ApiError('Please sign in again.', 401);
+/**
+ * Download Connections CSV using Bearer token without putting token in URL query
+ */
+export async function downloadConnectionsCsv() {
+  const token = getAccessToken();
+  const headers = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
-  if (endpoint === '/auth/register' && method === 'POST') {
-    const users = getMockUsers();
-    const email = normalizeEmail(body.email);
-
-    if (users.some((user) => normalizeEmail(user.email) === email)) {
-      throw new ApiError('Email already exists.', 409);
-    }
-
-    const user = {
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      full_name: body.full_name,
-      email,
-      created_at: new Date().toISOString(),
-    };
-
-    users.push({ ...user, password: body.password });
-    setMockUsers(users);
-    return { user };
+  const response = await fetch(`${API_BASE_URL}/admin/connections/export`, { headers });
+  if (!response.ok) {
+    throw new ApiError('ไม่สามารถดาวน์โหลดไฟล์ Connections CSV ได้', response.status);
   }
 
-  if (endpoint === '/auth/login' && method === 'POST') {
-    const users = getMockUsers();
-    const email = normalizeEmail(body.email);
-    const user = users.find((item) => normalizeEmail(item.email) === email);
-
-    if (!user || user.password !== body.password) {
-      throw new ApiError('Invalid email or password.', 401);
-    }
-
-    const accessToken = `mock-access-${user.id}-${Date.now()}`;
-    const refreshToken = `mock-refresh-${user.id}-${Date.now()}`;
-
-    localStorage.setItem('kmaps_mock_session_user_id', user.id);
-
-    return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_in: 60 * 60 * 8,
-    };
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition');
+  let filename = 'connections.csv';
+  if (disposition && disposition.includes('filename=')) {
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match?.[1]) filename = match[1];
   }
 
-  if (endpoint === '/users/me' && method === 'GET') {
-    return sanitizeUser(session);
-  }
-
-  if (endpoint === '/onboarding-status' && method === 'GET') {
-    const connections = getMockConnections(session.id);
-    return {
-      has_connection: connections.google || connections.microsoft,
-      connections,
-    };
-  }
-
-  if (endpoint === '/onboarding-status' && method === 'POST') {
-    const connections = getMockConnections(session.id);
-    const provider = body.provider;
-
-    if (!['google', 'microsoft'].includes(provider)) {
-      throw new ApiError('Unsupported platform.', 400);
-    }
-
-    const next = {
-      ...connections,
-      [provider]: Boolean(body.connected),
-    };
-
-    setMockConnections(session.id, next);
-
-    return {
-      has_connection: next.google || next.microsoft,
-      connections: next,
-    };
-  }
-
-  if (endpoint === '/dashboard/summary' && method === 'GET') {
-    const mockAssignments = getMockAssignmentsFromStorage(session?.id || 'default');
-    const courses = [...new Set(mockAssignments.map((a) => a.course))];
-    const completed = mockAssignments.filter((a) => ['completed', 'submitted'].includes((a.status || '').toLowerCase())).length;
-    return {
-      total_courses: courses.length || 3,
-      total_assignments: mockAssignments.length || 6,
-      due_soon: 1,
-      overdue: 0,
-      completed: completed || 5,
-      connected_platforms: ['google_classroom', 'microsoft_teams'],
-    };
-  }
-
-  if (endpoint.startsWith('/courses') && method === 'GET') {
-    return [
-      { id: 'c1', name: 'ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ', platform: 'google_classroom', is_deleted: false },
-      { id: 'c2', name: 'การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น', platform: 'google_classroom', is_deleted: false },
-      { id: 'c3', name: 'การออกแบบและพัฒนาเว็บไซต์', platform: 'microsoft_teams', is_deleted: false },
-    ];
-  }
-
-  if (endpoint === '/assignments' && method === 'GET') {
-    const connections = getMockConnections(session.id);
-    const mockAssignments = getMockAssignmentsFromStorage(session.id);
-    const filtered = mockAssignments.filter(a => a.platform === 'custom' || connections[a.platform]);
-    return { assignments: filtered };
-  }
-
-  if (endpoint === '/assignments/update-status' && method === 'POST') {
-    const mockAssignments = getMockAssignmentsFromStorage(session.id);
-    const item = mockAssignments.find(a => a.id === body.assignment_id);
-    if (!item) throw new ApiError('Assignment not found.', 404);
-    item.status = body.status;
-    saveMockAssignmentsToStorage(session.id, mockAssignments);
-    return { success: true, assignments: mockAssignments };
-  }
-
-  if (endpoint === '/assignments/create' && method === 'POST') {
-    const mockAssignments = getMockAssignmentsFromStorage(session.id);
-    const newAssignment = {
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      title: body.title,
-      course: body.course,
-      platform: 'custom',
-      due: body.due,
-      status: 'Not started'
-    };
-    mockAssignments.push(newAssignment);
-    saveMockAssignmentsToStorage(session.id, mockAssignments);
-    return { success: true, assignment: newAssignment, assignments: mockAssignments };
-  }
-
-  if (endpoint === '/assignments/delete' && method === 'POST') {
-    let mockAssignments = getMockAssignmentsFromStorage(session.id);
-    mockAssignments = mockAssignments.filter(a => a.id !== body.assignment_id);
-    saveMockAssignmentsToStorage(session.id, mockAssignments);
-    return { success: true, assignments: mockAssignments };
-  }
-
-  throw new ApiError('Mock endpoint not found.', 404);
+  triggerBlobDownload(blob, filename);
 }
 
-function getMockUsers() {
-  const raw = localStorage.getItem(MOCK_USERS_KEY);
-  if (!raw) return [];
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function setMockUsers(users) {
-  localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
-}
-
-function getMockSession() {
-  const userId = localStorage.getItem('kmaps_mock_session_user_id');
-  if (!userId || !getAccessToken()) return null;
-
-  const user = getMockUsers().find((item) => item.id === userId);
-  return user || null;
-}
-
-function getMockConnections(userId) {
-  const raw = localStorage.getItem(MOCK_CONNECTIONS_KEY);
-  let allConnections = {};
-
-  try {
-    allConnections = raw ? JSON.parse(raw) : {};
-  } catch {
-    allConnections = {};
+/**
+ * Download Audit Logs CSV using Bearer token without putting token in URL query
+ */
+export async function downloadAuditLogsCsv({ user = '', action = '', date = '' } = {}) {
+  const token = getAccessToken();
+  const headers = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
-  return allConnections[userId] || { google: false, microsoft: false };
-}
-
-function setMockConnections(userId, connections) {
-  const raw = localStorage.getItem(MOCK_CONNECTIONS_KEY);
-  let allConnections = {};
-
-  try {
-    allConnections = raw ? JSON.parse(raw) : {};
-  } catch {
-    allConnections = {};
+  const query = new URLSearchParams({ user, action, date });
+  const response = await fetch(`${API_BASE_URL}/admin/audit-logs/export?${query.toString()}`, { headers });
+  if (!response.ok) {
+    throw new ApiError('ไม่สามารถดาวน์โหลดไฟล์ Audit Logs CSV ได้', response.status);
   }
 
-  allConnections[userId] = connections;
-  localStorage.setItem(MOCK_CONNECTIONS_KEY, JSON.stringify(allConnections));
-}
-
-function sanitizeUser(user) {
-  const { password, ...profile } = user;
-  return profile;
-}
-
-function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getMockAssignmentsFromStorage(userId) {
-  const raw = localStorage.getItem('kmaps_mock_assignments');
-  let allAssignments = {};
-  try {
-    allAssignments = raw ? JSON.parse(raw) : {};
-  } catch {
-    allAssignments = {};
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition');
+  let filename = 'audit_logs.csv';
+  if (disposition && disposition.includes('filename=')) {
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match?.[1]) filename = match[1];
   }
-  let userAssignments = allAssignments[userId];
-  if (!userAssignments) {
-    userAssignments = [
-      {
-        id: 'mock-1',
-        title: "ออกแบบฐานข้อมูล Relational Database สำหรับระบบคลังสินค้า",
-        course: "ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ",
-        platform: "google",
-        due: "วันนี้, 23:59",
-        status: "Not started",
-      },
-      {
-        id: 'mock-2',
-        title: "สร้างแบบสอบถาม SQL และ Indexing สำหรับระบบจัดการสินค้า",
-        course: "ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ",
-        platform: "google",
-        due: "ส่งแล้วเมื่อวานนี้",
-        status: "Completed",
-      },
-      {
-        id: 'mock-3',
-        title: "เขียนโปรแกรมคำนวณและประมวลผลข้อมูลด้วย Python",
-        course: "การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น",
-        platform: "google",
-        due: "ส่งแล้วเมื่อวานนี้",
-        status: "Completed",
-      },
-      {
-        id: 'mock-4',
-        title: "พัฒนาฟังก์ชันการทำงานแบบ OOP และโครงสร้างข้อมูลเบื้องต้น",
-        course: "การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น",
-        platform: "microsoft",
-        due: "ส่งแล้ว 2 วันก่อน",
-        status: "Completed",
-      },
-      {
-        id: 'mock-5',
-        title: "ออกแบบ Wireframe และ User Journey ด้วย Figma",
-        course: "การออกแบบและพัฒนาเว็บไซต์",
-        platform: "microsoft",
-        due: "ส่งแล้ว 3 วันก่อน",
-        status: "Completed",
-      },
-      {
-        id: 'mock-6',
-        title: "พัฒนาหน้า Dashboard ด้วย HTML, Tailwind CSS และ Material 3",
-        course: "การออกแบบและพัฒนาเว็บไซต์",
-        platform: "microsoft",
-        due: "ส่งแล้ว 4 วันก่อน",
-        status: "Completed",
-      }
-    ];
-    allAssignments[userId] = userAssignments;
-    localStorage.setItem('kmaps_mock_assignments', JSON.stringify(allAssignments));
-  }
-  return userAssignments;
+
+  triggerBlobDownload(blob, filename);
 }
 
-function saveMockAssignmentsToStorage(userId, assignments) {
-  const raw = localStorage.getItem('kmaps_mock_assignments');
-  let allAssignments = {};
-  try {
-    allAssignments = raw ? JSON.parse(raw) : {};
-  } catch {
-    allAssignments = {};
-  }
-  allAssignments[userId] = assignments;
-  localStorage.setItem('kmaps_mock_assignments', JSON.stringify(allAssignments));
+function triggerBlobDownload(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 200);
 }
+
+export { ApiError };

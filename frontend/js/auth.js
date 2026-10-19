@@ -23,18 +23,19 @@ export function resolveAuthError(error) {
   }
 
   const statusMap = {
-    400: { message: error.message || 'Email already exists.', type: 'error' },
-    401: { message: 'Invalid email or password.', type: 'error' },
-    403: { message: 'Your account has been disabled. Please contact support.', type: 'warning' },
-    409: { message: 'Email already exists.', type: 'error' },
+    400: { message: error.message || 'Invalid request.', type: 'error' },
+    401: { message: error.message || 'Invalid email or password.', type: 'error' },
+    403: { message: error.message || 'Your account has been disabled. Please contact support.', type: 'warning' },
+    409: { message: error.message || 'Email already exists.', type: 'error' },
     422: { message: error.message || 'Please enter a valid email address and password.', type: 'error' },
-    500: { message: 'Server error. Please try again later.', type: 'error' },
+    500: { message: error.message || 'Server error. Please try again later.', type: 'error' },
   };
 
   return statusMap[error.status] || { message: error.message || 'An error occurred.', type: 'error' };
 }
 
 export async function handleLogin({ email, password, rememberMe = false }) {
+  setRememberMe(rememberMe);
   const response = await loginUser({ email, password });
 
   setAuthSession({
@@ -42,8 +43,6 @@ export async function handleLogin({ email, password, rememberMe = false }) {
     refreshToken: response.refresh_token,
     expiresIn: response.expires_in,
   });
-
-  setRememberMe(rememberMe);
 
   try {
     const user = await getCurrentUser();
@@ -70,7 +69,7 @@ export async function handleRegister({ full_name, email, password }) {
 
 export async function routeAfterAuth() {
   try {
-    const user = await getSignedInUser();
+    const user = await getSignedInUser({ forceRefresh: true });
     if (user && user.role === 'admin') {
       showToast('Signed in as administrator.', 'success');
       redirect('admin.html');
@@ -106,9 +105,14 @@ export function requireAuth() {
   return true;
 }
 
-export async function getSignedInUser() {
+export async function getSignedInUser({ forceRefresh = false } = {}) {
   const cached = getUserProfile();
-  if (cached && cached.id !== 'demo-kunagron') return cached;
+  const fetchedAt = Number(sessionStorage.getItem('kmaps_user_profile_fetched_at') || localStorage.getItem('kmaps_user_profile_fetched_at') || 0);
+  const isFresh = Date.now() - fetchedAt < 5 * 60 * 1000; // 5 minutes cache
+
+  if (cached && cached.id !== 'demo-kunagron' && isFresh && !forceRefresh) {
+    return cached;
+  }
 
   try {
     const user = await getCurrentUser();
