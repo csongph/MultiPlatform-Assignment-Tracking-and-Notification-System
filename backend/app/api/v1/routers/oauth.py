@@ -1,6 +1,9 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.config import settings
@@ -74,6 +77,7 @@ async def oauth_callback(
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
+    error_description: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -88,10 +92,31 @@ async def oauth_callback(
     """
     provider_slug = _PLATFORM_TO_SLUG.get(platform, platform)
 
+    # Check for error or admin consent required from provider query params
+    full_error_str = f"{error or ''} {error_description or ''}".lower()
+    is_admin_consent_required = any(
+        err in full_error_str
+        for err in ("aadsts65001", "aadsts90094", "consent_required", "interaction_required")
+    )
+
+    if is_admin_consent_required:
+        logger.warning(
+            "OAuth admin consent required for platform %s: %s",
+            platform,
+            error_description or error,
+        )
+        error_url = (
+            f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
+            f"?oauth_error={provider_slug}_admin_consent_required"
+        )
+        return RedirectResponse(url=error_url, status_code=302)
+
     # The user can decline consent on Google/Microsoft's screen, in which
     # case they're redirected back with `error=access_denied` and no `code`
     # at all - handle that before trying to exchange a code that isn't there.
     if error or not code or not state:
+        if error:
+            logger.warning("OAuth error returned from provider %s: %s", platform, error)
         reason = "denied" if error == "access_denied" else "failed"
         error_url = (
             f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
@@ -102,7 +127,24 @@ async def oauth_callback(
     service = OAuthOnboardingService(db)
     try:
         connection = await service.handle_callback(platform, code=code, state=state)
-    except AppError:
+    except AppError as exc:
+        exc_str = str(exc).lower()
+        if any(err in exc_str for err in ("aadsts65001", "aadsts90094", "consent_required", "interaction_required")):
+            logger.warning("OAuth admin consent required during token exchange for %s: %s", platform, exc)
+            error_url = (
+                f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
+                f"?oauth_error={provider_slug}_admin_consent_required"
+            )
+            return RedirectResponse(url=error_url, status_code=302)
+
+        logger.error("OAuth callback error for platform %s: %s", platform, exc)
+        error_url = (
+            f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
+            f"?oauth_error={provider_slug}_failed"
+        )
+        return RedirectResponse(url=error_url, status_code=302)
+    except Exception as exc:
+        logger.exception("Unexpected error during OAuth callback for platform %s", platform)
         error_url = (
             f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
             f"?oauth_error={provider_slug}_failed"

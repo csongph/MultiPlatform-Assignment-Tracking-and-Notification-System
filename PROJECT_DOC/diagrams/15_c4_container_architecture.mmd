@@ -1,0 +1,43 @@
+flowchart TB
+    classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef container fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef db fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+    classDef ext fill:#eceff1,stroke:#455a64,stroke-width:2px,color:#263238;
+
+    U_Student["👨‍🎓 <b>Student (ผู้เรียน)</b>"]:::user
+    U_Admin["👨‍💼 <b>Administrator (ผู้ดูแลระบบ)</b>"]:::user
+
+    subgraph AppContainer["ระบบ MultiPlatform Assignment Tracking System"]
+        SPA["<b>Web Application (SPA Frontend)</b><br/>[React / Vite / TypeScript / TailwindCSS]<br/>แสดงผล Dashboard, Task List, Calendar, Admin Panels"]:::container
+        
+        API["<b>Core API Application</b><br/>[FastAPI / Python 3.11 / AsyncIO]<br/>ให้บริการ REST APIs, Authentication, RBAC, Data Orchestration"]:::container
+        
+        Worker_Sync["<b>Sync Engine Worker</b><br/>[Python Background Service / APScheduler]<br/>ดึงข้อมูล LMS Delta-Sync ทุก 10-15 นาที"]:::container
+        
+        Worker_Notif["<b>Notification Dispatcher</b><br/>[Python Cron Worker]<br/>ประมวลผล Multi-tier Queue ทุก 1 นาที"]:::container
+
+        Redis["<b>Cache & Rate Limiter</b><br/>[Redis 7]<br/>Session Storage, Rate Limit Counter, Course Cache 5m"]:::db
+        
+        NeonDB[("<b>Primary Database</b><br/>[Neon Serverless PostgreSQL 16]<br/>จัดเก็บ 12 ตารางข้อมูล และ Encrypted Tokens")]:::db
+    end
+
+    subgraph ExtServices["ระบบและบริการภายนอก (External Integrations)"]
+        GC["<b>Google Classroom API</b><br/>OAuth2, CourseWork Endpoints"]:::ext
+        MS["<b>Microsoft Graph API</b><br/>OAuth2, Education Teams Endpoints"]:::ext
+        SMTP["<b>Email Provider</b><br/>[SMTP / SendGrid API]"]:::ext
+    end
+
+    U_Student & U_Admin -->|"HTTPS / TLS 1.3"| SPA
+    SPA -->|"JSON / REST API (JWT Bearer)"| API
+
+    API -->|"Async Read/Write (SQLAlchemy ORM)"| NeonDB
+    API -->|"Cache Read/Write & Rate Limit Check"| Redis
+    
+    Worker_Sync -->|"Upsert Courses / Assignments / Sync Logs"| NeonDB
+    Worker_Sync -->|"Invalidate Course Cache"| Redis
+    
+    Worker_Notif -->|"Poll Pending Tiers / Update Delivered"| NeonDB
+
+    API -->|"OAuth Authorization Code Flow"| GC & MS
+    Worker_Sync -->|"Fetch Assignments (Encrypted Refresh Token)"| GC & MS
+    Worker_Notif -->|"Send Dispatch Email / Push"| SMTP

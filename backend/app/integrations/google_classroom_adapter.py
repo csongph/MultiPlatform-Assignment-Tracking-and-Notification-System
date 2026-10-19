@@ -21,7 +21,7 @@ CLASSROOM_API_BASE = "https://classroom.googleapis.com/v1"
 SCOPES = [
     "https://www.googleapis.com/auth/classroom.courses.readonly",
     "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
-    "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
+    "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly",
     "openid",
     "email",
     "profile",

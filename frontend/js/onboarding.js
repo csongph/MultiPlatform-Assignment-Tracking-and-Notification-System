@@ -1,3 +1,4 @@
+```javascript
 import {
   getOnboardingStatus,
   disconnectPlatform,
@@ -23,7 +24,7 @@ async function init() {
 
   await refreshStatus();
 
-  // อ่าน Query params หลัง redirect กลับมาจาก OAuth
+  // Read query parameters after returning from OAuth.
   const urlParams = new URLSearchParams(window.location.search);
   const oauthSuccess = urlParams.get('oauth_success');
   const oauthError = urlParams.get('oauth_error');
@@ -47,10 +48,18 @@ async function init() {
       google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
       microsoft_denied: 'ยกเลิกการให้สิทธิ์ Microsoft Teams แล้ว',
       microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      microsoft_admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
       invalid_state: 'เซสชันการเชื่อมต่อหมดอายุ กรุณาลองใหม่อีกครั้ง',
       session_expired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
     };
-    showToast(errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง', 'error');
+
+    showToast(
+      errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
@@ -60,39 +69,58 @@ async function refreshStatus() {
     const status = await getOnboardingStatus();
     renderStatus(status?.connections || {});
   } catch {
-    showToast('ไม่สามารถดึงข้อมูลสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง', 'error');
+    showToast(
+      'ไม่สามารถดึงข้อมูลสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
   }
 }
 
 async function toggleProvider(button) {
   const provider = button.dataset.provider;
-  const card = document.querySelector(`[data-provider-card="${provider}"]`);
+  const card = document.querySelector(
+    `[data-provider-card="${provider}"]`,
+  );
   const isConnected = card?.classList.contains('connected');
 
-  // กรณีเชื่อมต่อ: เรียก OAuth authorize URL
+  // Connect platform through OAuth.
   if (!isConnected) {
     setButtonLoading(button, true, 'กำลังเชื่อมต่อ...');
+
     try {
       if (provider === 'microsoft') {
         await connectMicrosoft();
-      } else {
+      } else if (provider === 'google') {
         await connectGoogleClassroom();
+      } else {
+        throw new Error('ไม่รองรับแพลตฟอร์มนี้');
       }
     } catch {
-      showToast(`ไม่สามารถเริ่มต้นการเชื่อมต่อ ${providerLabels[provider] || provider} ได้`, 'error');
+      showToast(
+        `ไม่สามารถเริ่มต้นการเชื่อมต่อ ${providerLabels[provider] || provider} ได้`,
+        'error',
+      );
       setButtonLoading(button, false);
     }
+
     return;
   }
 
-  // กรณียกเลิกการเชื่อมต่อ: เรียก DELETE /oauth/{platform} (204 No Content)
+  // Disconnect platform.
   setButtonLoading(button, true, 'กำลังตัดการเชื่อมต่อ...');
+
   try {
     await disconnectPlatform(provider);
-    showToast(`ตัดการเชื่อมต่อ ${providerLabels[provider]} สำเร็จ`, 'success');
+    showToast(
+      `ตัดการเชื่อมต่อ ${providerLabels[provider]} สำเร็จ`,
+      'success',
+    );
     await refreshStatus();
   } catch (err) {
-    showToast(err.message || 'ไม่สามารถตัดการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง', 'error');
+    showToast(
+      err.message || 'ไม่สามารถตัดการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
   } finally {
     setButtonLoading(button, false);
   }
@@ -104,15 +132,23 @@ function renderStatus(connections) {
   const summary = document.getElementById('connection-summary');
 
   Object.entries(providerLabels).forEach(([provider, label]) => {
-    const card = document.querySelector(`[data-provider-card="${provider}"]`);
-    const button = document.querySelector(`[data-provider="${provider}"]`);
+    const card = document.querySelector(
+      `[data-provider-card="${provider}"]`,
+    );
+    const button = document.querySelector(
+      `[data-provider="${provider}"]`,
+    );
     const connected = Boolean(connections[provider]);
 
     card?.classList.toggle('connected', connected);
 
     if (button) {
       const shortName = label.split(' ')[0];
-      button.textContent = connected ? `Disconnect ${shortName}` : `Connect ${shortName}`;
+
+      button.textContent = connected
+        ? `Disconnect ${shortName}`
+        : `Connect ${shortName}`;
+
       button.classList.toggle('btn-danger', connected);
       button.classList.toggle('btn-primary', !connected);
     }
@@ -126,8 +162,12 @@ function renderStatus(connections) {
 
   if (continueLink) {
     continueLink.classList.toggle('disabled', connectedCount === 0);
-    continueLink.setAttribute('aria-disabled', connectedCount === 0 ? 'true' : 'false');
+    continueLink.setAttribute(
+      'aria-disabled',
+      connectedCount === 0 ? 'true' : 'false',
+    );
   }
 }
 
 document.addEventListener('DOMContentLoaded', init);
+```

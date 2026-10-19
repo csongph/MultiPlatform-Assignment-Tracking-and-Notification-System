@@ -12,6 +12,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import Role, User, UserRole
+from app.models.core import NotificationRule, NotificationSettings
 from app.repositories.admin_repository import AuditLogRepository
 from app.schemas.auth import RegisterRequest
 
@@ -48,7 +49,31 @@ async def register_user(db: AsyncSession, data: RegisterRequest) -> User:
     db.add(user)
     await db.flush()
 
+    # กำหนด role เป็น student
     db.add(UserRole(user_id=user.id, role_id=student_role.id))
+
+    # ✅ สร้าง NotificationSettings default ให้ user ใหม่ทันที
+    # ป้องกัน null settings error เมื่อ user ยังไม่ได้ตั้งค่าเอง
+    db.add(NotificationSettings(
+        user_id=user.id,
+        lead_time_minutes=60,          # แจ้งเตือนล่วงหน้า 1 ชั่วโมง (default)
+        new_assignment_enabled=True,   # แจ้งเมื่อมีงานใหม่
+        due_soon_enabled=True,         # แจ้งก่อนถึงกำหนด
+        overdue_enabled=True,          # แจ้งเมื่อเลยกำหนด
+        channel="push",                # ช่องทาง push notification
+    ))
+    # Default rule keeps the notification pipeline useful immediately while
+    # allowing the user to add/edit later rules through Notification Rules API.
+    db.add(NotificationRule(
+        user_id=user.id,
+        type="due_soon",
+        lead_time_value=1,
+        lead_time_unit="hour",
+        lead_time_minutes=60,
+        sequence_order=1,
+        is_enabled=True,
+    ))
+
     await db.commit()
 
     # ต้อง reload user พร้อม eager-load ความสัมพันธ์ที่ user_to_dict ต้องใช้
@@ -60,6 +85,7 @@ async def register_user(db: AsyncSession, data: RegisterRequest) -> User:
     user = result.scalar_one()
 
     return user
+
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:

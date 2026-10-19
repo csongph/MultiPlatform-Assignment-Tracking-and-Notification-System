@@ -21,16 +21,26 @@ class Settings(BaseSettings):
 
     MICROSOFT_OAUTH_CLIENT_ID: str = ""
     MICROSOFT_OAUTH_CLIENT_SECRET: str = ""
-    MICROSOFT_OAUTH_TENANT: str = "common"
+    MICROSOFT_OAUTH_TENANT: str = "organizations"
     MICROSOFT_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/oauth/microsoft_teams/callback"
 
     # Where the browser is sent back to after onboarding finishes (your frontend app)
-    FRONTEND_ORIGIN: str = "http://localhost:5173"
-    FRONTEND_ONBOARDING_SUCCESS_PATH: str = "/onboarding/success"
-    FRONTEND_ONBOARDING_ERROR_PATH: str = "/onboarding/error"
+    FRONTEND_ORIGIN: str = "http://localhost:5500"
+    FRONTEND_ONBOARDING_SUCCESS_PATH: str = "/pages/onboarding.html"
+    FRONTEND_ONBOARDING_ERROR_PATH: str = "/pages/onboarding.html"
 
     SYNC_INTERVAL_MINUTES: int = 10
     NOTIFICATION_POLL_INTERVAL_SECONDS: int = 60
+    NOTIFICATION_MAX_RETRIES: int = 3
+
+    # Dedicated KMAPS sender account, authorized once with the Gmail API's
+    # gmail.send scope.  This is deliberately separate from student OAuth.
+    GMAIL_SENDER_CLIENT_ID: str = ""
+    GMAIL_SENDER_CLIENT_SECRET: str = ""
+    GMAIL_SENDER_REFRESH_TOKEN: str = ""
+    GMAIL_SENDER_FROM_EMAIL: str = ""
+    GMAIL_SENDER_FROM_NAME: str = "KMAPS Notifications"
+    GMAIL_SENDER_REDIRECT_URI: str = "http://localhost:8085"
     TOKEN_REFRESH_LEAD_MINUTES: int = 15
     CACHE_TTL_SECONDS: int = 300
 

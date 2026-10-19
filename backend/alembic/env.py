@@ -1,38 +1,42 @@
-import asyncio
+```python
 from logging.config import fileConfig
 from pathlib import Path
 import sys
 
 from alembic import context
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy import create_engine, pool
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.models import Base
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config = context.config
 
-# Set sqlalchemy.url directly from settings (uses postgresql+asyncpg://...)
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Convert async PostgreSQL URL to a synchronous URL for Alembic.
+_raw_url = settings.DATABASE_URL.replace("+asyncpg", "")
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# Handle Neon PostgreSQL SSL configuration.
+if "?ssl=require" in _raw_url:
+    _raw_url = _raw_url.replace("?ssl=require", "")
+    _SYNC_SSL = True
+else:
+    _SYNC_SSL = False
+
+config.set_main_option("sqlalchemy.url", _raw_url)
+
+# Configure logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
+# Register model metadata for Alembic autogenerate.
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
+    """Run migrations without creating a database connection."""
     url = config.get_main_option("sqlalchemy.url")
+
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -44,33 +48,33 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+def run_migrations_online() -> None:
+    """Run migrations using a synchronous SQLAlchemy engine."""
+    url = config.get_main_option("sqlalchemy.url")
 
-    with context.begin_transaction():
-        context.run_migrations()
+    connect_args = {"sslmode": "require"} if _SYNC_SSL else {}
 
-
-async def run_async_migrations() -> None:
-    """Run migrations in 'online' mode with asyncpg engine."""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_engine(
+        url,
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+    try:
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+            )
 
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    run_migrations_online()
+```
