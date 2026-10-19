@@ -1,3 +1,4 @@
+```javascript
 /**
  * KMAPS Validation Module
  * Client-side form validation for auth pages
@@ -15,10 +16,17 @@ export function validateEmail(email) {
     errors.push('Please enter a valid email address.');
   }
 
-  return { valid: errors.length === 0, errors, value: trimmed };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value: trimmed,
+  };
 }
 
-export function validatePassword(password, { minLength = 8, maxLengthBytes = 72 } = {}) {
+export function validatePassword(
+  password,
+  { minLength = 8, maxLengthBytes = 72 } = {},
+) {
   const errors = [];
   const value = password || '';
 
@@ -28,12 +36,19 @@ export function validatePassword(password, { minLength = 8, maxLengthBytes = 72 
     errors.push(`Password must be at least ${minLength} characters.`);
   } else {
     const byteLength = new TextEncoder().encode(value).length;
+
     if (byteLength > maxLengthBytes) {
-      errors.push(`Password must not exceed ${maxLengthBytes} bytes (currently ${byteLength} bytes).`);
+      errors.push(
+        `Password must not exceed ${maxLengthBytes} bytes (currently ${byteLength} bytes).`,
+      );
     }
   }
 
-  return { valid: errors.length === 0, errors, value };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value,
+  };
 }
 
 export function validateConfirmPassword(password, confirmPassword) {
@@ -46,7 +61,11 @@ export function validateConfirmPassword(password, confirmPassword) {
     errors.push('Passwords do not match.');
   }
 
-  return { valid: errors.length === 0, errors, value };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value,
+  };
 }
 
 export function validateFullName(fullName) {
@@ -59,16 +78,31 @@ export function validateFullName(fullName) {
     errors.push('Full name must be at least 2 characters.');
   }
 
-  return { valid: errors.length === 0, errors, value: trimmed };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value: trimmed,
+  };
 }
 
 export function validateLoginForm({ email, password }) {
   const emailResult = validateEmail(email);
-  const passwordResult = validatePassword(password, { minLength: 1 });
+
+  // Login only requires a non-empty password.
+  // Password policy is enforced during registration.
+  const passwordResult = validatePassword(password, {
+    minLength: 1,
+  });
 
   const fieldErrors = {};
-  if (!emailResult.valid) fieldErrors.email = emailResult.errors[0];
-  if (!passwordResult.valid) fieldErrors.password = passwordResult.errors[0];
+
+  if (!emailResult.valid) {
+    fieldErrors.email = emailResult.errors[0];
+  }
+
+  if (!passwordResult.valid) {
+    fieldErrors.password = passwordResult.errors[0];
+  }
 
   return {
     valid: emailResult.valid && passwordResult.valid,
@@ -80,17 +114,37 @@ export function validateLoginForm({ email, password }) {
   };
 }
 
-export function validateRegisterForm({ full_name, email, password, confirm_password }) {
+export function validateRegisterForm({
+  full_name,
+  email,
+  password,
+  confirm_password,
+}) {
   const fullNameResult = validateFullName(full_name);
   const emailResult = validateEmail(email);
   const passwordResult = validatePassword(password);
-  const confirmResult = validateConfirmPassword(password, confirm_password);
+  const confirmResult = validateConfirmPassword(
+    password,
+    confirm_password,
+  );
 
   const fieldErrors = {};
-  if (!fullNameResult.valid) fieldErrors.full_name = fullNameResult.errors[0];
-  if (!emailResult.valid) fieldErrors.email = emailResult.errors[0];
-  if (!passwordResult.valid) fieldErrors.password = passwordResult.errors[0];
-  if (!confirmResult.valid) fieldErrors.confirm_password = confirmResult.errors[0];
+
+  if (!fullNameResult.valid) {
+    fieldErrors.full_name = fullNameResult.errors[0];
+  }
+
+  if (!emailResult.valid) {
+    fieldErrors.email = emailResult.errors[0];
+  }
+
+  if (!passwordResult.valid) {
+    fieldErrors.password = passwordResult.errors[0];
+  }
+
+  if (!confirmResult.valid) {
+    fieldErrors.confirm_password = confirmResult.errors[0];
+  }
 
   return {
     valid:
@@ -109,23 +163,29 @@ export function validateRegisterForm({ full_name, email, password, confirm_passw
 
 export function setFieldError(form, fieldName, message) {
   const input = form.querySelector(`[name="${fieldName}"]`);
-  const errorEl = form.querySelector(`[data-error-for="${fieldName}"]`);
+  const errorElement = form.querySelector(
+    `[data-error-for="${fieldName}"]`,
+  );
 
   if (input) {
-    input.setAttribute('aria-invalid', message ? 'true' : 'false');
+    input.setAttribute(
+      'aria-invalid',
+      message ? 'true' : 'false',
+    );
+
     input.classList.toggle('input-error', Boolean(message));
   }
 
-  if (errorEl) {
-    errorEl.textContent = message || '';
-    errorEl.classList.toggle('visible', Boolean(message));
+  if (errorElement) {
+    errorElement.textContent = message || '';
+    errorElement.classList.toggle('visible', Boolean(message));
   }
 }
 
 export function clearFormErrors(form) {
-  form.querySelectorAll('[data-error-for]').forEach((el) => {
-    el.textContent = '';
-    el.classList.remove('visible');
+  form.querySelectorAll('[data-error-for]').forEach((element) => {
+    element.textContent = '';
+    element.classList.remove('visible');
   });
 
   form.querySelectorAll('[aria-invalid="true"]').forEach((input) => {
@@ -136,7 +196,9 @@ export function clearFormErrors(form) {
 
 export function applyFieldErrors(form, fieldErrors) {
   clearFormErrors(form);
+
   Object.entries(fieldErrors).forEach(([field, message]) => {
     setFieldError(form, field, message);
   });
 }
+```

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ภาพรวมระบบ | LMS Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-page="dashboard">
+  <div class="app">
+    <main class="main">
+      <div class="dash-grid">
+
+       
+        <section class="card">
+          <h2 class="card-title">จำนวนผู้ใช้ทั้งหมด</h2>
+          <div class="count-wrap">
+            <div class="count-box">
+              <div class="count-label">นักเรียน</div>
+              <div class="count-num" id="studentCount">0</div>
+              <div class="count-growth"><b id="studentGrowth">↑ 0 %</b><br />จากเดือนที่แล้ว</div>
+            </div>
+            <div class="count-box">
+              <div class="count-label">แอดมิน</div>
+              <div class="count-num" id="adminCount">0</div>
+              <div class="count-growth"><b id="adminGrowth">↑ 0 %</b><br />จากเดือนที่แล้ว</div>
+            </div>
+          </div>
+        </section>
+
+        
+        <section class="card">
+          <h2 class="card-title">สถานะการ Sync LMS</h2>
+          <table class="table sync-table">
+            <thead>
+              <tr><th>Email</th><th>Type</th><th>Status</th></tr>
+            </thead>
+            <tbody id="syncBody"></tbody>
+          </table>
+        </section>
+
+        <!-- รายวิชาที่เชื่อมต่อ -->
+        <section class="card dash-wide">
+          <div class="card-head">
+            <h2 class="card-title">รายวิชาที่เชื่อมต่อจาก Google Classroom และ Teams</h2>
+            <div class="chart-switch" id="chartSwitch" role="tablist" aria-label="เลือกรูปแบบกราฟ">
+              <button type="button" data-chart="pie" title="กราฟวงกลม">
+                <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M14 1.5V10h8.5A8.5 8.5 0 0 0 14 1.5z"/></svg>
+                <span>พาย</span>
+              </button>
+              <button type="button" data-chart="donut" title="กราฟโดนัท">
+                <svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+                <span>โดนัท</span>
+              </button>
+              <button type="button" data-chart="bar" title="กราฟแท่งแนวตั้ง">
+                <svg viewBox="0 0 24 24"><rect x="3" y="10" width="5" height="11" rx="1"/><rect x="10" y="4" width="5" height="17" rx="1"/><rect x="17" y="13" width="5" height="8" rx="1"/></svg>
+                <span>แท่งตั้ง</span>
+              </button>
+              <button type="button" data-chart="hbar" title="กราฟแท่งแนวนอน">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="17" height="5" rx="1"/><rect x="3" y="10" width="11" height="5" rx="1"/><rect x="3" y="17" width="6" height="5" rx="1"/></svg>
+                <span>แท่งนอน</span>
+              </button>
+              <button type="button" data-chart="stack" title="แท่งสัดส่วน 100%">
+                <svg viewBox="0 0 24 24"><rect x="2" y="8" width="11" height="8" rx="1"/><rect x="14" y="8" width="5" height="8"/><rect x="20" y="8" width="2" height="8"/></svg>
+                <span>สัดส่วน</span>
+              </button>
+            </div>
+          </div>
+          <div class="chart-area">
+            <div class="chart-canvas" id="chartCanvas"></div>
+            <div class="legend" id="legend"></div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="layout.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

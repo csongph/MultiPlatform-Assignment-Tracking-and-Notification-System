@@ -5,8 +5,10 @@ import {
   connectGoogleClassroom,
   connectMicrosoft,
 } from './api.js';
+
 import { requireAuth, logout } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
+import { initNavigation } from './navigation.js';
 
 const providerLabels = {
   google: 'Google Classroom',
@@ -16,7 +18,12 @@ const providerLabels = {
 async function init() {
   if (!requireAuth()) return;
 
-  document.getElementById('logout-button')?.addEventListener('click', logout);
+  // Initialize navigation.
+  initNavigation('overview');
+
+  document
+    .getElementById('logout-button')
+    ?.addEventListener('click', logout);
 
   document.querySelectorAll('[data-provider]').forEach((button) => {
     button.addEventListener('click', () => toggleProvider(button));
@@ -24,30 +31,32 @@ async function init() {
 
   await refreshStatus();
 
-  // Read query parameters after returning from OAuth.
+  // Handle OAuth callback.
   const urlParams = new URLSearchParams(window.location.search);
   const oauthSuccess = urlParams.get('oauth_success');
   const oauthError = urlParams.get('oauth_error');
   const synced = urlParams.get('synced');
 
   if (oauthSuccess === 'google') {
-    const msg = synced
-      ? `เชื่อมต่อ Google Classroom สำเร็จ! ซิงก์งานได้ ${synced} รายการ`
-      : 'เชื่อมต่อ Google Classroom สำเร็จ!';
-    showToast(msg, 'success');
+    const message = synced
+      ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
+      : 'Google Classroom เชื่อมต่อสำเร็จ!';
+
+    showToast(message, 'success');
     window.history.replaceState({}, '', window.location.pathname);
   } else if (oauthSuccess === 'microsoft') {
-    const msg = synced
-      ? `เชื่อมต่อ Microsoft Teams สำเร็จ! ซิงก์งานได้ ${synced} รายการ`
-      : 'เชื่อมต่อ Microsoft Teams สำเร็จ!';
-    showToast(msg, 'success');
+    const message = synced
+      ? `Microsoft Teams เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
+      : 'Microsoft Teams เชื่อมต่อสำเร็จ!';
+
+    showToast(message, 'success');
     window.history.replaceState({}, '', window.location.pathname);
   } else if (oauthError) {
     const errorMessages = {
-      google_denied: 'ยกเลิกการให้สิทธิ์ Google Classroom แล้ว',
-      google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
-      microsoft_denied: 'ยกเลิกการให้สิทธิ์ Microsoft Teams แล้ว',
-      microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      google_denied: 'ยกเลิกการเชื่อมต่อ Google Classroom แล้ว',
+      google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
+      microsoft_denied: 'ยกเลิกการเชื่อมต่อ Microsoft Teams แล้ว',
+      microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่',
       microsoft_admin_consent_required:
         'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
       admin_consent_required:
@@ -57,9 +66,11 @@ async function init() {
     };
 
     showToast(
-      errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      errorMessages[oauthError] ||
+        'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
       'error',
     );
+
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
@@ -70,7 +81,7 @@ async function refreshStatus() {
     renderStatus(status?.connections || {});
   } catch {
     showToast(
-      'ไม่สามารถดึงข้อมูลสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'ไม่สามารถโหลดสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
       'error',
     );
   }
@@ -83,42 +94,46 @@ async function toggleProvider(button) {
   );
   const isConnected = card?.classList.contains('connected');
 
-  // Connect platform through OAuth.
+  // Connect through OAuth.
   if (!isConnected) {
-    setButtonLoading(button, true, 'กำลังเชื่อมต่อ...');
+    setButtonLoading(button, true, 'Connecting...');
 
     try {
-      if (provider === 'microsoft') {
-        await connectMicrosoft();
-      } else if (provider === 'google') {
+      if (provider === 'google') {
         await connectGoogleClassroom();
+      } else if (provider === 'microsoft') {
+        await connectMicrosoft();
       } else {
-        throw new Error('ไม่รองรับแพลตฟอร์มนี้');
+        throw new Error('Unsupported platform');
       }
-    } catch {
+    } catch (error) {
       showToast(
-        `ไม่สามารถเริ่มต้นการเชื่อมต่อ ${providerLabels[provider] || provider} ได้`,
+        error?.message ||
+          `Unable to connect ${providerLabels[provider] || provider}. Please try again.`,
         'error',
       );
+
       setButtonLoading(button, false);
     }
 
     return;
   }
 
-  // Disconnect platform.
-  setButtonLoading(button, true, 'กำลังตัดการเชื่อมต่อ...');
+  // Disconnect an existing connection.
+  setButtonLoading(button, true, 'Disconnecting...');
 
   try {
     await disconnectPlatform(provider);
+
     showToast(
-      `ตัดการเชื่อมต่อ ${providerLabels[provider]} สำเร็จ`,
+      `${providerLabels[provider] || provider} disconnected successfully.`,
       'success',
     );
+
     await refreshStatus();
-  } catch (err) {
+  } catch (error) {
     showToast(
-      err.message || 'ไม่สามารถตัดการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      error?.message || 'Unable to disconnect. Please try again.',
       'error',
     );
   } finally {
@@ -156,8 +171,8 @@ function renderStatus(connections) {
 
   if (summary) {
     summary.textContent = connectedCount
-      ? `เชื่อมต่อแล้ว ${connectedCount} แพลตฟอร์ม คุณสามารถเข้าสู่หน้าแดชบอร์ดได้ทันที`
-      : 'เชื่อมต่ออย่างน้อย 1 แพลตฟอร์มเพื่อเริ่มใช้งานแดชบอร์ด';
+      ? `${connectedCount} platform${connectedCount > 1 ? 's' : ''} connected. You can continue to the dashboard.`
+      : 'Connect one platform to unlock your dashboard.';
   }
 
   if (continueLink) {

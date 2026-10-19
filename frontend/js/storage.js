@@ -1,7 +1,9 @@
+```javascript
 /**
  * KMAPS Storage Module
- * Manages authentication tokens and user profile in localStorage / sessionStorage
- * based on the Remember Me preference.
+ * Manages authentication tokens and user profile storage.
+ * Remember Me enabled  -> localStorage
+ * Remember Me disabled -> sessionStorage
  */
 
 const STORAGE_KEYS = {
@@ -16,7 +18,11 @@ const STORAGE_KEYS = {
 
 export function setRememberMe(value) {
   const isRemember = Boolean(value);
-  localStorage.setItem(STORAGE_KEYS.REMEMBER_ME, isRemember ? 'true' : 'false');
+
+  localStorage.setItem(
+    STORAGE_KEYS.REMEMBER_ME,
+    isRemember ? 'true' : 'false',
+  );
 }
 
 export function getRememberMe() {
@@ -32,16 +38,13 @@ function getItemAnywhere(key) {
 }
 
 export function setAccessToken(token) {
-  if (token) {
-    // If not remember me, remove from localStorage just in case, save to sessionStorage
-    if (getRememberMe()) {
-      sessionStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-      sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-    }
-  }
+  if (!token) return;
+
+  const storage = getActiveStorage();
+  const otherStorage = getRememberMe() ? sessionStorage : localStorage;
+
+  otherStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+  storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
 }
 
 export function getAccessToken() {
@@ -49,15 +52,13 @@ export function getAccessToken() {
 }
 
 export function setRefreshToken(token) {
-  if (token) {
-    if (getRememberMe()) {
-      sessionStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-      sessionStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
-    }
-  }
+  if (!token) return;
+
+  const storage = getActiveStorage();
+  const otherStorage = getRememberMe() ? sessionStorage : localStorage;
+
+  otherStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+  storage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
 }
 
 export function getRefreshToken() {
@@ -65,18 +66,26 @@ export function getRefreshToken() {
 }
 
 export function setUserProfile(profile) {
-  if (profile) {
-    const serialized = JSON.stringify(profile);
-    const now = String(Date.now());
-    const storage = getActiveStorage();
-    storage.setItem(STORAGE_KEYS.USER_PROFILE, serialized);
-    storage.setItem(STORAGE_KEYS.USER_PROFILE_FETCHED_AT, now);
-  }
+  if (!profile) return;
+
+  const storage = getActiveStorage();
+  const otherStorage = getRememberMe() ? sessionStorage : localStorage;
+
+  otherStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+  otherStorage.removeItem(STORAGE_KEYS.USER_PROFILE_FETCHED_AT);
+
+  storage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+  storage.setItem(
+    STORAGE_KEYS.USER_PROFILE_FETCHED_AT,
+    String(Date.now()),
+  );
 }
 
 export function getUserProfile() {
   const raw = getItemAnywhere(STORAGE_KEYS.USER_PROFILE);
+
   if (!raw) return null;
+
   try {
     return JSON.parse(raw);
   } catch {
@@ -89,14 +98,29 @@ export function getUserProfileFetchedAt() {
   return raw ? Number(raw) : 0;
 }
 
-export function setAuthSession({ accessToken, refreshToken, expiresIn, userProfile }) {
+export function setAuthSession({
+  accessToken,
+  refreshToken,
+  expiresIn,
+  userProfile,
+}) {
   if (accessToken) setAccessToken(accessToken);
   if (refreshToken) setRefreshToken(refreshToken);
+
   if (expiresIn) {
     const expiresAt = Date.now() + expiresIn * 1000;
     const storage = getActiveStorage();
-    storage.setItem(STORAGE_KEYS.TOKEN_EXPIRES_AT, String(expiresAt));
+    const otherStorage = getRememberMe()
+      ? sessionStorage
+      : localStorage;
+
+    otherStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRES_AT);
+    storage.setItem(
+      STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      String(expiresAt),
+    );
   }
+
   if (userProfile) setUserProfile(userProfile);
 }
 
@@ -108,13 +132,19 @@ export function clearAuthSession() {
 }
 
 export function isTokenExpired() {
-  const expiresAt = Number(getItemAnywhere(STORAGE_KEYS.TOKEN_EXPIRES_AT));
+  const expiresAt = Number(
+    getItemAnywhere(STORAGE_KEYS.TOKEN_EXPIRES_AT),
+  );
+
   return Boolean(expiresAt && Date.now() > expiresAt);
 }
 
 export function isAuthenticated() {
   const token = getAccessToken();
-  if (!token || token === 'mock-preview-session-token') return false;
+
+  if (!token || token === 'mock-preview-session-token') {
+    return false;
+  }
 
   if (isTokenExpired()) {
     clearAuthSession();
@@ -123,3 +153,4 @@ export function isAuthenticated() {
 
   return true;
 }
+```
