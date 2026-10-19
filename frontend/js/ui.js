@@ -6,6 +6,9 @@
 
 const TOAST_CONTAINER_ID = 'toast-container';
 
+/**
+ * โหลด HTML Component ลงใน Container
+ */
 export async function loadComponent(containerId, componentPath) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -18,11 +21,14 @@ export async function loadComponent(containerId, componentPath) {
     }
 
     container.innerHTML = await response.text();
-  } catch (err) {
-    console.error('Component load error:', err);
+  } catch (error) {
+    console.error('Component load error:', error);
   }
 }
 
+/**
+ * โหลด Components หลายรายการพร้อมกัน
+ */
 export async function loadComponents(components) {
   await Promise.all(
     components.map(({ containerId, path }) =>
@@ -31,10 +37,14 @@ export async function loadComponents(components) {
   );
 }
 
+/**
+ * สร้าง Toast Container หากยังไม่มี
+ */
 export function initToastContainer() {
   if (document.getElementById(TOAST_CONTAINER_ID)) return;
 
   const container = document.createElement('div');
+
   container.id = TOAST_CONTAINER_ID;
   container.className = 'toast-container';
   container.setAttribute('role', 'region');
@@ -44,6 +54,9 @@ export function initToastContainer() {
   document.body.appendChild(container);
 }
 
+/**
+ * แสดง Toast Notification
+ */
 export function showToast(message, type = 'info', duration = 5000) {
   initToastContainer();
 
@@ -90,6 +103,9 @@ export function showToast(message, type = 'info', duration = 5000) {
   }, duration);
 }
 
+/**
+ * ซ่อนและนำ Toast ออกจาก DOM
+ */
 function dismissToast(toast) {
   if (!toast || toast.classList.contains('toast-exit')) return;
 
@@ -103,6 +119,11 @@ function dismissToast(toast) {
     () => toast.remove(),
     { once: true },
   );
+
+  // ป้องกัน Toast ค้าง หากไม่มี animationend event
+  toast._removeFallbackTimer = setTimeout(() => {
+    toast.remove();
+  }, 1000);
 }
 
 /**
@@ -117,6 +138,9 @@ export function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * จัดการสถานะ Loading ของ Form
+ */
 export function setFormLoading(
   form,
   isLoading,
@@ -126,7 +150,7 @@ export function setFormLoading(
 
   const submitButton = form.querySelector('[type="submit"]');
   const inputs = form.querySelectorAll(
-    'input, button:not([type="submit"])',
+    'input, button:not([type="submit"]), select, textarea',
   );
 
   const buttonText = submitButton?.querySelector('.btn-text');
@@ -141,6 +165,7 @@ export function setFormLoading(
     }
 
     submitButton.disabled = isLoading;
+
     submitButton.setAttribute(
       'aria-disabled',
       isLoading ? 'true' : 'false',
@@ -162,6 +187,9 @@ export function setFormLoading(
   }
 }
 
+/**
+ * จัดการสถานะ Loading ของปุ่มทั่วไป
+ */
 export function setButtonLoading(
   button,
   isLoading,
@@ -185,11 +213,15 @@ export function setButtonLoading(
     : button.dataset.defaultText;
 }
 
+/**
+ * แสดงหรือซ่อนรหัสผ่าน
+ */
 export function initPasswordToggle(form) {
   if (!form) return;
 
   form.addEventListener('click', (event) => {
     const toggle = event.target.closest('[data-toggle-password]');
+
     if (!toggle || !form.contains(toggle)) return;
 
     const targetId = toggle.dataset.togglePassword;
@@ -221,11 +253,15 @@ export function initPasswordToggle(form) {
   });
 }
 
+/**
+ * เพิ่ม Effect เมื่อ Focus ช่องกรอกข้อมูล
+ */
 export function initInputFocusEffects(form) {
   if (!form) return;
 
   form.querySelectorAll('.input-group').forEach((group) => {
     const input = group.querySelector('input');
+
     if (!input) return;
 
     input.addEventListener('focus', () => {
@@ -238,12 +274,18 @@ export function initInputFocusEffects(form) {
   });
 }
 
+/**
+ * เริ่ม Animation ขององค์ประกอบในหน้า
+ */
 export function initPageAnimations() {
   document.querySelectorAll('.animate-fade-in').forEach((element, index) => {
     element.style.animationDelay = `${index * 0.08}s`;
   });
 }
 
+/**
+ * แสดง Footer ตามประเภทหน้า Login หรือ Register
+ */
 export function initAuthFooter(type) {
   document
     .querySelector('[data-footer-type="login"]')
@@ -254,6 +296,9 @@ export function initAuthFooter(type) {
     ?.classList.toggle('hidden', type !== 'register');
 }
 
+/**
+ * เปลี่ยนหน้าเว็บ
+ */
 export function redirect(path) {
   window.location.href = path;
 }

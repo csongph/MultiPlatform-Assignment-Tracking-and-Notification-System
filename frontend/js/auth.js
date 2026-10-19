@@ -30,7 +30,10 @@ export function resolveAuthError(error) {
   }
 
   if (error.status === 0) {
-    return { message: error.message, type: 'error' };
+    return {
+      message: error.message,
+      type: 'error',
+    };
   }
 
   const statusMap = {
@@ -43,8 +46,7 @@ export function resolveAuthError(error) {
       type: 'error',
     },
     403: {
-      message:
-        'Your account has been disabled. Please contact support.',
+      message: 'Your account has been disabled. Please contact support.',
       type: 'warning',
     },
     409: {
@@ -98,7 +100,7 @@ export async function handleLogin({
       });
     }
   } catch {
-    // Profile fetch is optional; tokens are sufficient.
+    // Profile fetching is optional; tokens are sufficient.
   }
 
   await routeAfterAuth();
@@ -113,7 +115,7 @@ export async function handleRegister({
 
   showToast(
     'Account created successfully! Please sign in.',
-    'success'
+    'success',
   );
 
   redirect('login.html');
@@ -131,7 +133,7 @@ export async function routeAfterAuth() {
 
     const status = await getOnboardingStatus();
 
-    if (status.has_connection) {
+    if (status?.has_connection) {
       redirect('dashboard.html');
     } else {
       redirect('onboarding.html');
@@ -206,16 +208,16 @@ export function logout() {
 export function initSocialLogin(container) {
   if (!container) return;
 
-  container.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-social-provider]');
+  container.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-social-provider]');
 
-    if (!btn) return;
+    if (!button) return;
 
-    const provider = btn.dataset.socialProvider;
+    const provider = button.dataset.socialProvider;
 
     showToast(
       `${provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in will be available once OAuth is configured.`,
-      'info'
+      'info',
     );
   });
 }

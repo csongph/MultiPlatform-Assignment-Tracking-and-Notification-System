@@ -24,7 +24,10 @@
 
 <body class="app-page">
   <div class="app-viewport-layout">
-    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <div
+      class="app-sidebar-container"
+      id="kmaps-sidebar-container"
+    ></div>
 
     <div class="app-main-container">
       <div id="kmaps-topbar-container"></div>
@@ -154,8 +157,12 @@
 
             <div class="admin-pagination">
               <span id="users-page-info"></span>
-              <button class="btn-sm" id="users-prev">Prev</button>
-              <button class="btn-sm" id="users-next">Next</button>
+              <button type="button" class="btn-sm" id="users-prev">
+                Prev
+              </button>
+              <button type="button" class="btn-sm" id="users-next">
+                Next
+              </button>
             </div>
           </div>
         </section>
@@ -283,8 +290,12 @@
 
             <div class="admin-pagination">
               <span id="audit-page-info"></span>
-              <button class="btn-sm" id="audit-prev">Prev</button>
-              <button class="btn-sm" id="audit-next">Next</button>
+              <button type="button" class="btn-sm" id="audit-prev">
+                Prev
+              </button>
+              <button type="button" class="btn-sm" id="audit-next">
+                Next
+              </button>
             </div>
           </div>
         </section>
@@ -351,9 +362,7 @@
                 <strong
                   id="sync-last-run"
                   style="font-size: 0.9rem;"
-                >
-                  –
-                </strong>
+                >–</strong>
               </div>
             </div>
           </div>
@@ -377,10 +386,7 @@
               class="admin-table-wrap"
               style="margin-top: 1rem;"
             >
-              <table
-                class="admin-table"
-                id="errors-table"
-              >
+              <table class="admin-table" id="errors-table">
                 <thead>
                   <tr>
                     <th>Timestamp</th>

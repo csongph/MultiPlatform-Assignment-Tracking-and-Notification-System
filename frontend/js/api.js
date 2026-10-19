@@ -6,6 +6,7 @@
 import { getAccessToken, clearAuthSession } from './storage.js';
 
 export const FEATURES = {
+  // The live backend does not currently support custom assignments.
   customTasks: false,
 };
 
@@ -17,6 +18,11 @@ const API_BASE_URL = (
   ? window.KMAPS_API_BASE
   : 'http://localhost:8000/api/v1';
 
+const MOCK_DELAY_MS = 350;
+const MOCK_USERS_KEY = 'kmaps_mock_users';
+const MOCK_CONNECTIONS_KEY = 'kmaps_mock_connections';
+const MOCK_ASSIGNMENTS_KEY = 'kmaps_mock_assignments';
+
 class ApiError extends Error {
   constructor(message, status, data = null) {
     super(message);
@@ -26,25 +32,24 @@ class ApiError extends Error {
   }
 }
 
-let mockModulePromise = null;
-
-function getMockModule() {
-  if (!mockModulePromise) {
-    mockModulePromise = import('./mock-api.js');
-  }
-  return mockModulePromise;
-}
+// ---------------------------------------------------------------------------
+// HTTP request wrapper
+// ---------------------------------------------------------------------------
 
 export async function request(endpoint, options = {}) {
   if (
     typeof window !== 'undefined' &&
     window.KMAPS_USE_MOCK_API === true
   ) {
-    const mockModule = await getMockModule();
-    return mockModule.mockRequest(endpoint, options);
+    return mockRequest(endpoint, options);
   }
 
-  const { method = 'GET', body, auth = false, headers = {} } = options;
+  const {
+    method = 'GET',
+    body,
+    auth = false,
+    headers = {},
+  } = options;
 
   const config = {
     method,
@@ -73,7 +78,7 @@ export async function request(endpoint, options = {}) {
     response = await fetch(`${API_BASE_URL}${endpoint}`, config);
   } catch {
     throw new ApiError(
-      'Unable to connect to the server. Please try again later.',
+      'Unable to connect to the server. Please check that the backend is running.',
       0,
     );
   }
@@ -88,10 +93,16 @@ export async function request(endpoint, options = {}) {
 
     if (!isAuthPage && typeof window !== 'undefined') {
       clearAuthSession();
-      sessionStorage.setItem(
-        'kmaps_flash_error',
-        'Your session has expired. Please sign in again.',
-      );
+
+      try {
+        sessionStorage.setItem(
+          'kmaps_flash_error',
+          'Your session has expired. Please sign in again.',
+        );
+      } catch {
+        // Continue redirecting if sessionStorage is unavailable.
+      }
+
       window.location.href = 'login.html';
       return null;
     }
@@ -182,21 +193,8 @@ export async function updateOnboardingConnection(provider, connected) {
   });
 }
 
-export async function disconnectPlatform(provider) {
-  const platformName = provider === 'microsoft'
-    ? 'microsoft_teams'
-    : provider === 'google'
-      ? 'google_classroom'
-      : provider;
-
-  return request(`/oauth/${encodeURIComponent(platformName)}`, {
-    method: 'DELETE',
-    auth: true,
-  });
-}
-
 // ---------------------------------------------------------------------------
-// Platform and assignment normalization
+// Platform normalization
 // ---------------------------------------------------------------------------
 
 export function normalizePlatform(platform) {
@@ -226,46 +224,59 @@ function isValidHttpUrl(value) {
   }
 }
 
-export function normalizeAssignment(assignment) {
-  const platformSlug = normalizePlatform(assignment.platform);
-  const dueRaw = assignment.due_at ?? assignment.due ?? null;
-  const dueDate = dueRaw ? new Date(dueRaw) : null;
-
-  const validDue =
-    dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null;
-
-  return {
-    ...assignment,
-    id: assignment.id,
-    title: assignment.title ?? '(Untitled assignment)',
-    course: assignment.course_name ?? assignment.course ?? 'Untitled Course',
-    course_name: assignment.course_name ?? assignment.course ?? 'Untitled Course',
-    platform: platformSlug,
-    raw_platform: assignment.platform,
-    due_at: assignment.due_at ?? null,
-    due: formatDue(validDue),
-    dueDate: validDue,
-    status: assignment.computed_status ?? assignment.status ?? 'Not started',
-    computed_status:
-      assignment.computed_status ?? assignment.status ?? 'Not started',
-    source_status: assignment.source_status ?? '',
-    source_url: isValidHttpUrl(assignment.source_url)
-      ? assignment.source_url
-      : '',
-  };
-}
+// ---------------------------------------------------------------------------
+// Assignment normalization
+// ---------------------------------------------------------------------------
 
 function formatDue(date) {
   if (!date) {
     return 'No due date';
   }
 
-  return date.toLocaleString([], {
+  const validDate = date instanceof Date ? date : new Date(date);
+
+  if (Number.isNaN(validDate.getTime())) {
+    return 'No due date';
+  }
+
+  return validDate.toLocaleString([], {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+export function normalizeAssignment(assignment) {
+  const source = assignment || {};
+  const platformSlug = normalizePlatform(source.platform);
+  const dueRaw = source.due_at ?? source.due ?? null;
+  const dueDate = dueRaw ? new Date(dueRaw) : null;
+
+  const validDue =
+    dueDate && !Number.isNaN(dueDate.getTime())
+      ? dueDate
+      : null;
+
+  return {
+    ...source,
+    id: source.id,
+    title: source.title ?? '(Untitled assignment)',
+    course: source.course_name ?? source.course ?? 'Untitled Course',
+    course_name: source.course_name ?? source.course ?? 'Untitled Course',
+    platform: platformSlug,
+    raw_platform: source.platform,
+    due_at: source.due_at ?? null,
+    due: formatDue(validDue),
+    dueDate: validDue,
+    status: source.computed_status ?? source.status ?? 'Not started',
+    computed_status:
+      source.computed_status ?? source.status ?? 'Not started',
+    source_status: source.source_status ?? '',
+    source_url: isValidHttpUrl(source.source_url)
+      ? source.source_url
+      : '',
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +297,9 @@ export async function getCourses(platform = null) {
 
 export async function getAssignments() {
   const data = await request('/assignments', { auth: true });
-  const list = Array.isArray(data) ? data : data?.assignments || [];
+  const list = Array.isArray(data)
+    ? data
+    : data?.assignments || [];
 
   return {
     assignments: list.map(normalizeAssignment),
@@ -306,10 +319,6 @@ export async function getSyncJob(jobId) {
     auth: true,
   });
 }
-
-// Backend currently does not support editing, creating, or deleting
-// assignments. These functions remain for compatibility with older UI code.
-// They will only work if the selected API implementation supports them.
 
 export async function updateAssignmentStatus(assignmentId, status) {
   return request('/assignments/update-status', {
@@ -366,7 +375,13 @@ export async function connectPlatform(provider) {
 
   const platformSlug = provider === 'microsoft'
     ? 'microsoft_teams'
-    : 'google_classroom';
+    : provider === 'google'
+      ? 'google_classroom'
+      : null;
+
+  if (!platformSlug) {
+    throw new ApiError('Unsupported platform.', 400);
+  }
 
   try {
     const response = await request(
@@ -379,7 +394,10 @@ export async function connectPlatform(provider) {
       return response.authorization_url;
     }
 
-    throw new ApiError('Authorization URL was not returned by the server.', 500);
+    throw new ApiError(
+      'Authorization URL was not returned by the server.',
+      500,
+    );
   } catch (error) {
     console.error('Failed to start OAuth flow:', error);
     throw error;
@@ -394,8 +412,21 @@ export async function connectMicrosoft() {
   return connectPlatform('microsoft');
 }
 
+export async function disconnectPlatform(provider) {
+  const platformName = provider === 'microsoft'
+    ? 'microsoft_teams'
+    : provider === 'google'
+      ? 'google_classroom'
+      : provider;
+
+  return request(`/oauth/${encodeURIComponent(platformName)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 // ---------------------------------------------------------------------------
-// Admin Console
+// Admin Console: Users and roles
 // ---------------------------------------------------------------------------
 
 export async function adminListUsers({ search = '', page = 1 } = {}) {
@@ -431,9 +462,15 @@ export async function adminUpdateUserStatus(userId, isActive) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Admin Console: Connections
+// ---------------------------------------------------------------------------
+
 export async function adminGetConnections({ status = '' } = {}) {
-  const query = new URLSearchParams(status ? { status } : {});
-  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const query = new URLSearchParams(status ? { status } : '');
+  const suffix = query.toString()
+    ? `?${query.toString()}`
+    : '';
 
   return request(`/admin/connections${suffix}`, {
     auth: true,
@@ -449,6 +486,14 @@ export async function adminFlagConnectionStale(userId, platform) {
     },
   );
 }
+
+export function adminConnectionsExportUrl() {
+  return `${API_BASE_URL}/admin/connections/export`;
+}
+
+// ---------------------------------------------------------------------------
+// Admin Console: Audit logs
+// ---------------------------------------------------------------------------
 
 export async function adminListAuditLogs({
   user = '',
@@ -468,14 +513,6 @@ export async function adminListAuditLogs({
   });
 }
 
-// Export URL helpers retained for compatibility with admin.js.
-// Note: direct links may not send the Bearer token. Use the download
-// functions below if the backend requires Bearer authentication.
-
-export function adminConnectionsExportUrl() {
-  return `${API_BASE_URL}/admin/connections/export`;
-}
-
 export function adminAuditLogsExportUrl({
   user = '',
   action = '',
@@ -485,6 +522,10 @@ export function adminAuditLogsExportUrl({
 
   return `${API_BASE_URL}/admin/audit-logs/export?${query.toString()}`;
 }
+
+// ---------------------------------------------------------------------------
+// Admin Console: Monitoring and server logs
+// ---------------------------------------------------------------------------
 
 export async function adminGetSyncStatus() {
   return request('/admin/monitoring/sync-status', {
@@ -525,7 +566,9 @@ async function downloadCsv(endpoint, fallbackFilename) {
   let response;
 
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers,
+    });
   } catch {
     throw new ApiError('Unable to connect to the server.', 0);
   }
@@ -606,13 +649,374 @@ function triggerBlobDownload(blob, filename) {
 
 export async function getHealth() {
   const baseUrl = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
-  const response = await fetch(`${baseUrl}/health`);
+  let response;
+
+  try {
+    response = await fetch(`${baseUrl}/health`);
+  } catch {
+    throw new ApiError('Unable to connect to the server.', 0);
+  }
 
   if (!response.ok) {
     throw new ApiError('Health check failed.', response.status);
   }
 
   return response.json();
+}
+
+// ---------------------------------------------------------------------------
+// Mock API
+// ---------------------------------------------------------------------------
+
+async function mockRequest(endpoint, options = {}) {
+  await delay(MOCK_DELAY_MS);
+
+  const {
+    method = 'GET',
+    body = {},
+    auth = false,
+  } = options;
+
+  const session = getMockSession();
+
+  if (auth && !session) {
+    throw new ApiError('Please sign in again.', 401);
+  }
+
+  if (endpoint === '/auth/register' && method === 'POST') {
+    const users = getMockUsers();
+    const email = normalizeEmail(body.email);
+
+    if (users.some((user) => normalizeEmail(user.email) === email)) {
+      throw new ApiError('Email already exists.', 409);
+    }
+
+    const user = {
+      id: globalThis.crypto?.randomUUID
+        ? globalThis.crypto.randomUUID()
+        : String(Date.now()),
+      full_name: body.full_name,
+      email,
+      role: 'user',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+
+    users.push({ ...user, password: body.password });
+    setMockUsers(users);
+
+    return { user };
+  }
+
+  if (endpoint === '/auth/login' && method === 'POST') {
+    const users = getMockUsers();
+    const email = normalizeEmail(body.email);
+    const user = users.find(
+      (item) => normalizeEmail(item.email) === email,
+    );
+
+    if (!user || user.password !== body.password) {
+      throw new ApiError('Invalid email or password.', 401);
+    }
+
+    const accessToken = `mock-access-${user.id}-${Date.now()}`;
+    const refreshToken = `mock-refresh-${user.id}-${Date.now()}`;
+
+    localStorage.setItem('kmaps_mock_session_user_id', user.id);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_in: 60 * 60 * 8,
+      user: sanitizeUser(user),
+    };
+  }
+
+  if (endpoint === '/users/me' && method === 'GET') {
+    return sanitizeUser(session);
+  }
+
+  if (endpoint === '/onboarding-status' && method === 'GET') {
+    const connections = getMockConnections(session.id);
+
+    return {
+      has_connection: connections.google || connections.microsoft,
+      connections,
+    };
+  }
+
+  if (endpoint === '/onboarding-status' && method === 'POST') {
+    const connections = getMockConnections(session.id);
+    const provider = body.provider;
+
+    if (!['google', 'microsoft'].includes(provider)) {
+      throw new ApiError('Unsupported platform.', 400);
+    }
+
+    const next = {
+      ...connections,
+      [provider]: Boolean(body.connected),
+    };
+
+    setMockConnections(session.id, next);
+
+    return {
+      has_connection: next.google || next.microsoft,
+      connections: next,
+    };
+  }
+
+  if (endpoint === '/assignments' && method === 'GET') {
+    const connections = getMockConnections(session.id);
+    const assignments = getMockAssignmentsFromStorage(session.id);
+    const filtered = assignments.filter(
+      (assignment) =>
+        assignment.platform === 'custom' ||
+        connections[normalizePlatform(assignment.platform)],
+    );
+
+    return {
+      assignments: filtered,
+    };
+  }
+
+  if (endpoint === '/assignments/update-status' && method === 'POST') {
+    const assignments = getMockAssignmentsFromStorage(session.id);
+    const assignment = assignments.find(
+      (item) => String(item.id) === String(body.assignment_id),
+    );
+
+    if (!assignment) {
+      throw new ApiError('Assignment not found.', 404);
+    }
+
+    assignment.status = body.status;
+    assignment.computed_status = body.status;
+
+    saveMockAssignmentsToStorage(session.id, assignments);
+
+    return {
+      success: true,
+      assignments,
+    };
+  }
+
+  if (endpoint === '/assignments/create' && method === 'POST') {
+    const assignments = getMockAssignmentsFromStorage(session.id);
+
+    const assignment = {
+      id: globalThis.crypto?.randomUUID
+        ? globalThis.crypto.randomUUID()
+        : String(Date.now()),
+      title: body.title,
+      course: body.course,
+      platform: 'custom',
+      due: body.due,
+      status: 'Not started',
+    };
+
+    assignments.push(assignment);
+    saveMockAssignmentsToStorage(session.id, assignments);
+
+    return {
+      success: true,
+      assignment,
+      assignments,
+    };
+  }
+
+  if (endpoint === '/assignments/delete' && method === 'POST') {
+    const assignments = getMockAssignmentsFromStorage(session.id)
+      .filter(
+        (item) => String(item.id) !== String(body.assignment_id),
+      );
+
+    saveMockAssignmentsToStorage(session.id, assignments);
+
+    return {
+      success: true,
+      assignments,
+    };
+  }
+
+  throw new ApiError(
+    `Mock endpoint not found: ${method} ${endpoint}`,
+    404,
+  );
+}
+
+function getMockUsers() {
+  const raw = localStorage.getItem(MOCK_USERS_KEY);
+
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function setMockUsers(users) {
+  localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
+}
+
+function getMockSession() {
+  const userId = localStorage.getItem('kmaps_mock_session_user_id');
+
+  if (!userId || !getAccessToken()) {
+    return null;
+  }
+
+  return getMockUsers().find(
+    (user) => String(user.id) === String(userId),
+  ) || null;
+}
+
+function getMockConnections(userId) {
+  const raw = localStorage.getItem(MOCK_CONNECTIONS_KEY);
+  let allConnections = {};
+
+  try {
+    allConnections = raw ? JSON.parse(raw) : {};
+  } catch {
+    allConnections = {};
+  }
+
+  return allConnections[userId] || {
+    google: false,
+    microsoft: false,
+  };
+}
+
+function setMockConnections(userId, connections) {
+  const raw = localStorage.getItem(MOCK_CONNECTIONS_KEY);
+  let allConnections = {};
+
+  try {
+    allConnections = raw ? JSON.parse(raw) : {};
+  } catch {
+    allConnections = {};
+  }
+
+  allConnections[userId] = connections;
+
+  localStorage.setItem(
+    MOCK_CONNECTIONS_KEY,
+    JSON.stringify(allConnections),
+  );
+}
+
+function sanitizeUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  const { password, ...profile } = user;
+  return profile;
+}
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getMockAssignmentsFromStorage(userId) {
+  const raw = localStorage.getItem(MOCK_ASSIGNMENTS_KEY);
+  let allAssignments = {};
+
+  try {
+    allAssignments = raw ? JSON.parse(raw) : {};
+  } catch {
+    allAssignments = {};
+  }
+
+  let assignments = allAssignments[userId];
+
+  if (!assignments) {
+    assignments = [
+      {
+        id: 'mock-g1',
+        title: 'Data Modeling Case Study',
+        course: 'Business Analytics',
+        platform: 'google',
+        due: 'Tomorrow, 23:59',
+        status: 'Not started',
+      },
+      {
+        id: 'mock-g2',
+        title: 'UX Research Summary',
+        course: 'Human Computer Interaction',
+        platform: 'google',
+        due: 'In 5 days, 12:00',
+        status: 'Not started',
+      },
+      {
+        id: 'mock-g3',
+        title: 'Machine Learning Lab 1',
+        course: 'Advanced AI',
+        platform: 'google',
+        due: 'In 10 days, 23:59',
+        status: 'Completed',
+      },
+      {
+        id: 'mock-m1',
+        title: 'Sprint Retrospective Report',
+        course: 'Software Project Management',
+        platform: 'microsoft',
+        due: 'In 3 days, 18:00',
+        status: 'In progress',
+      },
+      {
+        id: 'mock-m2',
+        title: 'API Integration Lab',
+        course: 'Web Application Development',
+        platform: 'microsoft',
+        due: 'In 7 days, 23:59',
+        status: 'In progress',
+      },
+      {
+        id: 'mock-m3',
+        title: 'Database Optimization Project',
+        course: 'Database Systems',
+        platform: 'microsoft',
+        due: 'In 12 days, 17:00',
+        status: 'Not started',
+      },
+    ];
+
+    allAssignments[userId] = assignments;
+
+    localStorage.setItem(
+      MOCK_ASSIGNMENTS_KEY,
+      JSON.stringify(allAssignments),
+    );
+  }
+
+  return assignments;
+}
+
+function saveMockAssignmentsToStorage(userId, assignments) {
+  const raw = localStorage.getItem(MOCK_ASSIGNMENTS_KEY);
+  let allAssignments = {};
+
+  try {
+    allAssignments = raw ? JSON.parse(raw) : {};
+  } catch {
+    allAssignments = {};
+  }
+
+  allAssignments[userId] = assignments;
+
+  localStorage.setItem(
+    MOCK_ASSIGNMENTS_KEY,
+    JSON.stringify(allAssignments),
+  );
 }
 
 export { ApiError };

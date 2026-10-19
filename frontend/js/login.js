@@ -59,16 +59,17 @@ async function init() {
     showToast(flashError, 'warning');
   }
 
+  // Handle password reset link.
   document.querySelector('.forgot-link')?.addEventListener('click', (event) => {
     event.preventDefault();
 
     showToast(
       'Password reset will be available once the reset endpoint is configured.',
-      'info'
+      'info',
     );
   });
 
-  // Clear a field's validation error when the user edits it.
+  // Clear validation errors when the user edits a field.
   form.addEventListener('input', (event) => {
     const field = event.target.name;
 
@@ -77,6 +78,7 @@ async function init() {
     }
   });
 
+  // Handle login submission.
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearFormErrors(form);
@@ -87,7 +89,10 @@ async function init() {
     const password = formData.get('password');
     const rememberMe = formData.get('remember_me') === 'on';
 
-    const validation = validateLoginForm({ email, password });
+    const validation = validateLoginForm({
+      email,
+      password,
+    });
 
     if (!validation.valid) {
       applyFieldErrors(form, validation.fieldErrors);

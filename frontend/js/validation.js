@@ -6,6 +6,9 @@
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * ตรวจสอบรูปแบบอีเมล
+ */
 export function validateEmail(email) {
   const errors = [];
   const trimmed = (email || '').trim();
@@ -23,6 +26,10 @@ export function validateEmail(email) {
   };
 }
 
+/**
+ * ตรวจสอบรหัสผ่าน
+ * ค่าเริ่มต้น: อย่างน้อย 8 ตัวอักษร และไม่เกิน 72 ไบต์
+ */
 export function validatePassword(
   password,
   { minLength = 8, maxLengthBytes = 72 } = {},
@@ -33,7 +40,9 @@ export function validatePassword(
   if (!value) {
     errors.push('Password is required.');
   } else if (value.length < minLength) {
-    errors.push(`Password must be at least ${minLength} characters.`);
+    errors.push(
+      `Password must be at least ${minLength} characters.`,
+    );
   } else {
     const byteLength = new TextEncoder().encode(value).length;
 
@@ -51,6 +60,9 @@ export function validatePassword(
   };
 }
 
+/**
+ * ตรวจสอบการยืนยันรหัสผ่าน
+ */
 export function validateConfirmPassword(password, confirmPassword) {
   const errors = [];
   const value = confirmPassword || '';
@@ -68,6 +80,9 @@ export function validateConfirmPassword(password, confirmPassword) {
   };
 }
 
+/**
+ * ตรวจสอบชื่อ-นามสกุล
+ */
 export function validateFullName(fullName) {
   const errors = [];
   const trimmed = (fullName || '').trim();
@@ -85,11 +100,13 @@ export function validateFullName(fullName) {
   };
 }
 
+/**
+ * ตรวจสอบข้อมูลเข้าสู่ระบบ
+ * Login ต้องมีรหัสผ่าน แต่ไม่บังคับความยาวขั้นต่ำ 8 ตัว
+ */
 export function validateLoginForm({ email, password }) {
   const emailResult = validateEmail(email);
 
-  // Login only requires a non-empty password.
-  // Password policy is enforced during registration.
   const passwordResult = validatePassword(password, {
     minLength: 1,
   });
@@ -114,6 +131,9 @@ export function validateLoginForm({ email, password }) {
   };
 }
 
+/**
+ * ตรวจสอบข้อมูลสมัครสมาชิก
+ */
 export function validateRegisterForm({
   full_name,
   email,
@@ -123,6 +143,7 @@ export function validateRegisterForm({
   const fullNameResult = validateFullName(full_name);
   const emailResult = validateEmail(email);
   const passwordResult = validatePassword(password);
+
   const confirmResult = validateConfirmPassword(
     password,
     confirm_password,
@@ -161,8 +182,14 @@ export function validateRegisterForm({
   };
 }
 
+/**
+ * แสดงข้อผิดพลาดของแต่ละช่อง
+ */
 export function setFieldError(form, fieldName, message) {
+  if (!form) return;
+
   const input = form.querySelector(`[name="${fieldName}"]`);
+
   const errorElement = form.querySelector(
     `[data-error-for="${fieldName}"]`,
   );
@@ -182,7 +209,12 @@ export function setFieldError(form, fieldName, message) {
   }
 }
 
+/**
+ * ล้างข้อความและสถานะข้อผิดพลาดทั้งหมด
+ */
 export function clearFormErrors(form) {
+  if (!form) return;
+
   form.querySelectorAll('[data-error-for]').forEach((element) => {
     element.textContent = '';
     element.classList.remove('visible');
@@ -194,10 +226,15 @@ export function clearFormErrors(form) {
   });
 }
 
+/**
+ * แสดงข้อผิดพลาดหลายช่องพร้อมกัน
+ */
 export function applyFieldErrors(form, fieldErrors) {
+  if (!form) return;
+
   clearFormErrors(form);
 
-  Object.entries(fieldErrors).forEach(([field, message]) => {
+  Object.entries(fieldErrors || {}).forEach(([field, message]) => {
     setFieldError(form, field, message);
   });
 }

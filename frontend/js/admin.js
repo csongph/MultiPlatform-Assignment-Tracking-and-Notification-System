@@ -1,3 +1,4 @@
+```javascript
 import {
   adminListUsers,
   adminUpdateUserRole,
@@ -23,6 +24,8 @@ const state = {
   audit: { page: 1, total: 0, user: '', action: '', date: '' },
 };
 
+let logsTimer = null;
+
 async function init() {
   if (!requireAuth()) return;
 
@@ -37,8 +40,9 @@ async function init() {
   }
 
   const subtitle = document.getElementById('admin-subtitle');
+
   if (subtitle) {
-    subtitle.textContent = `Signed in as administrator (${user.email})`;
+    subtitle.textContent = `Signed in as administrator (${user.email || ''})`;
   }
 
   document.getElementById('logout-button')?.addEventListener('click', logout);
@@ -160,13 +164,14 @@ function renderUsers(users) {
 
   tbody.innerHTML = users.map((user) => `
     <tr>
-      <td>${escapeHtml(user.full_name)}</td>
-      <td>${escapeHtml(user.email)}</td>
+      <td>${escapeHtml(user.full_name || '')}</td>
+      <td>${escapeHtml(user.email || '')}</td>
       <td>
         <select
           class="toolbar-select role-select"
           data-user-id="${escapeHtml(user.id)}"
           style="font-size: 0.8125rem; padding: 0.3rem 0.5rem;"
+          aria-label="Role for ${escapeHtml(user.email || user.full_name || 'user')}"
         >
           <option value="user" ${user.role === 'user' ? 'selected' : ''}>student</option>
           <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>admin</option>
@@ -194,11 +199,11 @@ function renderUsers(users) {
 
   tbody.querySelectorAll('.role-select').forEach((select) => {
     select.addEventListener('change', async (event) => {
-      const userId = event.target.dataset.userId;
-      const role = event.target.value;
+      const userId = event.currentTarget.dataset.userId;
+      const role = event.currentTarget.value;
 
       if (!window.confirm(`Change this user's role to "${role}"?`)) {
-        loadUsers();
+        await loadUsers();
         return;
       }
 
@@ -208,15 +213,16 @@ function renderUsers(users) {
         await loadUsers();
       } catch (error) {
         showToast(error.message || 'Unable to update role.', 'error');
-        loadUsers();
+        await loadUsers();
       }
     });
   });
 
   tbody.querySelectorAll('[data-toggle-status]').forEach((button) => {
     button.addEventListener('click', async (event) => {
-      const userId = event.currentTarget.dataset.toggleStatus;
-      const nextActive = event.currentTarget.dataset.next === 'true';
+      const target = event.currentTarget;
+      const userId = target.dataset.toggleStatus;
+      const nextActive = target.dataset.next === 'true';
 
       const verb = nextActive
         ? 'reactivate'
@@ -249,9 +255,11 @@ function renderUsers(users) {
 // ---------------------------------------------------------------------------
 
 function setupConnectionsPanel() {
-  document.getElementById('connections-filter')?.addEventListener('change', (event) => {
-    loadConnections(event.target.value);
-  });
+  document
+    .getElementById('connections-filter')
+    ?.addEventListener('change', (event) => {
+      loadConnections(event.target.value);
+    });
 
   const exportLink = document.getElementById('connections-export');
 
@@ -289,10 +297,10 @@ function renderConnections(rows) {
   tbody.innerHTML = rows.map((row) => `
     <tr>
       <td>
-        ${escapeHtml(row.full_name)}
+        ${escapeHtml(row.full_name || '')}
         <br />
         <span style="color: var(--color-text-secondary); font-size: 0.75rem;">
-          ${escapeHtml(row.email)}
+          ${escapeHtml(row.email || '')}
         </span>
       </td>
       <td>
@@ -300,9 +308,9 @@ function renderConnections(rows) {
           ? 'Google Classroom'
           : row.platform === 'microsoft'
             ? 'Microsoft Teams'
-            : escapeHtml(row.platform)}
+            : escapeHtml(row.platform || '—')}
       </td>
-      <td>${statusBadge[row.status] || escapeHtml(row.status)}</td>
+      <td>${statusBadge[row.status] || escapeHtml(row.status || '—')}</td>
       <td>${formatDate(row.connected_at)}</td>
       <td>${formatDate(row.token_expires_at)}</td>
       <td>
@@ -319,8 +327,9 @@ function renderConnections(rows) {
 
   tbody.querySelectorAll('[data-flag-stale]').forEach((button) => {
     button.addEventListener('click', async (event) => {
-      const userId = event.currentTarget.dataset.flagStale;
-      const platform = event.currentTarget.dataset.platform;
+      const target = event.currentTarget;
+      const userId = target.dataset.flagStale;
+      const platform = target.dataset.platform;
 
       try {
         await adminFlagConnectionStale(userId, platform);
@@ -345,13 +354,17 @@ function setupAuditPanel() {
   const applyFilters = () => {
     state.audit.user =
       document.getElementById('audit-user')?.value.trim() || '';
+
     state.audit.action =
       document.getElementById('audit-action')?.value || '';
+
     state.audit.date =
       document.getElementById('audit-date')?.value || '';
 
     state.audit.page = 1;
+
     loadAuditLogs();
+    updateAuditExportLink();
   };
 
   document.getElementById('audit-user')?.addEventListener('input', () => {
@@ -431,7 +444,7 @@ function renderAuditLogs(logs) {
     <tr>
       <td>${formatDate(log.created_at)}</td>
       <td>${escapeHtml(log.actor_email || '—')}</td>
-      <td><span class="badge badge-gray">${escapeHtml(log.action)}</span></td>
+      <td><span class="badge badge-gray">${escapeHtml(log.action || '—')}</span></td>
       <td>${escapeHtml(log.target_email || '—')}</td>
       <td style="max-width: 260px; white-space: normal;">
         ${escapeHtml(JSON.stringify(log.metadata || {}))}
@@ -445,7 +458,9 @@ function renderAuditLogs(logs) {
 // ---------------------------------------------------------------------------
 
 function setupMonitoringPanel() {
-  document.getElementById('monitoring-refresh')?.addEventListener('click', loadMonitoring);
+  document
+    .getElementById('monitoring-refresh')
+    ?.addEventListener('click', loadMonitoring);
 }
 
 async function loadMonitoring() {
@@ -460,7 +475,7 @@ async function loadMonitoring() {
     renderHealth(health);
     renderSyncStatus(syncStatus);
     renderErrors(errors);
-    renderAlert(alertResponse.alert);
+    renderAlert(alertResponse?.alert || null);
   } catch (error) {
     showToast(error.message || 'Unable to load monitoring data.', 'error');
   }
@@ -470,29 +485,31 @@ function renderHealth(health) {
   const element = document.getElementById('health-status');
   if (!element) return;
 
-  const colorClass = health.status === 'healthy'
+  const status = String(health?.status || 'unknown');
+
+  const colorClass = status === 'healthy'
     ? 'health-green'
-    : health.status === 'degraded'
+    : status === 'degraded'
       ? 'health-yellow'
       : 'health-red';
 
-  const checks = Object.entries(health.checks || {})
+  const checks = Object.entries(health?.checks || {})
     .map(([key, value]) => `${key}: ${value}`)
     .join(' · ');
 
   element.innerHTML =
     `<span class="health-dot ${colorClass}"></span>` +
-    `${escapeHtml(String(health.status || 'unknown').toUpperCase())} — ${escapeHtml(checks)}`;
+    `${escapeHtml(status.toUpperCase())} — ${escapeHtml(checks)}`;
 }
 
 function renderSyncStatus(status) {
-  setText('sync-success-rate', `${status.success_rate_percent ?? 0}%`);
-  setText('sync-queue-depth', status.queue_depth ?? 0);
-  setText('sync-events-count', status.total_events_in_window ?? 0);
+  setText('sync-success-rate', `${status?.success_rate_percent ?? 0}%`);
+  setText('sync-queue-depth', status?.queue_depth ?? 0);
+  setText('sync-events-count', status?.total_events_in_window ?? 0);
 
   setText(
     'sync-last-run',
-    status.last_sync_at ? formatDate(status.last_sync_at) : 'No sync yet',
+    status?.last_sync_at ? formatDate(status.last_sync_at) : 'No sync yet',
   );
 }
 
@@ -500,7 +517,7 @@ function renderErrors(errors) {
   const byProviderElement = document.getElementById('error-by-provider');
 
   if (byProviderElement) {
-    const entries = Object.entries(errors.by_provider || {});
+    const entries = Object.entries(errors?.by_provider || {});
 
     byProviderElement.innerHTML = entries.length
       ? entries.map(([provider, count]) => `
@@ -515,14 +532,14 @@ function renderErrors(errors) {
   const tbody = document.getElementById('errors-tbody');
   if (!tbody) return;
 
-  const recent = errors.recent_failures || [];
+  const recent = errors?.recent_failures || [];
 
   tbody.innerHTML = recent.length
     ? recent.map((error) => `
         <tr>
           <td>${formatDate(error.created_at)}</td>
           <td>${escapeHtml(error.user_email || '—')}</td>
-          <td>${escapeHtml(error.provider)}</td>
+          <td>${escapeHtml(error.provider || '—')}</td>
           <td style="white-space: normal; max-width: 320px;">
             ${escapeHtml(error.error_message || '—')}
           </td>
@@ -541,32 +558,32 @@ function renderAlert(alert) {
   }
 
   element.innerHTML =
-    `<div class="alert-banner">⚠ ${escapeHtml(alert.message)}</div>`;
+    `<div class="alert-banner">⚠ ${escapeHtml(alert.message || '')}</div>`;
 }
 
 // ---------------------------------------------------------------------------
 // Server Log Viewer
 // ---------------------------------------------------------------------------
 
-let logsTimer = null;
-
 function setupLogsPanel() {
-  document.getElementById('logs-refresh')?.addEventListener('click', loadServerLogs);
+  document
+    .getElementById('logs-refresh')
+    ?.addEventListener('click', loadServerLogs);
 
   const checkbox = document.getElementById('logs-auto-refresh');
 
-  if (checkbox) {
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) {
-        startLogsPolling();
-      } else {
-        stopLogsPolling();
-      }
-    });
+  if (!checkbox) return;
 
+  checkbox.addEventListener('change', () => {
     if (checkbox.checked) {
       startLogsPolling();
+    } else {
+      stopLogsPolling();
     }
+  });
+
+  if (checkbox.checked) {
+    startLogsPolling();
   }
 }
 
@@ -645,3 +662,4 @@ function setText(id, value) {
 }
 
 init();
+```

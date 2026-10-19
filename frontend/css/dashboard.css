@@ -149,6 +149,7 @@ body {
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -163,6 +164,7 @@ body {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -185,8 +187,8 @@ body {
 
 /* Dashboard: Course Cards */
 .course-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,252,0.95));
-  border: 1px solid rgba(226,232,240,0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 250, 252, 0.95));
+  border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 12px;
   padding: 0.75rem;
   box-shadow: 0 6px 18px rgba(12, 18, 30, 0.06);
@@ -226,6 +228,7 @@ body {
   padding-top: 0.5rem;
 }
 
+/* Course Assignment Rows */
 .course-assignment-row {
   display: flex;
   align-items: center;
@@ -234,7 +237,7 @@ body {
   padding: 0.625rem;
   border-radius: 8px;
   background: linear-gradient(180deg, #ffffff, #fbfdff);
-  border: 1px solid rgba(226,232,240,0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .course-assignment-row:hover {
@@ -267,7 +270,7 @@ body {
 }
 
 .assignment-due {
-  background: rgba(99,102,241,0.06);
+  background: rgba(99, 102, 241, 0.06);
   color: #374151;
   padding: 0.18rem 0.4rem;
   border-radius: 999px;
@@ -280,6 +283,7 @@ body {
   gap: 0.5rem;
 }
 
+/* Buttons */
 .btn-link {
   background: none;
   border: none;
@@ -291,18 +295,19 @@ body {
 }
 
 .btn-link:hover {
-  background: rgba(37,99,235,0.06);
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .btn-delete-assignment {
   background: linear-gradient(180deg, #fff7f7, #fff2f2);
   color: var(--color-danger);
-  border: 1px solid rgba(220,38,38,0.08);
+  border: 1px solid rgba(220, 38, 38, 0.08);
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
   cursor: pointer;
 }
 
+/* Assignment Status */
 .status-badge {
   display: inline-block;
   padding: 0.18rem 0.45rem;

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="KMAPS Courses Overview & Multi-Platform Assignment Tracker" />
+  <title>รายวิชา - LMS KMAPS</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
+  <!-- Tailwind CSS CDN (ใช้ร่วมกับโครงสร้างเดิมของโปรเจกต์) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/navigation.css" />
+  <link rel="stylesheet" href="../css/courses.css" />
+</head>
+<body class="app-page">
+  <!-- โครงสร้างจัดวาง Sidebar ด้านซ้าย และ Topbar ด้านบน (Reuse จาก navigation.js) -->
+  <div class="app-viewport-layout">
+    <!-- Sidebar Container -->
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    
+    <!-- Main Right Content Container -->
+    <div class="app-main-container">
+      <!-- Topbar Container -->
+      <div id="kmaps-topbar-container"></div>
+      
+      <!-- พื้นที่เนื้อหาหลักของหน้ารายวิชา -->
+      <main class="app-shell" role="main" style="width: 100%; max-width: 1200px; padding: 0.5rem 0;">
+        
+        <!-- Header ส่วนหัวหน้าเว็บ -->
+        <header class="app-header mb-6">
+          <div>
+            <p class="app-eyebrow">Multi-Platform Courses</p>
+            <h1 class="text-2xl font-bold text-slate-900">รายวิชาทั้งหมด</h1>
+            <p class="text-slate-500 text-sm mt-1">จัดการและติดตามภาระงานรายวิชาจากทุกแพลตฟอร์มที่เชื่อมต่อ</p>
+          </div>
+        </header>
+
+        <!-- 1. การ์ดสรุปสถิติด้านบน (4 ช่อง: งานทั้งหมด, ส่งแล้ว, รอดำเนินการ, อัตราการส่งงาน) -->
+        <section id="stat-summary-container" aria-label="Course assignment statistics overview"></section>
+
+        <!-- 2. แถบกรองแพลตฟอร์ม (Platform Multi-Filter Bar: Google Classroom, Microsoft Teams) -->
+        <section id="platform-filter-bar" aria-label="Filter courses by platform"></section>
+
+        <!-- 3. ตารางแสดงการ์ดรายวิชา (Course Cards Grid) -->
+        <section aria-label="Course List">
+          <div class="courses-cards-grid" id="courses-grid"></div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- JavaScript Module หลักสำหรับหน้ารายวิชา -->
+  <script type="module" src="../js/courses.js"></script>
+</body>
+</html>

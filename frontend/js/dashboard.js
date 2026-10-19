@@ -25,7 +25,11 @@ import {
   setUserProfile,
 } from './storage.js';
 
-import { showToast, setButtonLoading, escapeHtml } from './ui.js';
+import {
+  showToast,
+  setButtonLoading,
+  escapeHtml,
+} from './ui.js';
 
 import {
   initSidebar,
@@ -33,12 +37,14 @@ import {
   updateSidebarAdminStatus,
 } from './sidebar.js';
 
-// State
+// Dashboard state
 let allAssignments = [];
 let connectionsState = {};
 let currentSortOrder = 'default';
 let currentSearchTerm = '';
 let isSyncing = false;
+
+const COMPLETED_STATUSES = ['completed', 'submitted', 'done'];
 
 const DEFAULT_MOCKUP_COURSES = [
   {
@@ -65,6 +71,7 @@ const DEFAULT_MOCKUP_COURSES = [
 ];
 
 async function init() {
+  // Clear the old demo session if one is still present.
   if (
     getAccessToken() === 'mock-preview-session-token' ||
     getUserProfile()?.id === 'demo-kunagron'
@@ -115,9 +122,12 @@ function switchViewTab(tabId) {
     calendar: document.getElementById('view-calendar'),
   };
 
+  if (!views[tabId]) return;
+
   Object.entries(views).forEach(([id, view]) => {
-    if (!view) return;
-    view.classList.toggle('hidden', id !== tabId);
+    if (view) {
+      view.classList.toggle('hidden', id !== tabId);
+    }
   });
 
   setActiveNavItem(tabId);
@@ -154,6 +164,18 @@ function setupHeaderEvents() {
     renderAssignmentsFeed();
   });
 
+  // Support search events emitted by the shared topbar.
+  window.addEventListener('kmaps-search', (event) => {
+    currentSearchTerm = (event.detail?.query || '').trim().toLowerCase();
+
+    if (searchInput && searchInput.value !== event.detail?.query) {
+      searchInput.value = event.detail?.query || '';
+    }
+
+    renderCourseProgress();
+    renderAssignmentsFeed();
+  });
+
   document.getElementById('sort-progress-btn')?.addEventListener('click', () => {
     if (currentSortOrder === 'default') {
       currentSortOrder = 'desc';
@@ -170,21 +192,37 @@ function setupHeaderEvents() {
   });
 }
 
+function setupFilterAndSortEvents() {
+  document
+    .getElementById('filter-platform')
+    ?.addEventListener('change', renderAssignmentsFeed);
+
+  document
+    .getElementById('filter-status')
+    ?.addEventListener('change', renderAssignmentsFeed);
+
+  document
+    .getElementById('sort-by')
+    ?.addEventListener('change', renderAssignmentsFeed);
+}
+
 function setupSyncButton() {
-  document.getElementById('sync-now-button')?.addEventListener('click', async () => {
-    if (isSyncing) return;
-    await triggerManualSync();
-  });
+  document
+    .getElementById('sync-now-button')
+    ?.addEventListener('click', async () => {
+      if (isSyncing) return;
+      await triggerManualSync();
+    });
 }
 
 async function triggerManualSync() {
-  const syncBtn = document.getElementById('sync-now-button');
+  const syncButton = document.getElementById('sync-now-button');
   const syncIcon = document.getElementById('sync-icon');
   const syncText = document.getElementById('sync-text');
 
   isSyncing = true;
 
-  if (syncBtn) syncBtn.disabled = true;
+  if (syncButton) syncButton.disabled = true;
   if (syncIcon) syncIcon.classList.add('spin-animate');
   if (syncText) syncText.textContent = 'กำลังซิงก์...';
 
@@ -204,13 +242,14 @@ async function triggerManualSync() {
     const pollInterval = setInterval(async () => {
       try {
         const statusData = await getSyncJob(jobId);
-        const status = statusData?.status;
+        const status = (statusData?.status || '').toLowerCase();
 
         if (['completed', 'succeeded', 'success'].includes(status)) {
           clearInterval(pollInterval);
+
           await finishSync(
             true,
-            `ซิงก์สำเร็จ! อัปเดตงาน ${statusData.items_synced || 0} รายการ`
+            `ซิงก์สำเร็จ! อัปเดตงาน ${statusData.items_synced || 0} รายการ`,
           );
         } else if (['failed', 'error'].includes(status)) {
           clearInterval(pollInterval);
@@ -225,17 +264,23 @@ async function triggerManualSync() {
       }
     }, 2500);
   } catch (error) {
-    await finishSync(false, error.message || 'ไม่สามารถเริ่มการซิงก์ได้');
+    await finishSync(
+      false,
+      error.message || 'ไม่สามารถเริ่มการซิงก์ได้',
+    );
   }
 }
 
 async function finishSync(isSuccess, message) {
   isSyncing = false;
 
-  document.getElementById('sync-now-button')?.removeAttribute('disabled');
-  document.getElementById('sync-icon')?.classList.remove('spin-animate');
-
+  const syncButton = document.getElementById('sync-now-button');
+  const syncIcon = document.getElementById('sync-icon');
   const syncText = document.getElementById('sync-text');
+
+  if (syncButton) syncButton.disabled = false;
+  syncIcon?.classList.remove('spin-animate');
+
   if (syncText) syncText.textContent = 'ซิงก์ตอนนี้';
 
   showToast(message, isSuccess ? 'success' : 'error');
@@ -261,42 +306,66 @@ async function loadUserData() {
 
     if (!user) return;
 
-    const nameEl = document.getElementById('user-display-name');
-    const roleEl = document.getElementById('user-role-badge');
+    const nameElement = document.getElementById('user-display-name');
+    const roleElement = document.getElementById('user-role-badge');
+    const titleElement = document.getElementById('dashboard-title');
 
-    if (nameEl) {
-      nameEl.textContent = user.full_name || user.display_name || user.email || 'ผู้ใช้งาน';
+    const displayName =
+      user.full_name || user.display_name || user.email || 'ผู้ใช้งาน';
+
+    if (nameElement) {
+      nameElement.textContent = displayName;
     }
 
-    if (roleEl) {
-      roleEl.textContent = user.role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักเรียน';
+    if (roleElement) {
+      roleElement.textContent =
+        user.role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักเรียน';
+    }
+
+    if (titleElement) {
+      titleElement.textContent = `Welcome back, ${displayName}`;
     }
 
     if (user.role === 'admin') {
       updateSidebarAdminStatus(true);
+      addAdminConsoleLink();
     }
   } catch (error) {
     console.warn('Could not load user profile:', error);
   }
 }
 
-function setupFilterAndSortEvents() {
-  document.getElementById('filter-platform')?.addEventListener('change', renderAssignmentsFeed);
-  document.getElementById('filter-status')?.addEventListener('change', renderAssignmentsFeed);
-  document.getElementById('sort-by')?.addEventListener('change', renderAssignmentsFeed);
+function addAdminConsoleLink() {
+  if (document.getElementById('admin-console-link')) return;
+
+  const headerActions = document.querySelector('.header-actions');
+  if (!headerActions) return;
+
+  const adminButton = document.createElement('a');
+  adminButton.id = 'admin-console-link';
+  adminButton.className = 'btn btn-secondary app-link-button';
+  adminButton.href = 'admin.html';
+  adminButton.style.color = '#2563eb';
+  adminButton.style.fontWeight = '700';
+  adminButton.textContent = '⚙️ Admin Console';
+
+  headerActions.insertBefore(adminButton, headerActions.firstChild);
 }
 
 function setupCustomTaskForm() {
   const form = document.getElementById('create-assignment-form');
   if (!form) return;
 
+  // Custom tasks are disabled until the API supports them.
   if (!FEATURES.customTasks) {
     const formCard = form.closest('div');
     if (formCard) formCard.style.display = 'none';
 
-    const customOption = document.querySelector('#filter-platform option[value="custom"]');
-    if (customOption) customOption.style.display = 'none';
+    const customOption = document.querySelector(
+      '#filter-platform option[value="custom"]',
+    );
 
+    if (customOption) customOption.style.display = 'none';
     return;
   }
 
@@ -306,7 +375,7 @@ function setupCustomTaskForm() {
 async function loadDashboardData() {
   try {
     const status = await getOnboardingStatus();
-    connectionsState = status?.connections || {};
+    connectionsState = normalizeConnections(status?.connections || {});
     renderConnectionsSidebar(connectionsState);
   } catch (error) {
     console.warn('Failed to load platform connections:', error);
@@ -314,75 +383,98 @@ async function loadDashboardData() {
     renderConnectionsSidebar(connectionsState);
   }
 
-  try {
-    const [assignmentsResult, summaryResult] = await Promise.allSettled([
-      getAssignments(),
-      getDashboardSummary(),
-    ]);
+  const [assignmentsResult, summaryResult] = await Promise.allSettled([
+    getAssignments(),
+    getDashboardSummary(),
+  ]);
 
-    allAssignments =
-      assignmentsResult.status === 'fulfilled' &&
-      Array.isArray(assignmentsResult.value?.assignments)
-        ? assignmentsResult.value.assignments
+  if (assignmentsResult.status === 'fulfilled') {
+    const result = assignmentsResult.value;
+
+    allAssignments = Array.isArray(result?.assignments)
+      ? result.assignments
+      : Array.isArray(result)
+        ? result
         : [];
-
-    updateMetrics(
-      summaryResult.status === 'fulfilled' ? summaryResult.value : null
-    );
-
-    renderCourseProgress();
-    renderAssignmentsFeed();
-    renderCalendarTimeline();
-  } catch (error) {
-    console.warn('Error loading dashboard data:', error);
+  } else {
+    console.warn('Failed to load assignments:', assignmentsResult.reason);
     allAssignments = [];
-    updateMetrics(null);
-    renderCourseProgress();
-    renderAssignmentsFeed();
-    renderCalendarTimeline();
+    showToast('ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่', 'error');
   }
+
+  const summary =
+    summaryResult.status === 'fulfilled'
+      ? summaryResult.value
+      : null;
+
+  if (summaryResult.status === 'rejected') {
+    console.warn('Failed to load dashboard summary:', summaryResult.reason);
+  }
+
+  updateMetrics(summary);
+  renderCourseProgress();
+  renderAssignmentsFeed();
+  renderCalendarTimeline();
+}
+
+function normalizeConnections(connections) {
+  return {
+    google: Boolean(
+      connections.google ?? connections.google_classroom,
+    ),
+    microsoft: Boolean(
+      connections.microsoft ?? connections.microsoft_teams,
+    ),
+  };
 }
 
 function updateMetrics(summary = null) {
-  const totalEl = document.getElementById('metric-total-tasks');
-  const dueTodayEl = document.getElementById('metric-due-today');
-  const submittedEl = document.getElementById('metric-submitted-tasks');
+  const totalElement = document.getElementById('metric-total-tasks');
+  const dueTodayElement = document.getElementById('metric-due-today');
+  const submittedElement = document.getElementById('metric-submitted-tasks');
 
-  const completed = allAssignments.filter((assignment) =>
-    ['completed', 'submitted', 'done'].includes(
-      (assignment.status || '').toLowerCase()
-    )
+  const completedCount = allAssignments.filter((assignment) =>
+    COMPLETED_STATUSES.includes(
+      (assignment.status || '').toLowerCase(),
+    ),
   ).length;
 
-  if (totalEl) {
-    totalEl.textContent = summary?.total_assignments ?? allAssignments.length;
+  if (totalElement) {
+    totalElement.textContent =
+      summary?.total_assignments ?? allAssignments.length;
   }
 
-  if (dueTodayEl) {
-    if (summary?.due_soon != null) {
-      dueTodayEl.textContent = summary.due_soon;
+  if (dueTodayElement) {
+    if (summary?.due_today != null) {
+      dueTodayElement.textContent = summary.due_today;
+    } else if (summary?.due_soon != null) {
+      dueTodayElement.textContent = summary.due_soon;
     } else {
       const now = new Date();
 
-      dueTodayEl.textContent = allAssignments.filter((assignment) => {
+      dueTodayElement.textContent = allAssignments.filter((assignment) => {
         if (!assignment.dueDate) return false;
 
         const dueDate = new Date(assignment.dueDate);
-        return (
-          !Number.isNaN(dueDate.getTime()) &&
+        const isValidDate = !Number.isNaN(dueDate.getTime());
+        const isToday =
+          isValidDate &&
           dueDate.getFullYear() === now.getFullYear() &&
           dueDate.getMonth() === now.getMonth() &&
-          dueDate.getDate() === now.getDate() &&
-          !['completed', 'submitted', 'done'].includes(
-            (assignment.status || '').toLowerCase()
-          )
+          dueDate.getDate() === now.getDate();
+
+        const isIncomplete = !COMPLETED_STATUSES.includes(
+          (assignment.status || '').toLowerCase(),
         );
+
+        return isToday && isIncomplete;
       }).length;
     }
   }
 
-  if (submittedEl) {
-    submittedEl.textContent = completed;
+  if (submittedElement) {
+    submittedElement.textContent =
+      summary?.submitted_assignments ?? completedCount;
   }
 }
 
@@ -396,7 +488,9 @@ function renderCourseProgress() {
     const rawName = (assignment.course || '').trim();
     if (!rawName) return;
 
-    const name = rawName.startsWith('วิชา') ? rawName : `วิชา ${rawName}`;
+    const name = rawName.startsWith('วิชา')
+      ? rawName
+      : `วิชา ${rawName}`;
 
     if (!courseMap.has(name)) {
       courseMap.set(name, {
@@ -410,8 +504,8 @@ function renderCourseProgress() {
     course.totalTasks += 1;
 
     if (
-      ['completed', 'submitted', 'done'].includes(
-        (assignment.status || '').toLowerCase()
+      COMPLETED_STATUSES.includes(
+        (assignment.status || '').toLowerCase(),
       )
     ) {
       course.completedTasks += 1;
@@ -422,14 +516,16 @@ function renderCourseProgress() {
     ? Array.from(courseMap.values()).map((course) => ({
         ...course,
         percentage: course.totalTasks
-          ? Math.round((course.completedTasks / course.totalTasks) * 100)
+          ? Math.round(
+              (course.completedTasks / course.totalTasks) * 100,
+            )
           : 0,
       }))
     : [...DEFAULT_MOCKUP_COURSES];
 
   if (currentSearchTerm) {
     courses = courses.filter((course) =>
-      course.name.toLowerCase().includes(currentSearchTerm)
+      course.name.toLowerCase().includes(currentSearchTerm),
     );
   }
 
@@ -451,7 +547,10 @@ function renderCourseProgress() {
   }
 
   container.innerHTML = courses.map((course) => {
-    const percentage = Math.max(0, Math.min(100, course.percentage));
+    const percentage = Math.max(
+      0,
+      Math.min(100, course.percentage),
+    );
 
     return `
       <article class="flex flex-col gap-2">
@@ -492,7 +591,7 @@ function renderConnectionsSidebar(connections) {
     const connected = Boolean(connections[platform.key]);
 
     return `
-      <div class="connection-item">
+      <div class="connection-item flex items-center justify-between gap-2 py-2">
         <span class="flex items-center gap-1.5 font-medium text-slate-700">
           <span>${platform.icon}</span>
           ${escapeHtml(platform.name)}
@@ -514,48 +613,60 @@ function renderAssignmentsFeed() {
   const container = document.getElementById('assignment-list');
   if (!container) return;
 
-  const platformFilter = document.getElementById('filter-platform')?.value || 'all';
-  const statusFilter = document.getElementById('filter-status')?.value || 'all';
-  const sortBy = document.getElementById('sort-by')?.value || 'due';
+  const platformFilter =
+    document.getElementById('filter-platform')?.value || 'all';
+
+  const statusFilter =
+    document.getElementById('filter-status')?.value || 'all';
+
+  const sortBy =
+    document.getElementById('sort-by')?.value || 'due';
 
   let filtered = [...allAssignments];
 
   if (currentSearchTerm) {
     filtered = filtered.filter((assignment) =>
       (assignment.title || '').toLowerCase().includes(currentSearchTerm) ||
-      (assignment.course || '').toLowerCase().includes(currentSearchTerm)
+      (assignment.course || '').toLowerCase().includes(currentSearchTerm),
     );
   }
 
   if (platformFilter !== 'all') {
     filtered = filtered.filter(
-      (assignment) => (assignment.platform || 'custom').toLowerCase() === platformFilter
+      (assignment) =>
+        normalizePlatform(assignment.platform) === platformFilter,
     );
   }
 
   if (statusFilter === 'pending') {
     filtered = filtered.filter(
       (assignment) =>
-        !['completed', 'submitted', 'done'].includes(
-          (assignment.status || '').toLowerCase()
-        )
+        !COMPLETED_STATUSES.includes(
+          (assignment.status || '').toLowerCase(),
+        ),
     );
   } else if (statusFilter === 'completed') {
     filtered = filtered.filter((assignment) =>
-      ['completed', 'submitted', 'done'].includes(
-        (assignment.status || '').toLowerCase()
-      )
+      COMPLETED_STATUSES.includes(
+        (assignment.status || '').toLowerCase(),
+      ),
     );
   }
 
   if (sortBy === 'title') {
     filtered.sort((a, b) =>
-      (a.title || '').localeCompare(b.title || '', 'th')
+      (a.title || '').localeCompare(b.title || '', 'th'),
     );
   } else {
     filtered.sort((a, b) => {
-      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      const dateA = a.dueDate
+        ? new Date(a.dueDate).getTime()
+        : Infinity;
+
+      const dateB = b.dueDate
+        ? new Date(b.dueDate).getTime()
+        : Infinity;
+
       return dateA - dateB;
     });
   }
@@ -563,122 +674,166 @@ function renderAssignmentsFeed() {
   if (!filtered.length) {
     container.innerHTML = `
       <div class="py-12 text-center text-slate-400">
-        <p class="text-sm font-medium">ไม่พบรายการงานที่ตรงกับเงื่อนไข</p>
+        <p class="text-sm font-medium">
+          ไม่พบรายการงานที่ตรงกับเงื่อนไข
+        </p>
+        <p class="mt-1 text-xs">
+          ลองเปลี่ยนคำค้นหาหรือตัวกรอง
+        </p>
       </div>
     `;
     return;
   }
 
-  container.innerHTML = filtered.map((item) => {
-    const completed = ['completed', 'submitted', 'done'].includes(
-      (item.status || '').toLowerCase()
-    );
+  container.innerHTML = filtered.map(renderAssignmentCard).join('');
 
-    const platform = (item.platform || 'custom').toLowerCase();
+  container
+    .querySelectorAll('[data-action="toggle-status"]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        handleToggleStatus(
+          button.dataset.id,
+          button.dataset.currentStatus,
+        );
+      });
+    });
 
-    const platformBadge =
-      platform === 'google'
-        ? '<span class="text-blue-600 font-semibold">Google Classroom</span>'
-        : platform === 'microsoft'
+  container
+    .querySelectorAll('[data-action="delete-task"]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        handleDeleteTask(button.dataset.id);
+      });
+    });
+}
+
+function renderAssignmentCard(item) {
+  const completed = COMPLETED_STATUSES.includes(
+    (item.status || '').toLowerCase(),
+  );
+
+  const platform = normalizePlatform(item.platform);
+
+  const platformBadge =
+    platform === 'google'
+      ? '<span class="text-blue-600 font-semibold">Google Classroom</span>'
+      : platform === 'microsoft'
         ? '<span class="text-sky-600 font-semibold">Microsoft Teams</span>'
         : `<span class="text-purple-600 font-semibold">${escapeHtml(item.raw_platform || 'งานที่เพิ่มเอง')}</span>`;
 
-    const sourceLink = item.source_url
-      ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs text-brand-purple hover:underline font-semibold mt-1">เปิดในแพลตฟอร์มต้นทาง ↗</a>`
-      : '';
+  const sourceLink = isSafeHttpUrl(item.source_url)
+    ? `
+      <a
+        href="${escapeHtml(item.source_url)}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1 text-xs text-brand-purple hover:underline font-semibold mt-1"
+      >
+        เปิดในแพลตฟอร์มต้นทาง ↗
+      </a>
+    `
+    : '';
 
-    const actions = FEATURES.customTasks
-      ? `
-        <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
-          <button
-            type="button"
-            class="px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
-              completed
-                ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                : 'bg-brand-lime text-slate-900 hover:bg-brand-lime-hover shadow-sm'
-            }"
-            data-action="toggle-status"
-            data-id="${escapeHtml(item.id)}"
-            data-current-status="${escapeHtml(item.status)}"
-          >
-            ${completed ? '↩️ เปลี่ยนเป็นยังไม่เสร็จ' : '✓ ส่งงานแล้ว'}
-          </button>
+  const actions = FEATURES.customTasks
+    ? `
+      <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+        <button
+          type="button"
+          class="px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+            completed
+              ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+              : 'bg-brand-lime text-slate-900 hover:bg-brand-lime-hover shadow-sm'
+          }"
+          data-action="toggle-status"
+          data-id="${escapeHtml(item.id)}"
+          data-current-status="${escapeHtml(item.status)}"
+        >
+          ${completed ? '↩️ เปลี่ยนเป็นยังไม่เสร็จ' : '✓ ส่งงานแล้ว'}
+        </button>
 
-          ${
-            platform === 'custom'
-              ? `<button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 hover:bg-red-200" data-action="delete-task" data-id="${escapeHtml(item.id)}">ลบ</button>`
-              : ''
-          }
-        </div>
-      `
-      : `
-        <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
-          completed
-            ? 'bg-emerald-100 text-emerald-800'
-            : 'bg-amber-100 text-amber-800'
-        }">
-          ${completed ? 'เสร็จสิ้นแล้ว' : 'รอดำเนินการ'}
-        </span>
-      `;
-
-    return `
-      <article class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
+        ${
+          platform === 'custom'
+            ? `
+              <button
+                type="button"
+                class="px-3 py-1.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+                data-action="delete-task"
+                data-id="${escapeHtml(item.id)}"
+              >
+                ลบ
+              </button>
+            `
+            : ''
+        }
+      </div>
+    `
+    : `
+      <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
         completed
-          ? 'bg-slate-50/70 border-slate-200/60 opacity-80'
-          : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+          ? 'bg-emerald-100 text-emerald-800'
+          : 'bg-amber-100 text-amber-800'
       }">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 text-xs text-slate-500">
-            ${platformBadge}
-            <span>•</span>
-            <span class="font-medium truncate">${escapeHtml(item.course)}</span>
-          </div>
+        ${completed ? 'เสร็จสิ้นแล้ว' : 'รอดำเนินการ'}
+      </span>
+    `;
 
-          <h4 class="text-sm font-semibold text-slate-900 ${
-            completed ? 'line-through text-slate-500' : ''
-          }">
-            ${escapeHtml(item.title)}
-          </h4>
-
-          <div class="flex flex-wrap items-center gap-3 mt-1">
-            <p class="text-xs text-slate-500">
-              กำหนดส่ง: <strong class="text-slate-700">${escapeHtml(item.due)}</strong>
-            </p>
-            ${sourceLink}
-          </div>
+  return `
+    <article class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
+      completed
+        ? 'bg-slate-50/70 border-slate-200/60 opacity-80'
+        : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+    }">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1 text-xs text-slate-500">
+          ${platformBadge}
+          <span>•</span>
+          <span class="font-medium truncate">${escapeHtml(item.course || 'ไม่ระบุรายวิชา')}</span>
         </div>
 
-        ${actions}
-      </article>
-    `;
-  }).join('');
+        <h4 class="text-sm font-semibold text-slate-900 ${
+          completed ? 'line-through text-slate-500' : ''
+        }">
+          ${escapeHtml(item.title || 'ไม่มีชื่อรายการงาน')}
+        </h4>
 
-  container.querySelectorAll('[data-action="toggle-status"]').forEach((button) => {
-    button.addEventListener('click', () => {
-      handleToggleStatus(button.dataset.id, button.dataset.currentStatus);
-    });
-  });
+        <div class="flex flex-wrap items-center gap-3 mt-1">
+          <p class="text-xs text-slate-500">
+            กำหนดส่ง:
+            <strong class="text-slate-700">
+              ${escapeHtml(item.due || formatDueDate(item.dueDate))}
+            </strong>
+          </p>
+          ${sourceLink}
+        </div>
+      </div>
 
-  container.querySelectorAll('[data-action="delete-task"]').forEach((button) => {
-    button.addEventListener('click', () => {
-      handleDeleteTask(button.dataset.id);
-    });
-  });
+      ${actions}
+    </article>
+  `;
 }
 
 async function handleToggleStatus(id, currentStatus) {
-  const nextStatus = ['completed', 'submitted', 'done'].includes(
-    (currentStatus || '').toLowerCase()
-  )
-    ? 'Not started'
-    : 'Completed';
+  if (!id) {
+    showToast('ไม่พบรหัสรายการงาน', 'error');
+    return;
+  }
+
+  const isCompleted = COMPLETED_STATUSES.includes(
+    (currentStatus || '').toLowerCase(),
+  );
+
+  const nextStatus = isCompleted ? 'Not started' : 'Completed';
 
   try {
     await updateAssignmentStatus(id, nextStatus);
+
     showToast('อัปเดตสถานะงานเรียบร้อยแล้ว', 'success');
     await loadDashboardData();
   } catch (error) {
-    showToast(error.message || 'ไม่สามารถอัปเดตสถานะงานได้', 'error');
+    showToast(
+      error.message || 'ไม่สามารถอัปเดตสถานะงานได้',
+      'error',
+    );
   }
 }
 
@@ -701,25 +856,36 @@ async function handleCreateAssignment(event) {
 
   try {
     await createAssignment({ title, course, due });
+
     form.reset();
     showToast('เพิ่มงานเรียบร้อยแล้ว', 'success');
+
     await loadDashboardData();
   } catch (error) {
-    showToast(error.message || 'ไม่สามารถเพิ่มงานได้', 'error');
+    showToast(
+      error.message || 'ไม่สามารถเพิ่มงานได้',
+      'error',
+    );
   } finally {
     setButtonLoading(submitButton, false);
   }
 }
 
 async function handleDeleteTask(id) {
+  if (!id) return;
+
   if (!window.confirm('ต้องการลบงานนี้ใช่หรือไม่?')) return;
 
   try {
     await deleteAssignment(id);
+
     showToast('ลบงานเรียบร้อยแล้ว', 'success');
     await loadDashboardData();
   } catch (error) {
-    showToast(error.message || 'ไม่สามารถลบงานได้', 'error');
+    showToast(
+      error.message || 'ไม่สามารถลบงานได้',
+      'error',
+    );
   }
 }
 
@@ -737,49 +903,110 @@ function renderCalendarTimeline() {
   }
 
   const sortedAssignments = [...allAssignments].sort((a, b) => {
-    const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-    const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+    const dateA = a.dueDate
+      ? new Date(a.dueDate).getTime()
+      : Infinity;
+
+    const dateB = b.dueDate
+      ? new Date(b.dueDate).getTime()
+      : Infinity;
+
     return dateA - dateB;
   });
 
   container.innerHTML = sortedAssignments.map((item, index) => {
-    const completed = ['completed', 'submitted', 'done'].includes(
-      (item.status || '').toLowerCase()
+    const completed = COMPLETED_STATUSES.includes(
+      (item.status || '').toLowerCase(),
     );
 
-    const sourceLink = item.source_url
-      ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-brand-purple hover:underline font-semibold block mt-1">เปิดในแพลตฟอร์มต้นทาง ↗</a>`
+    const sourceLink = isSafeHttpUrl(item.source_url)
+      ? `
+        <a
+          href="${escapeHtml(item.source_url)}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-xs text-brand-purple hover:underline font-semibold block mt-1"
+        >
+          เปิดในแพลตฟอร์มต้นทาง ↗
+        </a>
+      `
       : '';
 
     return `
       <div class="flex items-start gap-4 p-4 rounded-2xl border border-slate-100 ${
-        completed ? 'bg-slate-50' : 'bg-amber-50/50 border-amber-200/50'
+        completed
+          ? 'bg-slate-50'
+          : 'bg-amber-50/50 border-amber-200/50'
       }">
         <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-          completed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'
+          completed
+            ? 'bg-emerald-100 text-emerald-800'
+            : 'bg-red-100 text-red-700'
         }">
           ${index + 1}
         </div>
 
         <div class="flex-1 min-w-0">
-          <h4 class="text-sm font-semibold text-slate-800">${escapeHtml(item.title)}</h4>
-          <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(item.course)}</p>
+          <h4 class="text-sm font-semibold text-slate-800">
+            ${escapeHtml(item.title || 'ไม่มีชื่อรายการงาน')}
+          </h4>
+
+          <p class="text-xs text-slate-500 mt-0.5">
+            ${escapeHtml(item.course || 'ไม่ระบุรายวิชา')}
+          </p>
+
           <span class="inline-block mt-2 text-xs font-semibold ${
             completed ? 'text-emerald-600' : 'text-red-600'
           }">
-            📅 กำหนดส่ง: ${escapeHtml(item.due)}
+            📅 กำหนดส่ง:
+            ${escapeHtml(item.due || formatDueDate(item.dueDate))}
           </span>
+
           ${sourceLink}
         </div>
 
         <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
-          completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+          completed
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-amber-100 text-amber-800'
         }">
           ${completed ? 'เสร็จสิ้น' : 'รอดำเนินการ'}
         </span>
       </div>
     `;
   }).join('');
+}
+
+function normalizePlatform(platform) {
+  const value = String(platform || 'custom').toLowerCase();
+
+  if (value === 'google_classroom') return 'google';
+  if (value === 'microsoft_teams') return 'microsoft';
+
+  return value;
+}
+
+function formatDueDate(value) {
+  if (!value) return 'ไม่ระบุ';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleString('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+function isSafeHttpUrl(value) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);

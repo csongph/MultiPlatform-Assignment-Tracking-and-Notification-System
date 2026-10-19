@@ -4,13 +4,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="KMAPS - MultiPlatform Assignment Tracking and Notification System" />
+  <meta
+    name="description"
+    content="KMAPS - MultiPlatform Assignment Tracking and Notification System"
+  />
   <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png" />
   <title>Dashboard - KMAPS</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -45,24 +51,27 @@
   </script>
 
   <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/navigation.css" />
   <link rel="stylesheet" href="../css/sidebar.css" />
   <link rel="stylesheet" href="../css/dashboard.css" />
 </head>
 
-<body class="bg-[#f0f2f6] text-slate-800 font-prompt min-h-screen p-3 md:p-6 lg:p-8 flex justify-center items-start selection:bg-brand-lime selection:text-slate-900">
+<body class="bg-[#f0f2f6] text-slate-800 font-prompt min-h-screen p-3 md:p-6 lg:p-8 flex justify-center items-start">
 
   <div class="w-full max-w-[1400px] flex flex-col md:flex-row gap-5 lg:gap-6 items-stretch">
 
     <!-- Sidebar -->
     <div
       id="sidebar-container"
-      class="shrink-0 w-full md:w-[220px] lg:w-[240px]"
+      class="app-sidebar-container shrink-0 w-full md:w-[220px] lg:w-[240px]"
     ></div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col gap-5 lg:gap-6 min-w-0" role="main">
+    <main class="app-main-container flex-1 flex flex-col gap-5 lg:gap-6 min-w-0" role="main">
 
-      <!-- Top Bar -->
+      <!-- Topbar -->
+      <div id="kmaps-topbar-container"></div>
+
       <header class="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-4 w-full">
 
         <div class="relative w-full sm:flex-1 max-w-[560px]">
@@ -98,7 +107,6 @@
 
         <div class="flex items-center gap-3 shrink-0 self-end sm:self-auto">
 
-          <!-- User Profile -->
           <div
             class="md3-chip-lime flex items-center gap-2.5 py-1.5 px-3.5 shadow-sm"
             title="ข้อมูลผู้ใช้งาน"
@@ -130,7 +138,6 @@
             </div>
           </div>
 
-          <!-- Sync Button -->
           <button
             type="button"
             id="sync-now-button"
@@ -142,7 +149,6 @@
             <span id="sync-text">ซิงก์ตอนนี้</span>
           </button>
 
-          <!-- Logout Button -->
           <button
             type="button"
             id="logout-button"
@@ -165,19 +171,40 @@
               <line x1="21" y1="12" x2="9" y2="12"></line>
             </svg>
           </button>
-
         </div>
       </header>
 
       <!-- Overview -->
       <div id="view-overview" class="view-fade-in flex flex-col gap-5 lg:gap-6">
 
+        <header class="app-header">
+          <div>
+            <p class="app-eyebrow">Assignment dashboard</p>
+            <h1 id="dashboard-title">ยินดีต้อนรับสู่ KMAPS</h1>
+            <p id="dashboard-subtitle">
+              ดูและติดตามงานจากทุกแพลตฟอร์มได้ในที่เดียว
+            </p>
+          </div>
+
+          <div class="header-actions">
+            <a
+              class="btn btn-secondary app-link-button"
+              href="onboarding.html"
+            >
+              จัดการการเชื่อมต่อ
+            </a>
+          </div>
+        </header>
+
+        <!-- Assignment Metrics -->
         <section
           class="grid grid-cols-1 sm:grid-cols-3 gap-4"
           aria-label="ภาพรวมสถิติงาน"
         >
           <article class="stat-card stat-card-yellow p-5 flex flex-col justify-between min-h-[120px]">
-            <span class="text-xs sm:text-sm font-medium tracking-tight">งานที่ได้รับมอบหมายทั้งหมด</span>
+            <span class="text-xs sm:text-sm font-medium tracking-tight">
+              งานที่ได้รับมอบหมายทั้งหมด
+            </span>
             <strong
               id="metric-total-tasks"
               class="font-outfit text-4xl sm:text-5xl font-bold tracking-tight mt-2"
@@ -185,7 +212,9 @@
           </article>
 
           <article class="stat-card stat-card-red p-5 flex flex-col justify-between min-h-[120px]">
-            <span class="text-xs sm:text-sm font-medium tracking-tight">ครบกำหนดวันนี้</span>
+            <span class="text-xs sm:text-sm font-medium tracking-tight">
+              ครบกำหนดวันนี้
+            </span>
             <strong
               id="metric-due-today"
               class="font-outfit text-4xl sm:text-5xl font-bold tracking-tight mt-2"
@@ -193,7 +222,9 @@
           </article>
 
           <article class="stat-card stat-card-green p-5 flex flex-col justify-between min-h-[120px]">
-            <span class="text-xs sm:text-sm font-medium tracking-tight">งานที่ส่งแล้ว</span>
+            <span class="text-xs sm:text-sm font-medium tracking-tight">
+              งานที่ส่งแล้ว
+            </span>
             <strong
               id="metric-submitted-tasks"
               class="font-outfit text-4xl sm:text-5xl font-bold tracking-tight mt-2"
@@ -201,13 +232,38 @@
           </article>
         </section>
 
+        <!-- Legacy Dashboard Metrics -->
+        <section
+          class="metrics-grid"
+          aria-label="Assignment status overview"
+        >
+          <article class="metric-card metric-due">
+            <span class="metric-label">Due Soon</span>
+            <strong id="metric-due-soon">0</strong>
+            <span class="metric-note">Next 7 days</span>
+          </article>
+
+          <article class="metric-card metric-progress">
+            <span class="metric-label">In Progress</span>
+            <strong id="metric-in-progress">0</strong>
+            <span class="metric-note">Across all courses</span>
+          </article>
+
+          <article class="metric-card metric-complete">
+            <span class="metric-label">Completed</span>
+            <strong id="metric-completed">0</strong>
+            <span class="metric-note">Across all syncs</span>
+          </article>
+        </section>
+
+        <!-- Course Progress -->
         <section
           class="md3-surface-panel p-6 sm:p-8 flex flex-col gap-6"
           aria-label="ความคืบหน้ารายวิชา"
         >
           <div class="flex items-center justify-between">
             <h2 class="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
-              ความคืบหน้า
+              ความคืบหน้ารายวิชา
             </h2>
 
             <button
@@ -247,18 +303,18 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div>
                 <h2 class="text-xl font-bold text-slate-900">
-                  รายการงานทั้งหมด (Assignment Feed)
+                  รายการงานทั้งหมด
                 </h2>
                 <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
-                  ซิงก์จาก Google Classroom, Microsoft Teams และงานที่บันทึกเอง
+                  งานจาก Google Classroom, Microsoft Teams และงานที่เพิ่มเอง
                 </p>
               </div>
 
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="dashboard-toolbar flex flex-wrap items-center gap-2">
                 <select
                   id="filter-platform"
-                  class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
-                  aria-label="แพลตฟอร์ม"
+                  class="toolbar-select px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
+                  aria-label="กรองตามแพลตฟอร์ม"
                 >
                   <option value="all">ทุกแพลตฟอร์ม</option>
                   <option value="google">Google Classroom</option>
@@ -268,8 +324,8 @@
 
                 <select
                   id="filter-status"
-                  class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
-                  aria-label="สถานะ"
+                  class="toolbar-select px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
+                  aria-label="กรองตามสถานะ"
                 >
                   <option value="all">ทุกสถานะ</option>
                   <option value="pending">ยังไม่เสร็จ</option>
@@ -278,79 +334,94 @@
 
                 <select
                   id="sort-by"
-                  class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
+                  class="toolbar-select px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
                   aria-label="จัดเรียงตาม"
                 >
                   <option value="due">กำหนดส่ง</option>
-                  <option value="title">ชื่อ (ก-ฮ)</option>
+                  <option value="title">ชื่อ (A-Z)</option>
                 </select>
               </div>
             </div>
 
             <div
+              class="assignment-list mt-4 flex flex-col gap-3"
               id="assignment-list"
-              class="mt-4 flex flex-col gap-3"
             ></div>
           </section>
 
-          <aside class="w-full lg:w-[320px] shrink-0 flex flex-col gap-4">
+          <aside class="sidebar-panels w-full lg:w-[320px] shrink-0 flex flex-col gap-4">
 
             <!-- Add Custom Task -->
-            <div class="bg-white rounded-4xl p-6 shadow-sm border border-slate-200/80">
-              <h3 class="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
-                <span>➕ เพิ่มการบ้าน/งานใหม่</span>
+            <div class="connection-panel bg-white rounded-4xl p-6 shadow-sm border border-slate-200/80">
+              <h3 class="text-base font-bold text-slate-900 mb-3">
+                เพิ่มการบ้าน / งานใหม่
               </h3>
 
               <form
                 id="create-assignment-form"
-                class="flex flex-col gap-3"
+                class="custom-assignment-form flex flex-col gap-3"
                 novalidate
               >
-                <div>
-                  <label for="task-title" class="block text-xs font-medium text-slate-700 mb-1">
+                <div class="form-group">
+                  <label
+                    for="task-title"
+                    class="form-label block text-xs font-medium text-slate-700 mb-1"
+                  >
                     ชื่องาน
                   </label>
-                  <input
-                    type="text"
-                    id="task-title"
-                    name="title"
-                    required
-                    class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-brand-purple"
-                    placeholder="เช่น รายงานส่งท้ายสัปดาห์"
-                  />
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="task-title"
+                      name="title"
+                      class="form-input w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none"
+                      placeholder="เช่น รายงานส่งท้ายสัปดาห์"
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label for="task-course" class="block text-xs font-medium text-slate-700 mb-1">
-                    วิชา
+                <div class="form-group">
+                  <label
+                    for="task-course"
+                    class="form-label block text-xs font-medium text-slate-700 mb-1"
+                  >
+                    ชื่อวิชา
                   </label>
-                  <input
-                    type="text"
-                    id="task-course"
-                    name="course"
-                    required
-                    class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-brand-purple"
-                    placeholder="เช่น การเขียนโปรแกรม"
-                  />
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="task-course"
+                      name="course"
+                      class="form-input w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none"
+                      placeholder="เช่น การเขียนโปรแกรม"
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label for="task-due" class="block text-xs font-medium text-slate-700 mb-1">
+                <div class="form-group">
+                  <label
+                    for="task-due"
+                    class="form-label block text-xs font-medium text-slate-700 mb-1"
+                  >
                     กำหนดส่ง
                   </label>
-                  <input
-                    type="text"
-                    id="task-due"
-                    name="due"
-                    required
-                    class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-brand-purple"
-                    placeholder="เช่น พรุ่งนี้ 18:00"
-                  />
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="task-due"
+                      name="due"
+                      class="form-input w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none"
+                      placeholder="เช่น พรุ่งนี้ 18:00"
+                      required
+                    />
+                  </div>
                 </div>
 
                 <button
                   type="submit"
-                  class="w-full mt-2 py-2 px-4 bg-brand-purple text-white text-xs font-semibold rounded-xl hover:bg-brand-purple-dark transition-colors shadow-sm"
+                  class="btn btn-primary w-full mt-2 py-2 px-4 text-xs font-semibold rounded-xl"
                 >
                   เพิ่มงาน
                 </button>
@@ -358,28 +429,28 @@
             </div>
 
             <!-- Connected Platforms -->
-            <div class="bg-white rounded-4xl p-6 shadow-sm border border-slate-200/80">
+            <aside class="connection-panel bg-white rounded-4xl p-6 shadow-sm border border-slate-200/80">
               <h3 class="text-sm font-bold text-slate-900 mb-3">
-                สถานะแพลตฟอร์มที่เชื่อมต่อ
+                แพลตฟอร์มที่เชื่อมต่อ
               </h3>
 
               <div
+                class="connection-list flex flex-col gap-2"
                 id="connection-list"
-                class="flex flex-col gap-2"
               ></div>
 
               <a
                 href="onboarding.html"
                 class="inline-block mt-3 text-xs text-brand-purple font-semibold hover:underline"
               >
-                ⚙️ จัดการการเชื่อมต่อแพลตฟอร์ม →
+                จัดการการเชื่อมต่อแพลตฟอร์ม →
               </a>
-            </div>
+            </aside>
           </aside>
         </div>
       </div>
 
-      <!-- Calendar and Notifications -->
+      <!-- Calendar -->
       <div id="view-calendar" class="view-fade-in hidden flex flex-col gap-6">
         <section class="bg-white rounded-4xl p-6 sm:p-8 shadow-sm border border-slate-200/80">
           <h2 class="text-xl font-bold text-slate-900 mb-1">
@@ -394,6 +465,21 @@
             id="calendar-timeline-container"
             class="flex flex-col gap-4"
           ></div>
+        </section>
+      </div>
+
+      <!-- Notifications -->
+      <div id="view-notifications" class="view-fade-in hidden flex flex-col gap-6">
+        <section class="bg-white rounded-4xl p-6 sm:p-8 shadow-sm border border-slate-200/80">
+          <h2 class="text-xl font-bold text-slate-900 mb-1">
+            การแจ้งเตือน
+          </h2>
+
+          <p class="text-xs sm:text-sm text-slate-500 mb-6">
+            ตรวจสอบการแจ้งเตือนเกี่ยวกับงานและกำหนดส่ง
+          </p>
+
+          <div id="notifications-container" class="flex flex-col gap-4"></div>
         </section>
       </div>
 
