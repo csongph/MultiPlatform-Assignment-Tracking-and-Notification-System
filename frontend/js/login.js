@@ -8,6 +8,7 @@ import {
   clearFormErrors,
   setFieldError,
 } from './validation.js';
+
 import {
   loadComponents,
   showToast,
@@ -17,15 +18,29 @@ import {
   initPageAnimations,
   initAuthFooter,
 } from './ui.js';
-import { handleLogin, resolveAuthError, guardAuthPage } from './auth.js';
+
+import {
+  handleLogin,
+  resolveAuthError,
+  guardAuthPage,
+} from './auth.js';
 
 async function init() {
   guardAuthPage();
 
   await loadComponents([
-    { containerId: 'auth-header', path: '../components/auth-header.html' },
-    { containerId: 'login-form-container', path: '../components/login-form.html' },
-    { containerId: 'auth-footer', path: '../components/auth-footer.html' },
+    {
+      containerId: 'auth-header',
+      path: '../components/auth-header.html',
+    },
+    {
+      containerId: 'login-form-container',
+      path: '../components/login-form.html',
+    },
+    {
+      containerId: 'auth-footer',
+      path: '../components/auth-footer.html',
+    },
   ]);
 
   const form = document.getElementById('login-form');
@@ -36,26 +51,44 @@ async function init() {
   initPageAnimations();
   initAuthFooter('login');
 
-  document.querySelector('.forgot-link')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    showToast('Password reset will be available once the reset endpoint is configured.', 'info');
+  // Display authentication errors saved during redirects.
+  const flashError = sessionStorage.getItem('kmaps_flash_error');
+
+  if (flashError) {
+    sessionStorage.removeItem('kmaps_flash_error');
+    showToast(flashError, 'warning');
+  }
+
+  document.querySelector('.forgot-link')?.addEventListener('click', (event) => {
+    event.preventDefault();
+
+    showToast(
+      'Password reset will be available once the reset endpoint is configured.',
+      'info'
+    );
   });
 
-  form.addEventListener('input', (e) => {
-    const field = e.target.name;
-    if (field) setFieldError(form, field, '');
+  // Clear a field's validation error when the user edits it.
+  form.addEventListener('input', (event) => {
+    const field = event.target.name;
+
+    if (field) {
+      setFieldError(form, field, '');
+    }
   });
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
     clearFormErrors(form);
 
     const formData = new FormData(form);
+
     const email = formData.get('email');
     const password = formData.get('password');
     const rememberMe = formData.get('remember_me') === 'on';
 
     const validation = validateLoginForm({ email, password });
+
     if (!validation.valid) {
       applyFieldErrors(form, validation.fieldErrors);
       return;

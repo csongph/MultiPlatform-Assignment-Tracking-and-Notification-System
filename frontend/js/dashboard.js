@@ -1,87 +1,482 @@
 /**
- * KMAPS Dashboard Entry Point
+ * KMAPS Dashboard Controller
+ * Dashboard overview, assignments, platform connections, and sync
  */
 
 import {
   getAssignments,
+  getDashboardSummary,
   getOnboardingStatus,
-  createAssignment,
+  getCurrentUser,
+  queueSync,
+  getSyncJob,
   updateAssignmentStatus,
+  createAssignment,
   deleteAssignment,
+  FEATURES,
 } from './api.js';
-import { requireAuth, getSignedInUser, logout } from './auth.js';
-import { showToast, setButtonLoading } from './ui.js';
-import { initNavigation } from './navigation.js';
 
+import { requireAuth, getSignedInUser, logout } from './auth.js';
+
+import {
+  getAccessToken,
+  clearAuthSession,
+  getUserProfile,
+  setUserProfile,
+} from './storage.js';
+
+import { showToast, setButtonLoading, escapeHtml } from './ui.js';
+
+import {
+  initSidebar,
+  setActiveNavItem,
+  updateSidebarAdminStatus,
+} from './sidebar.js';
+
+// State
 let allAssignments = [];
 let connectionsState = {};
-let currentSearchQuery = '';
+let currentSortOrder = 'default';
+let currentSearchTerm = '';
+let isSyncing = false;
+
+const DEFAULT_MOCKUP_COURSES = [
+  {
+    id: 'c-db',
+    name: 'วิชา ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ',
+    completedTasks: 0,
+    totalTasks: 4,
+    percentage: 10,
+  },
+  {
+    id: 'c-prog',
+    name: 'วิชา การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น',
+    completedTasks: 1,
+    totalTasks: 3,
+    percentage: 60,
+  },
+  {
+    id: 'c-web',
+    name: 'วิชา การออกแบบและพัฒนาเว็บไซต์',
+    completedTasks: 4,
+    totalTasks: 4,
+    percentage: 96,
+  },
+];
 
 async function init() {
+  if (
+    getAccessToken() === 'mock-preview-session-token' ||
+    getUserProfile()?.id === 'demo-kunagron'
+  ) {
+    clearAuthSession();
+  }
+
   if (!requireAuth()) return;
 
-  // โหลด Navigation Bar (Sidebar สีม่วง + Topbar สีเขียวมะนาว)
-  initNavigation('courses');
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialTab =
+    urlParams.get('view') ||
+    window.location.hash.replace('#', '') ||
+    'overview';
 
-  // ฟัง Event การค้นหาจาก Topbar
-  window.addEventListener('kmaps-search', (e) => {
-    currentSearchQuery = (e.detail?.query || '').toLowerCase();
-    renderFeed();
+  if (initialTab === 'assignments') {
+    window.location.replace('assignments.html');
+    return;
+  }
+
+  await initSidebar({
+    container: 'sidebar-container',
+    active: initialTab,
+    onNavigate: (tabId) => {
+      if (tabId === 'assignments') {
+        window.location.href = 'assignments.html';
+        return;
+      }
+
+      switchViewTab(tabId);
+    },
   });
 
-  // Setup header events
-  document.getElementById('logout-button')?.addEventListener('click', logout);
+  setupNavigationEvents(initialTab);
+  setupHeaderEvents();
+  setupFilterAndSortEvents();
+  setupSyncButton();
+  setupCustomTaskForm();
 
-  // Load user profile
-  try {
-    const user = await getSignedInUser();
-    if (user?.display_name || user?.full_name) {
-      const titleEl = document.getElementById('dashboard-title');
-      if (titleEl) {
-        titleEl.textContent = `Welcome back, ${user.display_name || user.full_name}`;
-      }
-    }
-
-    if (user?.role === 'admin') {
-      const headerActions = document.querySelector('.header-actions');
-      if (headerActions && !document.getElementById('admin-console-link')) {
-        const adminBtn = document.createElement('a');
-        adminBtn.id = 'admin-console-link';
-        adminBtn.className = 'btn btn-secondary app-link-button';
-        adminBtn.href = 'admin.html';
-        adminBtn.style.color = '#2563eb';
-        adminBtn.style.fontWeight = '700';
-        adminBtn.textContent = '⚙️ Admin Console';
-        headerActions.insertBefore(adminBtn, headerActions.firstChild);
-      }
-    }
-  } catch (err) {
-    console.warn('Could not load user profile', err);
-  }
-
-  // Setup filters & sorting listeners
-  document.getElementById('filter-platform')?.addEventListener('change', renderFeed);
-  document.getElementById('filter-status')?.addEventListener('change', renderFeed);
-  document.getElementById('sort-by')?.addEventListener('change', renderFeed);
-
-  // Setup custom assignment form
-  const customForm = document.getElementById('create-assignment-form');
-  if (customForm) {
-    customForm.addEventListener('submit', handleCreateAssignment);
-  }
-
-  // Initial data load
-  await Promise.all([loadPlatforms(), loadAssignmentsFeed()]);
+  await loadUserData();
+  await loadDashboardData();
 }
 
-async function loadPlatforms() {
+function switchViewTab(tabId) {
+  const views = {
+    overview: document.getElementById('view-overview'),
+    assignments: document.getElementById('view-assignments'),
+    calendar: document.getElementById('view-calendar'),
+  };
+
+  Object.entries(views).forEach(([id, view]) => {
+    if (!view) return;
+    view.classList.toggle('hidden', id !== tabId);
+  });
+
+  setActiveNavItem(tabId);
+
+  if (tabId === 'calendar') {
+    renderCalendarTimeline();
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', tabId);
+  window.history.replaceState({}, '', url.toString());
+}
+
+function setupNavigationEvents(initialTab = 'overview') {
+  if (initialTab && initialTab !== 'overview') {
+    switchViewTab(initialTab);
+  }
+
+  window.addEventListener('kmaps:tabchange', (event) => {
+    if (event.detail?.tabId) {
+      switchViewTab(event.detail.tabId);
+    }
+  });
+}
+
+function setupHeaderEvents() {
+  document.getElementById('logout-button')?.addEventListener('click', logout);
+
+  const searchInput = document.getElementById('search-course-input');
+
+  searchInput?.addEventListener('input', (event) => {
+    currentSearchTerm = event.target.value.trim().toLowerCase();
+    renderCourseProgress();
+    renderAssignmentsFeed();
+  });
+
+  document.getElementById('sort-progress-btn')?.addEventListener('click', () => {
+    if (currentSortOrder === 'default') {
+      currentSortOrder = 'desc';
+      showToast('เรียงตามความคืบหน้า: มากไปน้อย', 'info');
+    } else if (currentSortOrder === 'desc') {
+      currentSortOrder = 'asc';
+      showToast('เรียงตามความคืบหน้า: น้อยไปมาก', 'info');
+    } else {
+      currentSortOrder = 'default';
+      showToast('เรียงตามลำดับรายวิชาปกติ', 'info');
+    }
+
+    renderCourseProgress();
+  });
+}
+
+function setupSyncButton() {
+  document.getElementById('sync-now-button')?.addEventListener('click', async () => {
+    if (isSyncing) return;
+    await triggerManualSync();
+  });
+}
+
+async function triggerManualSync() {
+  const syncBtn = document.getElementById('sync-now-button');
+  const syncIcon = document.getElementById('sync-icon');
+  const syncText = document.getElementById('sync-text');
+
+  isSyncing = true;
+
+  if (syncBtn) syncBtn.disabled = true;
+  if (syncIcon) syncIcon.classList.add('spin-animate');
+  if (syncText) syncText.textContent = 'กำลังซิงก์...';
+
+  try {
+    const job = await queueSync('google_classroom');
+    const jobId = job?.job_id;
+
+    if (!jobId) {
+      await finishSync(true, 'เริ่มซิงก์แล้ว กำลังอัปเดตข้อมูล...');
+      return;
+    }
+
+    showToast('กำลังซิงก์ข้อมูลงานจากแพลตฟอร์ม...', 'info');
+
+    const startTime = Date.now();
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const statusData = await getSyncJob(jobId);
+        const status = statusData?.status;
+
+        if (['completed', 'succeeded', 'success'].includes(status)) {
+          clearInterval(pollInterval);
+          await finishSync(
+            true,
+            `ซิงก์สำเร็จ! อัปเดตงาน ${statusData.items_synced || 0} รายการ`
+          );
+        } else if (['failed', 'error'].includes(status)) {
+          clearInterval(pollInterval);
+          await finishSync(false, 'การซิงก์ล้มเหลว กรุณาลองใหม่');
+        } else if (Date.now() - startTime > 60000) {
+          clearInterval(pollInterval);
+          await finishSync(true, 'การซิงก์ยังทำงานอยู่เบื้องหลัง');
+        }
+      } catch {
+        clearInterval(pollInterval);
+        await finishSync(false, 'ไม่สามารถตรวจสอบสถานะการซิงก์ได้');
+      }
+    }, 2500);
+  } catch (error) {
+    await finishSync(false, error.message || 'ไม่สามารถเริ่มการซิงก์ได้');
+  }
+}
+
+async function finishSync(isSuccess, message) {
+  isSyncing = false;
+
+  document.getElementById('sync-now-button')?.removeAttribute('disabled');
+  document.getElementById('sync-icon')?.classList.remove('spin-animate');
+
+  const syncText = document.getElementById('sync-text');
+  if (syncText) syncText.textContent = 'ซิงก์ตอนนี้';
+
+  showToast(message, isSuccess ? 'success' : 'error');
+
+  if (isSuccess) {
+    await loadDashboardData();
+  }
+}
+
+async function loadUserData() {
+  try {
+    let user;
+
+    try {
+      user = await getCurrentUser();
+
+      if (user) {
+        setUserProfile(user);
+      }
+    } catch {
+      user = await getSignedInUser();
+    }
+
+    if (!user) return;
+
+    const nameEl = document.getElementById('user-display-name');
+    const roleEl = document.getElementById('user-role-badge');
+
+    if (nameEl) {
+      nameEl.textContent = user.full_name || user.display_name || user.email || 'ผู้ใช้งาน';
+    }
+
+    if (roleEl) {
+      roleEl.textContent = user.role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักเรียน';
+    }
+
+    if (user.role === 'admin') {
+      updateSidebarAdminStatus(true);
+    }
+  } catch (error) {
+    console.warn('Could not load user profile:', error);
+  }
+}
+
+function setupFilterAndSortEvents() {
+  document.getElementById('filter-platform')?.addEventListener('change', renderAssignmentsFeed);
+  document.getElementById('filter-status')?.addEventListener('change', renderAssignmentsFeed);
+  document.getElementById('sort-by')?.addEventListener('change', renderAssignmentsFeed);
+}
+
+function setupCustomTaskForm() {
+  const form = document.getElementById('create-assignment-form');
+  if (!form) return;
+
+  if (!FEATURES.customTasks) {
+    const formCard = form.closest('div');
+    if (formCard) formCard.style.display = 'none';
+
+    const customOption = document.querySelector('#filter-platform option[value="custom"]');
+    if (customOption) customOption.style.display = 'none';
+
+    return;
+  }
+
+  form.addEventListener('submit', handleCreateAssignment);
+}
+
+async function loadDashboardData() {
   try {
     const status = await getOnboardingStatus();
     connectionsState = status?.connections || {};
     renderConnectionsSidebar(connectionsState);
-  } catch (err) {
-    console.error('Failed to load platform connections:', err);
+  } catch (error) {
+    console.warn('Failed to load platform connections:', error);
+    connectionsState = {};
+    renderConnectionsSidebar(connectionsState);
   }
+
+  try {
+    const [assignmentsResult, summaryResult] = await Promise.allSettled([
+      getAssignments(),
+      getDashboardSummary(),
+    ]);
+
+    allAssignments =
+      assignmentsResult.status === 'fulfilled' &&
+      Array.isArray(assignmentsResult.value?.assignments)
+        ? assignmentsResult.value.assignments
+        : [];
+
+    updateMetrics(
+      summaryResult.status === 'fulfilled' ? summaryResult.value : null
+    );
+
+    renderCourseProgress();
+    renderAssignmentsFeed();
+    renderCalendarTimeline();
+  } catch (error) {
+    console.warn('Error loading dashboard data:', error);
+    allAssignments = [];
+    updateMetrics(null);
+    renderCourseProgress();
+    renderAssignmentsFeed();
+    renderCalendarTimeline();
+  }
+}
+
+function updateMetrics(summary = null) {
+  const totalEl = document.getElementById('metric-total-tasks');
+  const dueTodayEl = document.getElementById('metric-due-today');
+  const submittedEl = document.getElementById('metric-submitted-tasks');
+
+  const completed = allAssignments.filter((assignment) =>
+    ['completed', 'submitted', 'done'].includes(
+      (assignment.status || '').toLowerCase()
+    )
+  ).length;
+
+  if (totalEl) {
+    totalEl.textContent = summary?.total_assignments ?? allAssignments.length;
+  }
+
+  if (dueTodayEl) {
+    if (summary?.due_soon != null) {
+      dueTodayEl.textContent = summary.due_soon;
+    } else {
+      const now = new Date();
+
+      dueTodayEl.textContent = allAssignments.filter((assignment) => {
+        if (!assignment.dueDate) return false;
+
+        const dueDate = new Date(assignment.dueDate);
+        return (
+          !Number.isNaN(dueDate.getTime()) &&
+          dueDate.getFullYear() === now.getFullYear() &&
+          dueDate.getMonth() === now.getMonth() &&
+          dueDate.getDate() === now.getDate() &&
+          !['completed', 'submitted', 'done'].includes(
+            (assignment.status || '').toLowerCase()
+          )
+        );
+      }).length;
+    }
+  }
+
+  if (submittedEl) {
+    submittedEl.textContent = completed;
+  }
+}
+
+function renderCourseProgress() {
+  const container = document.getElementById('courses-progress-container');
+  if (!container) return;
+
+  const courseMap = new Map();
+
+  allAssignments.forEach((assignment) => {
+    const rawName = (assignment.course || '').trim();
+    if (!rawName) return;
+
+    const name = rawName.startsWith('วิชา') ? rawName : `วิชา ${rawName}`;
+
+    if (!courseMap.has(name)) {
+      courseMap.set(name, {
+        name,
+        totalTasks: 0,
+        completedTasks: 0,
+      });
+    }
+
+    const course = courseMap.get(name);
+    course.totalTasks += 1;
+
+    if (
+      ['completed', 'submitted', 'done'].includes(
+        (assignment.status || '').toLowerCase()
+      )
+    ) {
+      course.completedTasks += 1;
+    }
+  });
+
+  let courses = courseMap.size
+    ? Array.from(courseMap.values()).map((course) => ({
+        ...course,
+        percentage: course.totalTasks
+          ? Math.round((course.completedTasks / course.totalTasks) * 100)
+          : 0,
+      }))
+    : [...DEFAULT_MOCKUP_COURSES];
+
+  if (currentSearchTerm) {
+    courses = courses.filter((course) =>
+      course.name.toLowerCase().includes(currentSearchTerm)
+    );
+  }
+
+  if (currentSortOrder === 'asc') {
+    courses.sort((a, b) => a.percentage - b.percentage);
+  } else if (currentSortOrder === 'desc') {
+    courses.sort((a, b) => b.percentage - a.percentage);
+  }
+
+  if (!courses.length) {
+    container.innerHTML = `
+      <div class="py-8 text-center text-slate-400">
+        <p class="text-sm font-medium">
+          ไม่พบรายวิชาที่ตรงกับคำค้นหา "${escapeHtml(currentSearchTerm)}"
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = courses.map((course) => {
+    const percentage = Math.max(0, Math.min(100, course.percentage));
+
+    return `
+      <article class="flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-800">
+          <span class="tracking-tight">${escapeHtml(course.name)}</span>
+          <span class="text-slate-600 font-medium">
+            ${course.completedTasks} / ${course.totalTasks} งานเสร็จสิ้น
+          </span>
+        </div>
+
+        <div class="progress-track w-full">
+          <div
+            class="progress-fill"
+            style="width: ${percentage}%;"
+            role="progressbar"
+            aria-valuenow="${percentage}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span class="progress-label">${percentage}%</span>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
 }
 
 function renderConnectionsSidebar(connections) {
@@ -93,67 +488,29 @@ function renderConnectionsSidebar(connections) {
     { key: 'microsoft', name: 'Microsoft Teams', icon: '💼' },
   ];
 
-  container.innerHTML = platforms
-    .map((p) => {
-      const isConnected = Boolean(connections[p.key]);
-      return `
-        <div class="connection-item" style="display:flex; justify-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-          <span style="font-size:0.9rem;">${p.icon} ${p.name}</span>
-          <span class="badge ${isConnected ? 'badge-success' : 'badge-neutral'}" style="font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:1rem; background:${isConnected ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.1)'}; color:${isConnected ? '#34d399' : '#a1a1aa'};">
-            ${isConnected ? 'Connected' : 'Not Connected'}
-          </span>
-        </div>
-      `;
-    })
-    .join('');
+  container.innerHTML = platforms.map((platform) => {
+    const connected = Boolean(connections[platform.key]);
+
+    return `
+      <div class="connection-item">
+        <span class="flex items-center gap-1.5 font-medium text-slate-700">
+          <span>${platform.icon}</span>
+          ${escapeHtml(platform.name)}
+        </span>
+
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+          connected
+            ? 'bg-emerald-100 text-emerald-800'
+            : 'bg-slate-100 text-slate-500'
+        }">
+          ${connected ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อมต่อ'}
+        </span>
+      </div>
+    `;
+  }).join('');
 }
 
-async function loadAssignmentsFeed() {
-  const container = document.getElementById('assignment-list');
-  if (container) {
-    container.innerHTML = '<div style="padding: 2rem; text-align: center; color: #a1a1aa;">Loading assignments...</div>';
-  }
-
-  try {
-    const response = await getAssignments();
-    allAssignments = response?.assignments || [];
-    updateMetrics(allAssignments);
-    renderFeed();
-  } catch (err) {
-    console.error('Failed to load assignments:', err);
-    showToast('Failed to load assignments. Please refresh.', 'error');
-    if (container) {
-      container.innerHTML = '<div style="padding: 2rem; text-align: center; color: #ef4444;">Failed to load assignments.</div>';
-    }
-  }
-}
-
-function updateMetrics(assignments) {
-  const dueSoonEl = document.getElementById('metric-due-soon');
-  const inProgressEl = document.getElementById('metric-in-progress');
-  const completedEl = document.getElementById('metric-completed');
-
-  let dueSoonCount = 0;
-  let inProgressCount = 0;
-  let completedCount = 0;
-
-  assignments.forEach((a) => {
-    const status = (a.status || '').toLowerCase();
-    if (status === 'completed' || status === 'submitted') {
-      completedCount++;
-    } else if (status === 'in progress' || status === 'in_progress') {
-      inProgressCount++;
-    } else {
-      dueSoonCount++;
-    }
-  });
-
-  if (dueSoonEl) dueSoonEl.textContent = dueSoonCount;
-  if (inProgressEl) inProgressEl.textContent = inProgressCount;
-  if (completedEl) completedEl.textContent = completedCount;
-}
-
-function renderFeed() {
+function renderAssignmentsFeed() {
   const container = document.getElementById('assignment-list');
   if (!container) return;
 
@@ -163,179 +520,266 @@ function renderFeed() {
 
   let filtered = [...allAssignments];
 
-  // ค้นหาตามข้อความ Search จาก Topbar
-  if (currentSearchQuery) {
-    filtered = filtered.filter(
-      (a) =>
-        (a.title || '').toLowerCase().includes(currentSearchQuery) ||
-        (a.course || '').toLowerCase().includes(currentSearchQuery)
+  if (currentSearchTerm) {
+    filtered = filtered.filter((assignment) =>
+      (assignment.title || '').toLowerCase().includes(currentSearchTerm) ||
+      (assignment.course || '').toLowerCase().includes(currentSearchTerm)
     );
   }
 
-  // Filter by platform
   if (platformFilter !== 'all') {
-    filtered = filtered.filter((a) => (a.platform || 'custom').toLowerCase() === platformFilter);
+    filtered = filtered.filter(
+      (assignment) => (assignment.platform || 'custom').toLowerCase() === platformFilter
+    );
   }
 
-  // Filter by status
   if (statusFilter === 'pending') {
-    filtered = filtered.filter((a) => (a.status || '').toLowerCase() !== 'completed' && (a.status || '').toLowerCase() !== 'submitted');
+    filtered = filtered.filter(
+      (assignment) =>
+        !['completed', 'submitted', 'done'].includes(
+          (assignment.status || '').toLowerCase()
+        )
+    );
   } else if (statusFilter === 'completed') {
-    filtered = filtered.filter((a) => (a.status || '').toLowerCase() === 'completed' || (a.status || '').toLowerCase() === 'submitted');
+    filtered = filtered.filter((assignment) =>
+      ['completed', 'submitted', 'done'].includes(
+        (assignment.status || '').toLowerCase()
+      )
+    );
   }
 
-  // Sort
   if (sortBy === 'title') {
-    filtered.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    filtered.sort((a, b) =>
+      (a.title || '').localeCompare(b.title || '', 'th')
+    );
   } else {
-    // default sort by due date
-    filtered.sort((a, b) => new Date(a.due || 0) - new Date(b.due || 0));
+    filtered.sort((a, b) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      return dateA - dateB;
+    });
   }
 
-  if (filtered.length === 0) {
+  if (!filtered.length) {
     container.innerHTML = `
-      <div style="padding: 3rem 1.5rem; text-align: center; color: #71717a;">
-        <p style="font-size: 1.1rem; font-weight: 500;">No assignments found</p>
-        <p style="font-size: 0.875rem; margin-top: 0.25rem;">Try adjusting your filters or connect a platform in setup.</p>
+      <div class="py-12 text-center text-slate-400">
+        <p class="text-sm font-medium">ไม่พบรายการงานที่ตรงกับเงื่อนไข</p>
       </div>
     `;
     return;
   }
 
-  container.innerHTML = filtered.map((item) => renderAssignmentCard(item)).join('');
+  container.innerHTML = filtered.map((item) => {
+    const completed = ['completed', 'submitted', 'done'].includes(
+      (item.status || '').toLowerCase()
+    );
 
-  // Attach status toggle & delete listeners
-  container.querySelectorAll('[data-action="toggle-status"]').forEach((btn) => {
-    btn.addEventListener('click', () => handleToggleStatus(btn.dataset.id, btn.dataset.currentStatus));
-  });
+    const platform = (item.platform || 'custom').toLowerCase();
 
-  container.querySelectorAll('[data-action="delete-task"]').forEach((btn) => {
-    btn.addEventListener('click', () => handleDeleteTask(btn.dataset.id));
-  });
-}
+    const platformBadge =
+      platform === 'google'
+        ? '<span class="text-blue-600 font-semibold">Google Classroom</span>'
+        : platform === 'microsoft'
+        ? '<span class="text-sky-600 font-semibold">Microsoft Teams</span>'
+        : `<span class="text-purple-600 font-semibold">${escapeHtml(item.raw_platform || 'งานที่เพิ่มเอง')}</span>`;
 
-function renderAssignmentCard(item) {
-  const isCompleted = ['completed', 'submitted'].includes((item.status || '').toLowerCase());
-  const platform = item.platform || 'custom';
-  const platformBadge =
-    platform === 'google'
-      ? '<span style="color:#4285f4;">Google</span>'
-      : platform === 'microsoft'
-      ? '<span style="color:#00a4ef;">Microsoft</span>'
-      : '<span style="color:#a855f7;">Custom</span>';
+    const sourceLink = item.source_url
+      ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs text-brand-purple hover:underline font-semibold mt-1">เปิดในแพลตฟอร์มต้นทาง ↗</a>`
+      : '';
 
-  return `
-    <article class="assignment-card ${isCompleted ? 'completed' : ''}" style="display:flex; justify-content:space-between; align-items:center; padding:1.25rem; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:0.75rem; margin-bottom:0.75rem; transition:all 0.2s ease;">
-      <div style="flex:1; padding-right:1rem;">
-        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
-          <span style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8;">${platformBadge}</span>
-          <span style="color:rgba(255,255,255,0.3);">•</span>
-          <span style="font-size:0.8rem; color:#a1a1aa;">${escapeHtml(item.course)}</span>
+    const actions = FEATURES.customTasks
+      ? `
+        <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+              completed
+                ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                : 'bg-brand-lime text-slate-900 hover:bg-brand-lime-hover shadow-sm'
+            }"
+            data-action="toggle-status"
+            data-id="${escapeHtml(item.id)}"
+            data-current-status="${escapeHtml(item.status)}"
+          >
+            ${completed ? '↩️ เปลี่ยนเป็นยังไม่เสร็จ' : '✓ ส่งงานแล้ว'}
+          </button>
+
+          ${
+            platform === 'custom'
+              ? `<button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 hover:bg-red-200" data-action="delete-task" data-id="${escapeHtml(item.id)}">ลบ</button>`
+              : ''
+          }
         </div>
-        <h3 style="font-size:1.05rem; font-weight:600; text-decoration:${isCompleted ? 'line-through' : 'none'}; color:${isCompleted ? '#a1a1aa' : '#f4f4f5'}; margin:0 0 0.35rem 0;">
-          ${escapeHtml(item.title)}
-        </h3>
-        <p style="font-size:0.8rem; color:#71717a; margin:0;">Due: <strong>${escapeHtml(item.due)}</strong></p>
-      </div>
+      `
+      : `
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
+          completed
+            ? 'bg-emerald-100 text-emerald-800'
+            : 'bg-amber-100 text-amber-800'
+        }">
+          ${completed ? 'เสร็จสิ้นแล้ว' : 'รอดำเนินการ'}
+        </span>
+      `;
 
-      <div style="display:flex; align-items:center; gap:0.5rem;">
-        <button 
-          type="button" 
-          class="btn ${isCompleted ? 'btn-secondary' : 'btn-primary'}" 
-          data-action="toggle-status" 
-          data-id="${item.id}" 
-          data-current-status="${item.status}"
-          style="padding:0.4rem 0.85rem; font-size:0.8rem;"
-        >
-          ${isCompleted ? 'Mark Pending' : 'Mark Done'}
-        </button>
-        ${
-          platform === 'custom'
-            ? `<button type="button" class="btn btn-secondary" data-action="delete-task" data-id="${item.id}" style="padding:0.4rem 0.6rem; font-size:0.8rem; color:#ef4444;" title="Delete">🗑️</button>`
-            : ''
-        }
-      </div>
-    </article>
-  `;
+    return `
+      <article class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
+        completed
+          ? 'bg-slate-50/70 border-slate-200/60 opacity-80'
+          : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+      }">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 text-xs text-slate-500">
+            ${platformBadge}
+            <span>•</span>
+            <span class="font-medium truncate">${escapeHtml(item.course)}</span>
+          </div>
+
+          <h4 class="text-sm font-semibold text-slate-900 ${
+            completed ? 'line-through text-slate-500' : ''
+          }">
+            ${escapeHtml(item.title)}
+          </h4>
+
+          <div class="flex flex-wrap items-center gap-3 mt-1">
+            <p class="text-xs text-slate-500">
+              กำหนดส่ง: <strong class="text-slate-700">${escapeHtml(item.due)}</strong>
+            </p>
+            ${sourceLink}
+          </div>
+        </div>
+
+        ${actions}
+      </article>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-action="toggle-status"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      handleToggleStatus(button.dataset.id, button.dataset.currentStatus);
+    });
+  });
+
+  container.querySelectorAll('[data-action="delete-task"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      handleDeleteTask(button.dataset.id);
+    });
+  });
 }
 
-async function handleToggleStatus(assignmentId, currentStatus) {
-  const nextStatus = ['completed', 'submitted'].includes((currentStatus || '').toLowerCase())
+async function handleToggleStatus(id, currentStatus) {
+  const nextStatus = ['completed', 'submitted', 'done'].includes(
+    (currentStatus || '').toLowerCase()
+  )
     ? 'Not started'
     : 'Completed';
 
   try {
-    const res = await updateAssignmentStatus(assignmentId, nextStatus);
-    if (res?.assignments) {
-      allAssignments = res.assignments;
-    } else {
-      const idx = allAssignments.findIndex((a) => a.id === assignmentId);
-      if (idx !== -1) allAssignments[idx].status = nextStatus;
-    }
-    updateMetrics(allAssignments);
-    renderFeed();
-    showToast('Assignment status updated.', 'success');
-  } catch (err) {
-    showToast(err.message || 'Could not update status.', 'error');
+    await updateAssignmentStatus(id, nextStatus);
+    showToast('อัปเดตสถานะงานเรียบร้อยแล้ว', 'success');
+    await loadDashboardData();
+  } catch (error) {
+    showToast(error.message || 'ไม่สามารถอัปเดตสถานะงานได้', 'error');
   }
 }
 
-async function handleCreateAssignment(e) {
-  e.preventDefault();
-  const form = e.target;
-  const submitBtn = form.querySelector('button[type="submit"]');
+async function handleCreateAssignment(event) {
+  event.preventDefault();
 
-  const title = form.title.value.trim();
-  const course = form.course.value.trim();
-  const due = form.due.value.trim();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const title = form.elements.title?.value.trim();
+  const course = form.elements.course?.value.trim();
+  const due = form.elements.due?.value.trim();
 
   if (!title || !course || !due) {
-    showToast('Please fill in all task fields.', 'warning');
+    showToast('กรุณากรอกข้อมูลงานให้ครบทุกช่อง', 'warning');
     return;
   }
 
-  setButtonLoading(submitBtn, true, 'Adding...');
+  setButtonLoading(submitButton, true, 'กำลังเพิ่ม...');
 
   try {
-    const res = await createAssignment({ title, course, due });
-    if (res?.assignment) {
-      allAssignments.push(res.assignment);
-    } else if (res?.assignments) {
-      allAssignments = res.assignments;
-    }
+    await createAssignment({ title, course, due });
     form.reset();
-    updateMetrics(allAssignments);
-    renderFeed();
-    showToast('Custom task added successfully!', 'success');
-  } catch (err) {
-    showToast(err.message || 'Could not create custom task.', 'error');
+    showToast('เพิ่มงานเรียบร้อยแล้ว', 'success');
+    await loadDashboardData();
+  } catch (error) {
+    showToast(error.message || 'ไม่สามารถเพิ่มงานได้', 'error');
   } finally {
-    setButtonLoading(submitBtn, false);
+    setButtonLoading(submitButton, false);
   }
 }
 
-async function handleDeleteTask(assignmentId) {
+async function handleDeleteTask(id) {
+  if (!window.confirm('ต้องการลบงานนี้ใช่หรือไม่?')) return;
+
   try {
-    const res = await deleteAssignment(assignmentId);
-    if (res?.assignments) {
-      allAssignments = res.assignments;
-    } else {
-      allAssignments = allAssignments.filter((a) => a.id !== assignmentId);
-    }
-    updateMetrics(allAssignments);
-    renderFeed();
-    showToast('Task deleted.', 'info');
-  } catch (err) {
-    showToast(err.message || 'Could not delete task.', 'error');
+    await deleteAssignment(id);
+    showToast('ลบงานเรียบร้อยแล้ว', 'success');
+    await loadDashboardData();
+  } catch (error) {
+    showToast(error.message || 'ไม่สามารถลบงานได้', 'error');
   }
 }
 
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function renderCalendarTimeline() {
+  const container = document.getElementById('calendar-timeline-container');
+  if (!container) return;
+
+  if (!allAssignments.length) {
+    container.innerHTML = `
+      <div class="py-12 text-center text-slate-400">
+        <p class="text-sm font-medium">ไม่มีรายการงานในกำหนดการ</p>
+      </div>
+    `;
+    return;
+  }
+
+  const sortedAssignments = [...allAssignments].sort((a, b) => {
+    const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+    const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+    return dateA - dateB;
+  });
+
+  container.innerHTML = sortedAssignments.map((item, index) => {
+    const completed = ['completed', 'submitted', 'done'].includes(
+      (item.status || '').toLowerCase()
+    );
+
+    const sourceLink = item.source_url
+      ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-brand-purple hover:underline font-semibold block mt-1">เปิดในแพลตฟอร์มต้นทาง ↗</a>`
+      : '';
+
+    return `
+      <div class="flex items-start gap-4 p-4 rounded-2xl border border-slate-100 ${
+        completed ? 'bg-slate-50' : 'bg-amber-50/50 border-amber-200/50'
+      }">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+          completed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'
+        }">
+          ${index + 1}
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <h4 class="text-sm font-semibold text-slate-800">${escapeHtml(item.title)}</h4>
+          <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(item.course)}</p>
+          <span class="inline-block mt-2 text-xs font-semibold ${
+            completed ? 'text-emerald-600' : 'text-red-600'
+          }">
+            📅 กำหนดส่ง: ${escapeHtml(item.due)}
+          </span>
+          ${sourceLink}
+        </div>
+
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${
+          completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+        }">
+          ${completed ? 'เสร็จสิ้น' : 'รอดำเนินการ'}
+        </span>
+      </div>
+    `;
+  }).join('');
 }
 
 document.addEventListener('DOMContentLoaded', init);

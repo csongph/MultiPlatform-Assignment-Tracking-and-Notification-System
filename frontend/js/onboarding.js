@@ -1,4 +1,11 @@
-import { getOnboardingStatus, updateOnboardingConnection, connectGoogleClassroom, connectMicrosoft } from './api.js';
+```javascript
+import {
+  getOnboardingStatus,
+  disconnectPlatform,
+  connectGoogleClassroom,
+  connectMicrosoft,
+} from './api.js';
+
 import { requireAuth, logout } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
 import { initNavigation } from './navigation.js';
@@ -11,10 +18,12 @@ const providerLabels = {
 async function init() {
   if (!requireAuth()) return;
 
-  // โหลด Navigation Bar (Sidebar สีม่วง + Topbar สีเขียวมะนาว)
+  // Initialize navigation.
   initNavigation('overview');
 
-  document.getElementById('logout-button')?.addEventListener('click', logout);
+  document
+    .getElementById('logout-button')
+    ?.addEventListener('click', logout);
 
   document.querySelectorAll('[data-provider]').forEach((button) => {
     button.addEventListener('click', () => toggleProvider(button));
@@ -22,30 +31,46 @@ async function init() {
 
   await refreshStatus();
 
-  // แสดงผลหลังจาก Google OAuth callback
+  // Handle OAuth callback.
   const urlParams = new URLSearchParams(window.location.search);
   const oauthSuccess = urlParams.get('oauth_success');
   const oauthError = urlParams.get('oauth_error');
   const synced = urlParams.get('synced');
 
   if (oauthSuccess === 'google') {
-    const msg = synced ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ` : 'Google Classroom เชื่อมต่อสำเร็จ!';
-    showToast(msg, 'success');
+    const message = synced
+      ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
+      : 'Google Classroom เชื่อมต่อสำเร็จ!';
+
+    showToast(message, 'success');
     window.history.replaceState({}, '', window.location.pathname);
   } else if (oauthSuccess === 'microsoft') {
-    const msg = synced ? `Microsoft Teams / To Do เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ` : 'Microsoft Teams / To Do เชื่อมต่อสำเร็จ!';
-    showToast(msg, 'success');
+    const message = synced
+      ? `Microsoft Teams เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
+      : 'Microsoft Teams เชื่อมต่อสำเร็จ!';
+
+    showToast(message, 'success');
     window.history.replaceState({}, '', window.location.pathname);
   } else if (oauthError) {
     const errorMessages = {
-      google_denied: 'ยกเลิกการเข้าสู่ระบบ Google แล้ว',
+      google_denied: 'ยกเลิกการเชื่อมต่อ Google Classroom แล้ว',
       google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
-      microsoft_denied: 'ยกเลิกการเข้าสู่ระบบ Microsoft แล้ว',
-      microsoft_failed: 'เชื่อมต่อ Microsoft ไม่สำเร็จ กรุณาลองใหม่',
-      invalid_state: 'Session หมดอายุ กรุณาลองใหม่',
-      session_expired: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่',
+      microsoft_denied: 'ยกเลิกการเชื่อมต่อ Microsoft Teams แล้ว',
+      microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่',
+      microsoft_admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      invalid_state: 'เซสชันการเชื่อมต่อหมดอายุ กรุณาลองใหม่อีกครั้ง',
+      session_expired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
     };
-    showToast(errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่', 'error');
+
+    showToast(
+      errorMessages[oauthError] ||
+        'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
+
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
@@ -53,42 +78,66 @@ async function init() {
 async function refreshStatus() {
   try {
     const status = await getOnboardingStatus();
-    renderStatus(status.connections || {});
+    renderStatus(status?.connections || {});
   } catch {
-    showToast('Unable to load platform status. Please sign in again.', 'error');
+    showToast(
+      'ไม่สามารถโหลดสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
   }
 }
 
 async function toggleProvider(button) {
   const provider = button.dataset.provider;
-  const card = document.querySelector(`[data-provider-card="${provider}"]`);
+  const card = document.querySelector(
+    `[data-provider-card="${provider}"]`,
+  );
   const isConnected = card?.classList.contains('connected');
 
-  // Google/Microsoft connect → ใช้ OAuth flow จริง
-  if ((provider === 'google' || provider === 'microsoft') && !isConnected) {
+  // Connect through OAuth.
+  if (!isConnected) {
     setButtonLoading(button, true, 'Connecting...');
-    if (provider === 'microsoft') {
-      connectMicrosoft();
-    } else {
-      connectGoogleClassroom();
+
+    try {
+      if (provider === 'google') {
+        await connectGoogleClassroom();
+      } else if (provider === 'microsoft') {
+        await connectMicrosoft();
+      } else {
+        throw new Error('Unsupported platform');
+      }
+    } catch (error) {
+      showToast(
+        error?.message ||
+          `Unable to connect ${providerLabels[provider] || provider}. Please try again.`,
+        'error',
+      );
+
+      setButtonLoading(button, false);
     }
+
     return;
   }
 
-  let nextStatus = null;
-  setButtonLoading(button, true, isConnected ? 'Disconnecting...' : 'Connecting...');
+  // Disconnect an existing connection.
+  setButtonLoading(button, true, 'Disconnecting...');
 
   try {
-    nextStatus = await updateOnboardingConnection(provider, !isConnected);
+    await disconnectPlatform(provider);
+
     showToast(
-      `${providerLabels[provider]} ${isConnected ? 'disconnected' : 'connected'} successfully.`,
-      'success'
+      `${providerLabels[provider] || provider} disconnected successfully.`,
+      'success',
     );
-  } catch {
-    showToast('Unable to update connection. Please try again.', 'error');
+
+    await refreshStatus();
+  } catch (error) {
+    showToast(
+      error?.message || 'Unable to disconnect. Please try again.',
+      'error',
+    );
   } finally {
     setButtonLoading(button, false);
-    if (nextStatus) renderStatus(nextStatus.connections || {});
   }
 }
 
@@ -98,14 +147,23 @@ function renderStatus(connections) {
   const summary = document.getElementById('connection-summary');
 
   Object.entries(providerLabels).forEach(([provider, label]) => {
-    const card = document.querySelector(`[data-provider-card="${provider}"]`);
-    const button = document.querySelector(`[data-provider="${provider}"]`);
+    const card = document.querySelector(
+      `[data-provider-card="${provider}"]`,
+    );
+    const button = document.querySelector(
+      `[data-provider="${provider}"]`,
+    );
     const connected = Boolean(connections[provider]);
 
     card?.classList.toggle('connected', connected);
 
     if (button) {
-      button.textContent = connected ? `Disconnect ${label.split(' ')[0]}` : `Connect ${label.split(' ')[0]}`;
+      const shortName = label.split(' ')[0];
+
+      button.textContent = connected
+        ? `Disconnect ${shortName}`
+        : `Connect ${shortName}`;
+
       button.classList.toggle('btn-danger', connected);
       button.classList.toggle('btn-primary', !connected);
     }
@@ -119,8 +177,12 @@ function renderStatus(connections) {
 
   if (continueLink) {
     continueLink.classList.toggle('disabled', connectedCount === 0);
-    continueLink.setAttribute('aria-disabled', connectedCount === 0 ? 'true' : 'false');
+    continueLink.setAttribute(
+      'aria-disabled',
+      connectedCount === 0 ? 'true' : 'false',
+    );
   }
 }
 
 document.addEventListener('DOMContentLoaded', init);
+```

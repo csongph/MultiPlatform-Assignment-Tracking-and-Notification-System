@@ -14,6 +14,8 @@ celery_app = Celery(
     include=[
         "worker.sync.sync_engine",
         "worker.token_refresh",
+        "worker.notification.scheduler",
+        "worker.notification.dispatcher",
     ],
 )
 
@@ -33,5 +35,9 @@ celery_app.conf.beat_schedule = {
     "refresh-expiring-tokens": {
         "task": "worker.token_refresh.refresh_expiring_tokens_task",
         "schedule": 300,  # check every 5 minutes regardless of TOKEN_REFRESH_LEAD_MINUTES
+    },
+    "schedule-due-notifications": {
+        "task": "worker.notification.scheduler.schedule_due_notifications_task",
+        "schedule": settings.NOTIFICATION_POLL_INTERVAL_SECONDS,
     },
 }

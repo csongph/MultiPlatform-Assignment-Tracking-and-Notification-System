@@ -1,0 +1,2 @@
+### Figma 
+- [Figma_UX/UI]([https://docs.google.com/document/d/1a_eZiRCorczniqWGgIb1GBWf3iGNgnj7UPorZaWrlbw/edit?usp=sharing](https://www.figma.com/design/jfrwl1VTUWLf2XrKKJi60X/%E0%B8%A3%E0%B8%B0%E0%B8%9A%E0%B8%9A%E0%B8%95%E0%B8%B4%E0%B8%94%E0%B8%95%E0%B8%B2%E0%B8%A1%E0%B8%87%E0%B8%B2%E0%B8%99%E0%B9%81%E0%B8%A5%E0%B8%B0%E0%B9%81%E0%B8%88%E0%B9%89%E0%B8%87%E0%B9%80%E0%B8%95%E0%B8%B7%E0%B8%AD%E0%B8%99?node-id=0-1&t=CMLHK3ojfXSdwSPz-1))

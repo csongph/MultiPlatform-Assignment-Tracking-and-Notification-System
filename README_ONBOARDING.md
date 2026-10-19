@@ -1,85 +1,442 @@
-# Onboarding / OAuth — สรุปการติดตั้งและใช้งาน
+# KMAPS OAuth Onboarding
 
-## 1. วางไฟล์
-คัดลอกทุกไฟล์ในโฟลเดอร์นี้ (ยกเว้นไฟล์ `.md`/`.txt` นี้) ไปทับ/เพิ่มในโปรเจกต์จริง
-โดยคง path เดิมไว้ เช่น `app/core/security.py` ไปวางที่
-`D:\PROJECT_KMAPS\...\backend\app\core\security.py`
+## Overview
 
-ไฟล์ `app/core/config.py` เป็นการ "แทนที่ทั้งไฟล์" (เพิ่ม field ใหม่ แต่ field เดิมยังอยู่ครบ)
+KMAPS supports connecting external learning platforms to a user's account through OAuth 2.0.
 
-## 2. ติดตั้ง package เพิ่ม
-```powershell
-(venv) PS D:\...\backend> pip install httpx cryptography PyJWT "passlib[bcrypt]" email-validator
+Currently supported:
+
+* Google Classroom
+* Microsoft Teams
+
+The OAuth process allows KMAPS to access the user's learning-platform data without storing the user's platform password.
+
+---
+
+# OAuth Architecture
+
+```text
+User
+ │
+ ▼
+KMAPS Frontend
+ │
+ ▼
+KMAPS Backend
+ │
+ ▼
+OAuth Provider
+ │
+ │ User Login + Permission
+ ▼
+OAuth Callback
+ │
+ ▼
+KMAPS Backend
+ │
+ ├── Exchange Authorization Code
+ │
+ ├── Obtain Access Token
+ │
+ ├── Obtain Refresh Token
+ │
+ ├── Encrypt Tokens
+ │
+ └── Store Connection
+ │
+ ▼
+Database
 ```
-(รายละเอียดอยู่ใน `requirements-additions.txt` — เพิ่มเข้า requirements.txt เดิมด้วย)
 
-## 3. เพิ่มค่าใน .env
+---
+
+# Google Classroom
+
+## 1. Create Google Cloud Project
+
+Open:
+
+```text
+https://console.cloud.google.com/
+```
+
+Create or select a Google Cloud project.
+
+---
+
+## 2. Enable Google Classroom API
+
+Open:
+
+```text
+APIs & Services
+→ Library
+```
+
+Search:
+
+```text
+Google Classroom API
+```
+
+Enable the API.
+
+---
+
+# 3. Create OAuth Client
+
+Go to:
+
+```text
+APIs & Services
+→ Credentials
+```
+
+Create:
+
+```text
+OAuth Client ID
+```
+
+Application type:
+
+```text
+Web application
+```
+
+---
+
+# 4. Redirect URI
+
+Add:
+
+```text
+http://localhost:8000/api/v1/oauth/google_classroom/callback
+```
+
+The URI must exactly match:
+
 ```env
-GOOGLE_OAUTH_CLIENT_ID=your-google-client-id
-GOOGLE_OAUTH_CLIENT_SECRET=your-google-client-secret
 GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/google_classroom/callback
+```
 
-MICROSOFT_OAUTH_CLIENT_ID=your-microsoft-client-id
-MICROSOFT_OAUTH_CLIENT_SECRET=your-microsoft-client-secret
+---
+
+# 5. Configure `.env`
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=your-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/google_classroom/callback
+```
+
+Never commit these values to GitHub.
+
+---
+
+# Microsoft Teams
+
+Microsoft Teams integration uses Microsoft Graph API through Azure App Registration.
+
+---
+
+# 1. Open Azure Portal
+
+```text
+https://portal.azure.com/
+```
+
+Go to:
+
+```text
+Microsoft Entra ID
+→ App registrations
+```
+
+---
+
+# 2. Create Application
+
+Select:
+
+```text
+New registration
+```
+
+Choose an appropriate supported account type.
+
+For development, the project currently uses:
+
+```env
+MICROSOFT_OAUTH_TENANT=common
+```
+
+---
+
+# 3. Configure Redirect URI
+
+Add:
+
+```text
+http://localhost:8000/api/v1/oauth/microsoft_teams/callback
+```
+
+---
+
+# 4. Create Client Secret
+
+Go to:
+
+```text
+Certificates & secrets
+→ New client secret
+```
+
+Copy the secret immediately.
+
+The secret value will not be shown again after leaving the page.
+
+---
+
+# 5. Configure API Permissions
+
+Go to:
+
+```text
+API permissions
+→ Add a permission
+→ Microsoft Graph
+```
+
+Configure the permissions required by the application.
+
+Refer to the project's API implementation and Microsoft Graph documentation before changing permissions.
+
+---
+
+# 6. Configure `.env`
+
+```env
+MICROSOFT_OAUTH_CLIENT_ID=your-client-id
+MICROSOFT_OAUTH_CLIENT_SECRET=your-client-secret
 MICROSOFT_OAUTH_TENANT=common
 MICROSOFT_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/microsoft_teams/callback
-
-FRONTEND_ORIGIN=http://localhost:5173
-```
-(redirect URI ต้องตรงกับที่ลงทะเบียนไว้ใน Google Cloud Console / Azure App Registration เป๊ะๆ)
-
-## 4. Seed ตาราง platforms
-ตาราง `oauth_connections.platform_id` เป็น foreign key ไปยัง `platforms` — ต้องมี row
-`google_classroom` และ `microsoft_teams` อยู่ก่อน ไม่งั้น callback จะ error
-
-```powershell
-(venv) PS D:\...\backend> python -m scripts.seed_platforms
 ```
 
-## 5. รัน server
-```powershell
-(venv) PS D:\...\backend> uvicorn app.main:app --reload
+---
+
+# OAuth Endpoints
+
+## Get Platforms
+
+```http
+GET /api/v1/oauth/platforms
 ```
-เปิด http://localhost:8000/docs จะเห็น endpoint ทั้งหมด
 
-## 6. Flow การใช้งานจริง (สำหรับ frontend)
+---
 
-**สมัคร/login ก่อน (ต้องมี JWT):**
-- `POST /api/v1/auth/register` → `{email, password, display_name}`
-- `POST /api/v1/auth/login` → คืน `{access_token, refresh_token}`
+## Get Connections
 
-**เริ่ม onboarding เชื่อมต่อ platform:**
-1. Frontend เรียก `GET /api/v1/oauth/google_classroom/authorize`
-   (ใส่ header `Authorization: Bearer <access_token>`)
-   → ได้ `{authorization_url: "..."}`
-2. Frontend สั่ง `window.location.href = authorization_url`
-   (พาผู้ใช้ไปหน้ายินยอมของ Google)
-3. ผู้ใช้กด "อนุญาต" → Google/Microsoft redirect กลับมาที่
-   `GET /api/v1/oauth/google_classroom/callback?code=...&state=...` เอง (backend รับ, ไม่ใช่ frontend)
-4. Backend แลก code เป็น token, เข้ารหัส, บันทึกลง `oauth_connections`
-   แล้ว redirect ผู้ใช้ต่อไปที่ `FRONTEND_ORIGIN + /onboarding/success?platform=google_classroom`
-   (หรือ `/onboarding/error?platform=...` ถ้าล้มเหลว)
+```http
+GET /api/v1/oauth/connections
+```
 
-**เดียวกันสำหรับ Microsoft Teams:** ใช้ path `/api/v1/oauth/microsoft_teams/authorize` แทน
+Requires authentication.
 
-**ดูรายการที่เชื่อมต่อแล้ว:**
-- `GET /api/v1/oauth/connections`
+---
 
-**ยกเลิกการเชื่อมต่อ:**
-- `DELETE /api/v1/oauth/{platform}`
+# Google Authorization
 
-## 7. ต้องไปสมัคร OAuth app กับผู้ให้บริการเองก่อน
-- **Google:** https://console.cloud.google.com/ → สร้าง OAuth 2.0 Client ID (Web application)
-  เปิดใช้ Google Classroom API ด้วย ใส่ redirect URI ให้ตรงกับ `.env`
-- **Microsoft:** https://portal.azure.com/ → Azure Active Directory → App registrations
-  → New registration → เพิ่ม redirect URI แบบ Web, ใส่ API permissions ตาม scope ที่ใช้ใน
-  `app/integrations/microsoft_teams_adapter.py`
+```http
+GET /api/v1/oauth/google_classroom/authorize
+```
 
-## หมายเหตุสำคัญ
-- ระบบนี้**ยังไม่ได้ sync ข้อมูล courses/assignments จริง** จาก Google Classroom / MS Teams API
-  — ที่ทำไว้คือขั้นตอน "เชื่อมต่อบัญชี" (onboarding) เท่านั้น ได้ access_token/refresh_token
-  เก็บไว้ในฐานข้อมูลแบบเข้ารหัสแล้ว ขั้นต่อไปคือเขียน service ที่ใช้ token นี้ไปเรียก
-  Google Classroom API / Microsoft Graph API เพื่อดึงรายวิชาและงานจริง (ยังไม่ได้ทำในรอบนี้)
-- Token ที่เก็บใน `oauth_connections.access_token_enc` / `refresh_token_enc` เข้ารหัสด้วย
-  Fernet โดยอิง `TOKEN_ENCRYPTION_KEY` จาก `.env` — **ถ้าเปลี่ยนค่านี้ภายหลัง token เก่าที่เข้ารหัส
-  ไว้แล้วจะถอดรหัสไม่ได้อีก** ต้องให้ผู้ใช้เชื่อมต่อใหม่
+The backend generates an OAuth authorization URL.
+
+The frontend redirects the user to the provider.
+
+---
+
+# Google Callback
+
+```http
+GET /api/v1/oauth/google_classroom/callback
+```
+
+The backend:
+
+1. Receives authorization code.
+2. Exchanges code for OAuth tokens.
+3. Retrieves provider information.
+4. Encrypts OAuth tokens.
+5. Stores the connection.
+6. Redirects to the frontend.
+
+---
+
+# Microsoft Authorization
+
+```http
+GET /api/v1/oauth/microsoft_teams/authorize
+```
+
+---
+
+# Microsoft Callback
+
+```http
+GET /api/v1/oauth/microsoft_teams/callback
+```
+
+The backend performs the same general OAuth flow:
+
+```text
+Authorization Code
+        ↓
+Token Exchange
+        ↓
+Token Encryption
+        ↓
+Database
+        ↓
+Frontend Redirect
+```
+
+---
+
+# Frontend Redirect
+
+Success:
+
+```env
+FRONTEND_ONBOARDING_SUCCESS_PATH=/onboarding/success
+```
+
+Error:
+
+```env
+FRONTEND_ONBOARDING_ERROR_PATH=/onboarding/error
+```
+
+Frontend origin:
+
+```env
+FRONTEND_ORIGIN=http://localhost:5500
+```
+
+---
+
+# Token Security
+
+OAuth tokens must never be stored as plain text.
+
+KMAPS uses:
+
+```env
+TOKEN_ENCRYPTION_KEY=
+```
+
+to encrypt sensitive OAuth credentials before storing them.
+
+Generate:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+---
+
+# Important Security Rules
+
+Never commit:
+
+```text
+.env
+```
+
+Never publish:
+
+```text
+GOOGLE_OAUTH_CLIENT_SECRET
+MICROSOFT_OAUTH_CLIENT_SECRET
+TOKEN_ENCRYPTION_KEY
+JWT_SECRET_KEY
+DATABASE_PASSWORD
+ACCESS_TOKEN
+REFRESH_TOKEN
+```
+
+If a secret is accidentally committed:
+
+1. Revoke the secret immediately.
+2. Generate a new secret.
+3. Remove the secret from the repository history if necessary.
+4. Update the local `.env`.
+
+---
+
+# OAuth Testing Checklist
+
+Before testing OAuth, check:
+
+* [ ] Backend is running
+* [ ] Frontend is running
+* [ ] Supabase Database is accessible
+* [ ] `DATABASE_URL` is correct
+* [ ] JWT secret is configured
+* [ ] Token encryption key is configured
+* [ ] Google/Microsoft Client ID is configured
+* [ ] Client Secret is configured
+* [ ] Redirect URI matches exactly
+* [ ] Required provider API permissions are enabled
+* [ ] Frontend origin is correct
+
+---
+
+# OAuth Flow Test
+
+```text
+1. Open KMAPS
+       ↓
+2. Login / Register
+       ↓
+3. Open Platform Connection
+       ↓
+4. Select Google Classroom or Microsoft Teams
+       ↓
+5. Provider Login
+       ↓
+6. Grant Permission
+       ↓
+7. Provider redirects to KMAPS
+       ↓
+8. Backend processes callback
+       ↓
+9. OAuth connection stored
+       ↓
+10. Redirect to frontend
+```
+
+---
+
+# Current OAuth Status
+
+## Google Classroom
+
+* [x] OAuth authorization
+* [x] OAuth callback
+* [x] Token exchange
+* [x] Token encryption
+* [x] Connection storage
+* [ ] Full assignment synchronization
+* [ ] Automatic background synchronization
+
+## Microsoft Teams
+
+* [x] OAuth authorization
+* [x] OAuth callback
+* [x] Token exchange
+* [x] Token encryption
+* [x] Connection storage
+* [ ] Full assignment synchronization
+* [ ] Automatic background synchronization

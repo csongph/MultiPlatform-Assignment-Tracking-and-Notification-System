@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.models.core import Assignment, Course, Notification, NotificationSettings
+from app.models.core import Assignment, Course, Notification, NotificationRule, NotificationSettings
 from app.models.logs import SyncLog
 from app.repositories.learning_repository import LearningRepository
 from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
@@ -13,6 +14,8 @@ from app.schemas.learning import (
     CourseOut,
     DashboardSummary,
     NotificationSettingsUpdate,
+    NotificationRuleCreate,
+    NotificationRuleUpdate,
     SyncJobOut,
 )
 from app.services.oauth_service import ensure_supported_platform
@@ -74,6 +77,14 @@ class LearningService:
     async def update_notification_settings(
         self, user_id: uuid.UUID, payload: NotificationSettingsUpdate
     ) -> NotificationSettings:
+        # Older frontend clients do not send the newly added JSON field.  Keep
+        # their saved intervals instead of accidentally clearing them on PUT.
+        current_settings = await self.learning.get_notification_settings(user_id)
+        reminder_intervals = (
+            payload.reminder_intervals
+            if "reminder_intervals" in payload.model_fields_set
+            else current_settings.reminder_intervals
+        )
         return await self.learning.update_notification_settings(
             user_id=user_id,
             lead_time_minutes=payload.lead_time_minutes,
@@ -81,7 +92,59 @@ class LearningService:
             due_soon_enabled=payload.due_soon_enabled,
             overdue_enabled=payload.overdue_enabled,
             channel=payload.channel,
+            reminder_intervals=reminder_intervals,
         )
+
+    async def list_notification_rules(self, user_id: uuid.UUID) -> list[NotificationRule]:
+        return await self.learning.list_notification_rules(user_id)
+
+    @staticmethod
+    def _lead_time_minutes(value: int, unit: str) -> int:
+        """Keep a minute value for scheduler arithmetic while the API uses units."""
+        return value * {"day": 1440, "hour": 60, "minute": 1}[unit]
+
+    async def create_notification_rule(
+        self, user_id: uuid.UUID, payload: NotificationRuleCreate
+    ) -> NotificationRule:
+        try:
+            return await self.learning.create_notification_rule(
+                user_id=user_id,
+                type_=payload.type,
+                lead_time_value=payload.lead_time_value,
+                lead_time_unit=payload.lead_time_unit,
+                lead_time_minutes=self._lead_time_minutes(payload.lead_time_value, payload.lead_time_unit),
+                sequence_order=payload.sequence_order,
+                is_enabled=payload.is_enabled,
+            )
+        except IntegrityError as exc:
+            raise ValueError("A notification rule with this type and sequence order already exists") from exc
+
+    async def update_notification_rule(
+        self, user_id: uuid.UUID, rule_id: uuid.UUID, payload: NotificationRuleUpdate
+    ) -> NotificationRule:
+        rule = await self.learning.get_notification_rule(user_id, rule_id)
+        if rule is None:
+            raise NotFoundError("Notification rule not found")
+        try:
+            values = {
+                "lead_time_value": payload.lead_time_value,
+                "lead_time_unit": payload.lead_time_unit,
+                "sequence_order": payload.sequence_order,
+                "is_enabled": payload.is_enabled,
+            }
+            if payload.lead_time_value is not None or payload.lead_time_unit is not None:
+                value = payload.lead_time_value if payload.lead_time_value is not None else rule.lead_time_value
+                unit = payload.lead_time_unit if payload.lead_time_unit is not None else rule.lead_time_unit
+                values["lead_time_minutes"] = self._lead_time_minutes(value, unit)
+            return await self.learning.update_notification_rule(rule, **values)
+        except IntegrityError as exc:
+            raise ValueError("A notification rule with this type and sequence order already exists") from exc
+
+    async def delete_notification_rule(self, user_id: uuid.UUID, rule_id: uuid.UUID) -> None:
+        rule = await self.learning.get_notification_rule(user_id, rule_id)
+        if rule is None:
+            raise NotFoundError("Notification rule not found")
+        await self.learning.delete_notification_rule(rule)
 
     async def list_notifications(
         self, user_id: uuid.UUID, status: str | None

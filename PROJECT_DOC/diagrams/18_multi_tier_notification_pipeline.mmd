@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant Cron as Cron Dispatcher (Every 1 min)
+    participant Engine as Notification Engine
+    participant DB as Neon PostgreSQL
+    participant Mail as Email / Push Provider
+
+    Cron->>Engine: Poll Pending Notifications
+    Engine->>DB: Query Assignments where computed_status = 'not_submitted'
+    Engine->>DB: Query User Notification Settings & Intervals (Tier 1/2/3)
+    loop แต่ละ Assignment
+        Engine->>Engine: คำนวณ Remaining Time = due_at - now()
+        alt เข้าเกณฑ์ Tier 1 (เช่น 3 วันก่อน)
+            Engine->>DB: Check Unique (user_id, ass_id, 'due_soon', tier=1)
+            alt ยังไม่เคยส่ง Tier 1
+                Engine->>Mail: Dispatch Notification Message (Tier 1 Alert)
+                Mail-->>Engine: 200 OK Delivered
+                Engine->>DB: INSERT INTO notifications (tier=1, status='delivered')
+            end
+        else เข้าเกณฑ์ Tier 2 (เช่น 1 วันก่อน)
+            Engine->>DB: Check Unique (user_id, ass_id, 'due_soon', tier=2)
+            alt ยังไม่เคยส่ง Tier 2
+                Engine->>Mail: Dispatch Notification Message (Tier 2 Alert)
+                Engine->>DB: INSERT INTO notifications (tier=2, status='delivered')
+            end
+        end
+    end

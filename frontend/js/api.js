@@ -3,16 +3,19 @@
  * Centralized Fetch API wrapper for backend communication
  */
 
-import { getAccessToken } from './storage.js';
+import { getAccessToken, clearAuthSession } from './storage.js';
 
-const API_BASE_URL = (window.KMAPS_API_BASE && window.KMAPS_API_BASE.startsWith('http'))
+export const FEATURES = {
+  customTasks: false,
+};
+
+const API_BASE_URL = (
+  typeof window !== 'undefined' &&
+  window.KMAPS_API_BASE &&
+  window.KMAPS_API_BASE.startsWith('http')
+)
   ? window.KMAPS_API_BASE
-  : "http://localhost:8000/api/v1";
-
-const USE_MOCK_API = window.KMAPS_USE_MOCK_API === true;
-const MOCK_DELAY_MS = 350;
-const MOCK_USERS_KEY = 'kmaps_mock_users';
-const MOCK_CONNECTIONS_KEY = 'kmaps_mock_connections';
+  : 'http://localhost:8000/api/v1';
 
 class ApiError extends Error {
   constructor(message, status, data = null) {
@@ -23,9 +26,22 @@ class ApiError extends Error {
   }
 }
 
-async function request(endpoint, options = {}) {
-  if (USE_MOCK_API) {
-    return mockRequest(endpoint, options);
+let mockModulePromise = null;
+
+function getMockModule() {
+  if (!mockModulePromise) {
+    mockModulePromise = import('./mock-api.js');
+  }
+  return mockModulePromise;
+}
+
+export async function request(endpoint, options = {}) {
+  if (
+    typeof window !== 'undefined' &&
+    window.KMAPS_USE_MOCK_API === true
+  ) {
+    const mockModule = await getMockModule();
+    return mockModule.mockRequest(endpoint, options);
   }
 
   const { method = 'GET', body, auth = false, headers = {} } = options;
@@ -41,6 +57,7 @@ async function request(endpoint, options = {}) {
 
   if (auth) {
     const token = getAccessToken();
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -51,14 +68,42 @@ async function request(endpoint, options = {}) {
   }
 
   let response;
+
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, config);
   } catch {
-    throw new ApiError('Network error. Please check if the backend server is running at http://localhost:8000', 0);
+    throw new ApiError(
+      'Unable to connect to the server. Please try again later.',
+      0,
+    );
+  }
+
+  if (auth && response.status === 401) {
+    const currentPath =
+      typeof window !== 'undefined' ? window.location.pathname : '';
+
+    const isAuthPage =
+      currentPath.includes('login.html') ||
+      currentPath.includes('register.html');
+
+    if (!isAuthPage && typeof window !== 'undefined') {
+      clearAuthSession();
+      sessionStorage.setItem(
+        'kmaps_flash_error',
+        'Your session has expired. Please sign in again.',
+      );
+      window.location.href = 'login.html';
+      return null;
+    }
+  }
+
+  if (response.status === 204) {
+    return null;
   }
 
   let data = null;
   const contentType = response.headers.get('content-type');
+
   if (contentType && contentType.includes('application/json')) {
     try {
       data = await response.json();
@@ -69,13 +114,20 @@ async function request(endpoint, options = {}) {
 
   if (!response.ok) {
     let message = '';
+
     if (typeof data?.detail === 'string') {
       message = data.detail;
     } else if (Array.isArray(data?.detail)) {
-      message = data.detail.map((item) => item.msg || item.message).join(', ');
+      message = data.detail
+        .map((item) => item.msg || item.message)
+        .join(', ');
     } else {
-      message = data?.message || data?.error || getDefaultErrorMessage(response.status);
+      message =
+        data?.message ||
+        data?.error ||
+        getDefaultErrorMessage(response.status);
     }
+
     throw new ApiError(message, response.status, data);
   }
 
@@ -89,11 +141,16 @@ function getDefaultErrorMessage(status) {
     403: 'Your account has been disabled. Please contact support.',
     404: 'Resource not found.',
     409: 'Email already exists.',
-    422: 'Validation error. Please check your input format.',
+    422: 'Validation error. Please check your input.',
     500: 'Server error. Please try again later.',
   };
+
   return messages[status] || 'An unexpected error occurred.';
 }
+
+// ---------------------------------------------------------------------------
+// Authentication and onboarding
+// ---------------------------------------------------------------------------
 
 export async function registerUser({ full_name, email, password }) {
   return request('/auth/register', {
@@ -125,24 +182,84 @@ export async function updateOnboardingConnection(provider, connected) {
   });
 }
 
-// The real backend (app/api/v1/routers/learning.py) exposes assignments as
-// a plain array at GET /assignments, with different field names than the
-// dashboard UI expects (course_name/due_at/computed_status instead of
-// course/due/status). We normalize the shape here so dashboard.js keeps
-// working against the live API without needing to know about that.
-function normalizeAssignment(a) {
+export async function disconnectPlatform(provider) {
+  const platformName = provider === 'microsoft'
+    ? 'microsoft_teams'
+    : provider === 'google'
+      ? 'google_classroom'
+      : provider;
+
+  return request(`/oauth/${encodeURIComponent(platformName)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Platform and assignment normalization
+// ---------------------------------------------------------------------------
+
+export function normalizePlatform(platform) {
+  const value = String(platform || '').toLowerCase();
+
+  if (value === 'google_classroom' || value === 'google') {
+    return 'google';
+  }
+
+  if (value === 'microsoft_teams' || value === 'microsoft') {
+    return 'microsoft';
+  }
+
+  return platform || 'custom';
+}
+
+function isValidHttpUrl(value) {
+  if (!value || typeof value !== 'string') {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeAssignment(assignment) {
+  const platformSlug = normalizePlatform(assignment.platform);
+  const dueRaw = assignment.due_at ?? assignment.due ?? null;
+  const dueDate = dueRaw ? new Date(dueRaw) : null;
+
+  const validDue =
+    dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null;
+
   return {
-    ...a,
-    course: a.course_name ?? a.course ?? 'Untitled Course',
-    due: formatDue(a.due_at) ?? a.due ?? 'No due date',
-    status: a.computed_status ?? a.status ?? 'Not started',
+    ...assignment,
+    id: assignment.id,
+    title: assignment.title ?? '(Untitled assignment)',
+    course: assignment.course_name ?? assignment.course ?? 'Untitled Course',
+    course_name: assignment.course_name ?? assignment.course ?? 'Untitled Course',
+    platform: platformSlug,
+    raw_platform: assignment.platform,
+    due_at: assignment.due_at ?? null,
+    due: formatDue(validDue),
+    dueDate: validDue,
+    status: assignment.computed_status ?? assignment.status ?? 'Not started',
+    computed_status:
+      assignment.computed_status ?? assignment.status ?? 'Not started',
+    source_status: assignment.source_status ?? '',
+    source_url: isValidHttpUrl(assignment.source_url)
+      ? assignment.source_url
+      : '',
   };
 }
 
-function formatDue(dueAt) {
-  if (!dueAt) return null;
-  const date = new Date(dueAt);
-  if (Number.isNaN(date.getTime())) return null;
+function formatDue(date) {
+  if (!date) {
+    return 'No due date';
+  }
+
   return date.toLocaleString([], {
     month: 'short',
     day: 'numeric',
@@ -151,30 +268,68 @@ function formatDue(dueAt) {
   });
 }
 
-export async function getAssignments() {
-  const data = await request('/assignments', { auth: true });
-  // Backend returns a raw array, not { assignments: [...] } like the mock API.
-  const list = Array.isArray(data) ? data : data?.assignments || [];
-  return { assignments: list.map(normalizeAssignment) };
+// ---------------------------------------------------------------------------
+// Dashboard, courses, assignments, and synchronization
+// ---------------------------------------------------------------------------
+
+export async function getDashboardSummary() {
+  return request('/dashboard/summary', { auth: true });
 }
 
-// NOTE: The backend does not currently support manually editing, creating,
-// or deleting assignments (they are read-only records synced from Google
-// Classroom / Microsoft Teams — see app/services/learning_service.py and
-// the Assignment model, which has no user-editable status and no "custom"
-// platform). These three calls will 404 against the real API until that
-// backend feature is built. Left in place (matching the mock API) so the
-// UI still works in mock mode; wire them up once the backend adds:
-//   PATCH /assignments/{id}/status , POST /assignments , DELETE /assignments/{id}
+export async function getCourses(platform = null) {
+  const query = platform
+    ? `?platform=${encodeURIComponent(platform)}`
+    : '';
+
+  return request(`/courses${query}`, { auth: true });
+}
+
+export async function getAssignments() {
+  const data = await request('/assignments', { auth: true });
+  const list = Array.isArray(data) ? data : data?.assignments || [];
+
+  return {
+    assignments: list.map(normalizeAssignment),
+  };
+}
+
+export async function queueSync(platform = 'google_classroom') {
+  return request('/sync', {
+    method: 'POST',
+    auth: true,
+    body: { platform },
+  });
+}
+
+export async function getSyncJob(jobId) {
+  return request(`/sync/${encodeURIComponent(jobId)}`, {
+    auth: true,
+  });
+}
+
+// Backend currently does not support editing, creating, or deleting
+// assignments. These functions remain for compatibility with older UI code.
+// They will only work if the selected API implementation supports them.
+
 export async function updateAssignmentStatus(assignmentId, status) {
   return request('/assignments/update-status', {
     method: 'POST',
     auth: true,
-    body: { assignment_id: assignmentId, status },
+    body: {
+      assignment_id: assignmentId,
+      status,
+    },
   });
 }
 
 export async function createAssignment({ title, course, due }) {
+  if (!FEATURES.customTasks) {
+    throw new ApiError(
+      'Custom assignment creation is not supported by the backend.',
+      501,
+    );
+  }
+
   return request('/assignments/create', {
     method: 'POST',
     auth: true,
@@ -183,6 +338,13 @@ export async function createAssignment({ title, course, due }) {
 }
 
 export async function deleteAssignment(assignmentId) {
+  if (!FEATURES.customTasks) {
+    throw new ApiError(
+      'Custom assignment deletion is not supported by the backend.',
+      501,
+    );
+  }
+
   return request('/assignments/delete', {
     method: 'POST',
     auth: true,
@@ -190,387 +352,267 @@ export async function deleteAssignment(assignmentId) {
   });
 }
 
-/**
- * Redirect the user to the platform OAuth consent screen.
- * The backend will handle the token exchange and assignment sync.
- */
+// ---------------------------------------------------------------------------
+// OAuth connection
+// ---------------------------------------------------------------------------
+
 export async function connectPlatform(provider) {
   const token = getAccessToken();
+
   if (!token) {
-    window.location.href = '/pages/login.html';
+    window.location.href = 'login.html';
     return;
   }
 
-  // The backend's Platform rows / adapters use "google_classroom" and
-  // "microsoft_teams" (see app/integrations/__init__.py), not the short
-  // "google"/"microsoft" names used elsewhere in the frontend.
   const platformSlug = provider === 'microsoft'
     ? 'microsoft_teams'
     : 'google_classroom';
 
-  // GET /oauth/{platform}/authorize does NOT itself redirect to Google/
-  // Microsoft — it's a JSON endpoint that *returns* the consent-screen URL
-  // (see AuthorizeUrlResponse in oauth.py). We have to fetch it first
-  // (auth required) and then send the browser to the URL it gives back.
   try {
-    const { authorization_url } = await request(`/oauth/${platformSlug}/authorize`, { auth: true });
-    window.location.href = authorization_url;
-  } catch (err) {
-    console.error('Failed to start OAuth flow:', err);
-    throw err;
+    const response = await request(
+      `/oauth/${platformSlug}/authorize`,
+      { auth: true },
+    );
+
+    if (response?.authorization_url) {
+      window.location.href = response.authorization_url;
+      return response.authorization_url;
+    }
+
+    throw new ApiError('Authorization URL was not returned by the server.', 500);
+  } catch (error) {
+    console.error('Failed to start OAuth flow:', error);
+    throw error;
   }
 }
 
-export function connectGoogleClassroom() {
-  connectPlatform('google');
+export async function connectGoogleClassroom() {
+  return connectPlatform('google');
 }
 
-export function connectMicrosoft() {
-  connectPlatform('microsoft');
+export async function connectMicrosoft() {
+  return connectPlatform('microsoft');
 }
-
-export { ApiError };
 
 // ---------------------------------------------------------------------------
-// Admin Console (M12-M15)
+// Admin Console
 // ---------------------------------------------------------------------------
 
 export async function adminListUsers({ search = '', page = 1 } = {}) {
-  const query = new URLSearchParams({ search, page: String(page) });
-  return request(`/admin/users?${query.toString()}`, { auth: true });
+  const query = new URLSearchParams({
+    search,
+    page: String(page),
+  });
+
+  return request(`/admin/users?${query.toString()}`, {
+    auth: true,
+  });
 }
 
 export async function adminUpdateUserRole(userId, role) {
-  return request(`/admin/users/${encodeURIComponent(userId)}/role`, {
-    method: 'PUT',
-    auth: true,
-    body: { role },
-  });
+  return request(
+    `/admin/users/${encodeURIComponent(userId)}/role`,
+    {
+      method: 'PUT',
+      auth: true,
+      body: { role },
+    },
+  );
 }
 
 export async function adminUpdateUserStatus(userId, isActive) {
-  return request(`/admin/users/${encodeURIComponent(userId)}/status`, {
-    method: 'PATCH',
-    auth: true,
-    body: { is_active: isActive },
-  });
+  return request(
+    `/admin/users/${encodeURIComponent(userId)}/status`,
+    {
+      method: 'PATCH',
+      auth: true,
+      body: { is_active: isActive },
+    },
+  );
 }
 
 export async function adminGetConnections({ status = '' } = {}) {
   const query = new URLSearchParams(status ? { status } : {});
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  return request(`/admin/connections${suffix}`, { auth: true });
-}
 
-export async function adminFlagConnectionStale(userId, platform) {
-  return request(`/admin/connections/${encodeURIComponent(userId)}/${encodeURIComponent(platform)}/stale`, {
-    method: 'PATCH',
+  return request(`/admin/connections${suffix}`, {
     auth: true,
   });
 }
+
+export async function adminFlagConnectionStale(userId, platform) {
+  return request(
+    `/admin/connections/${encodeURIComponent(userId)}/${encodeURIComponent(platform)}/stale`,
+    {
+      method: 'PATCH',
+      auth: true,
+    },
+  );
+}
+
+export async function adminListAuditLogs({
+  user = '',
+  action = '',
+  date = '',
+  page = 1,
+} = {}) {
+  const query = new URLSearchParams({
+    user,
+    action,
+    date,
+    page: String(page),
+  });
+
+  return request(`/admin/audit-logs?${query.toString()}`, {
+    auth: true,
+  });
+}
+
+// Export URL helpers retained for compatibility with admin.js.
+// Note: direct links may not send the Bearer token. Use the download
+// functions below if the backend requires Bearer authentication.
 
 export function adminConnectionsExportUrl() {
   return `${API_BASE_URL}/admin/connections/export`;
 }
 
-export async function adminListAuditLogs({ user = '', action = '', date = '', page = 1 } = {}) {
-  const query = new URLSearchParams({ user, action, date, page: String(page) });
-  return request(`/admin/audit-logs?${query.toString()}`, { auth: true });
-}
-
-export function adminAuditLogsExportUrl({ user = '', action = '', date = '' } = {}) {
+export function adminAuditLogsExportUrl({
+  user = '',
+  action = '',
+  date = '',
+} = {}) {
   const query = new URLSearchParams({ user, action, date });
+
   return `${API_BASE_URL}/admin/audit-logs/export?${query.toString()}`;
 }
 
 export async function adminGetSyncStatus() {
-  return request('/admin/monitoring/sync-status', { auth: true });
+  return request('/admin/monitoring/sync-status', {
+    auth: true,
+  });
 }
 
 export async function adminGetErrorSummary() {
-  return request('/admin/monitoring/errors', { auth: true });
+  return request('/admin/monitoring/errors', {
+    auth: true,
+  });
 }
 
 export async function adminGetAlerts() {
-  return request('/admin/monitoring/alerts', { auth: true });
+  return request('/admin/monitoring/alerts', {
+    auth: true,
+  });
 }
 
 export async function adminGetServerLogs() {
-  return request('/admin/server-logs', { auth: true });
+  return request('/admin/server-logs', {
+    auth: true,
+  });
 }
 
+// ---------------------------------------------------------------------------
+// CSV downloads
+// ---------------------------------------------------------------------------
+
+async function downloadCsv(endpoint, fallbackFilename) {
+  const token = getAccessToken();
+  const headers = {};
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+  } catch {
+    throw new ApiError('Unable to connect to the server.', 0);
+  }
+
+  if (!response.ok) {
+    let message = `Unable to download ${fallbackFilename}.`;
+
+    try {
+      const data = await response.json();
+      message =
+        data?.detail ||
+        data?.message ||
+        data?.error ||
+        message;
+    } catch {
+      // Keep the fallback message if the response is not JSON.
+    }
+
+    throw new ApiError(message, response.status);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition');
+
+  let filename = fallbackFilename;
+
+  if (disposition && disposition.includes('filename=')) {
+    const match = disposition.match(/filename="?([^";]+)"?/);
+
+    if (match?.[1]) {
+      filename = match[1];
+    }
+  }
+
+  triggerBlobDownload(blob, filename);
+}
+
+export async function downloadConnectionsCsv() {
+  return downloadCsv(
+    '/admin/connections/export',
+    'connections.csv',
+  );
+}
+
+export async function downloadAuditLogsCsv({
+  user = '',
+  action = '',
+  date = '',
+} = {}) {
+  const query = new URLSearchParams({ user, action, date });
+
+  return downloadCsv(
+    `/admin/audit-logs/export?${query.toString()}`,
+    'audit_logs.csv',
+  );
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.style.display = 'none';
+  link.href = url;
+  link.download = filename;
+
+  document.body.appendChild(link);
+  link.click();
+
+  setTimeout(() => {
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }, 200);
+}
+
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
+
 export async function getHealth() {
-  // /health is mounted at the app root in backend/app/main.py, NOT under
-  // /api/v1 like every other route, so it can't go through request().
-  const response = await fetch(`${API_BASE_URL.replace(/\/api\/v1$/, '')}/health`);
+  const baseUrl = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  const response = await fetch(`${baseUrl}/health`);
+
   if (!response.ok) {
     throw new ApiError('Health check failed.', response.status);
   }
+
   return response.json();
 }
 
-async function mockRequest(endpoint, options = {}) {
-  await delay(MOCK_DELAY_MS);
-
-  const { method = 'GET', body = {}, auth = false } = options;
-  const session = getMockSession();
-
-  if (auth && !session) {
-    throw new ApiError('Please sign in again.', 401);
-  }
-
-  if (endpoint === '/auth/register' && method === 'POST') {
-    const users = getMockUsers();
-    const email = normalizeEmail(body.email);
-
-    if (users.some((user) => normalizeEmail(user.email) === email)) {
-      throw new ApiError('Email already exists.', 409);
-    }
-
-    const user = {
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      full_name: body.full_name,
-      email,
-      created_at: new Date().toISOString(),
-    };
-
-    users.push({ ...user, password: body.password });
-    setMockUsers(users);
-    return { user };
-  }
-
-  if (endpoint === '/auth/login' && method === 'POST') {
-    const users = getMockUsers();
-    const email = normalizeEmail(body.email);
-    const user = users.find((item) => normalizeEmail(item.email) === email);
-
-    if (!user || user.password !== body.password) {
-      throw new ApiError('Invalid email or password.', 401);
-    }
-
-    const accessToken = `mock-access-${user.id}-${Date.now()}`;
-    const refreshToken = `mock-refresh-${user.id}-${Date.now()}`;
-
-    localStorage.setItem('kmaps_mock_session_user_id', user.id);
-
-    return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_in: 60 * 60 * 8,
-    };
-  }
-
-  if (endpoint === '/users/me' && method === 'GET') {
-    return sanitizeUser(session);
-  }
-
-  if (endpoint === '/onboarding-status' && method === 'GET') {
-    const connections = getMockConnections(session.id);
-    return {
-      has_connection: connections.google || connections.microsoft,
-      connections,
-    };
-  }
-
-  if (endpoint === '/onboarding-status' && method === 'POST') {
-    const connections = getMockConnections(session.id);
-    const provider = body.provider;
-
-    if (!['google', 'microsoft'].includes(provider)) {
-      throw new ApiError('Unsupported platform.', 400);
-    }
-
-    const next = {
-      ...connections,
-      [provider]: Boolean(body.connected),
-    };
-
-    setMockConnections(session.id, next);
-
-    return {
-      has_connection: next.google || next.microsoft,
-      connections: next,
-    };
-  }
-
-  if (endpoint === '/assignments' && method === 'GET') {
-    const connections = getMockConnections(session.id);
-    const mockAssignments = getMockAssignmentsFromStorage(session.id);
-    const filtered = mockAssignments.filter(a => a.platform === 'custom' || connections[a.platform]);
-    return { assignments: filtered };
-  }
-
-  if (endpoint === '/assignments/update-status' && method === 'POST') {
-    const mockAssignments = getMockAssignmentsFromStorage(session.id);
-    const item = mockAssignments.find(a => a.id === body.assignment_id);
-    if (!item) throw new ApiError('Assignment not found.', 404);
-    item.status = body.status;
-    saveMockAssignmentsToStorage(session.id, mockAssignments);
-    return { success: true, assignments: mockAssignments };
-  }
-
-  if (endpoint === '/assignments/create' && method === 'POST') {
-    const mockAssignments = getMockAssignmentsFromStorage(session.id);
-    const newAssignment = {
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      title: body.title,
-      course: body.course,
-      platform: 'custom',
-      due: body.due,
-      status: 'Not started'
-    };
-    mockAssignments.push(newAssignment);
-    saveMockAssignmentsToStorage(session.id, mockAssignments);
-    return { success: true, assignment: newAssignment, assignments: mockAssignments };
-  }
-
-  if (endpoint === '/assignments/delete' && method === 'POST') {
-    let mockAssignments = getMockAssignmentsFromStorage(session.id);
-    mockAssignments = mockAssignments.filter(a => a.id !== body.assignment_id);
-    saveMockAssignmentsToStorage(session.id, mockAssignments);
-    return { success: true, assignments: mockAssignments };
-  }
-
-  throw new ApiError('Mock endpoint not found.', 404);
-}
-
-function getMockUsers() {
-  const raw = localStorage.getItem(MOCK_USERS_KEY);
-  if (!raw) return [];
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function setMockUsers(users) {
-  localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
-}
-
-function getMockSession() {
-  const userId = localStorage.getItem('kmaps_mock_session_user_id');
-  if (!userId || !getAccessToken()) return null;
-
-  const user = getMockUsers().find((item) => item.id === userId);
-  return user || null;
-}
-
-function getMockConnections(userId) {
-  const raw = localStorage.getItem(MOCK_CONNECTIONS_KEY);
-  let allConnections = {};
-
-  try {
-    allConnections = raw ? JSON.parse(raw) : {};
-  } catch {
-    allConnections = {};
-  }
-
-  return allConnections[userId] || { google: false, microsoft: false };
-}
-
-function setMockConnections(userId, connections) {
-  const raw = localStorage.getItem(MOCK_CONNECTIONS_KEY);
-  let allConnections = {};
-
-  try {
-    allConnections = raw ? JSON.parse(raw) : {};
-  } catch {
-    allConnections = {};
-  }
-
-  allConnections[userId] = connections;
-  localStorage.setItem(MOCK_CONNECTIONS_KEY, JSON.stringify(allConnections));
-}
-
-function sanitizeUser(user) {
-  const { password, ...profile } = user;
-  return profile;
-}
-
-function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getMockAssignmentsFromStorage(userId) {
-  const raw = localStorage.getItem('kmaps_mock_assignments');
-  let allAssignments = {};
-  try {
-    allAssignments = raw ? JSON.parse(raw) : {};
-  } catch {
-    allAssignments = {};
-  }
-  let userAssignments = allAssignments[userId];
-  if (!userAssignments) {
-    userAssignments = [
-      {
-        id: 'mock-g1',
-        title: "Data Modeling Case Study",
-        course: "Business Analytics",
-        platform: "google",
-        due: "Tomorrow, 23:59",
-        status: "Not started",
-      },
-      {
-        id: 'mock-g2',
-        title: "UX Research Summary",
-        course: "Human Computer Interaction",
-        platform: "google",
-        due: "In 5 days, 12:00",
-        status: "Not started",
-      },
-      {
-        id: 'mock-g3',
-        title: "Machine Learning Lab 1",
-        course: "Advanced AI",
-        platform: "google",
-        due: "In 10 days, 23:59",
-        status: "Completed",
-      },
-      {
-        id: 'mock-m1',
-        title: "Sprint Retrospective Report",
-        course: "Software Project Management",
-        platform: "microsoft",
-        due: "In 3 days, 18:00",
-        status: "In progress",
-      },
-      {
-        id: 'mock-m2',
-        title: "API Integration Lab",
-        course: "Web Application Development",
-        platform: "microsoft",
-        due: "In 7 days, 23:59",
-        status: "In progress",
-      },
-      {
-        id: 'mock-m3',
-        title: "Database Optimization Project",
-        course: "Database Systems",
-        platform: "microsoft",
-        due: "In 12 days, 17:00",
-        status: "Not started",
-      }
-    ];
-    allAssignments[userId] = userAssignments;
-    localStorage.setItem('kmaps_mock_assignments', JSON.stringify(allAssignments));
-  }
-  return userAssignments;
-}
-
-function saveMockAssignmentsToStorage(userId, assignments) {
-  const raw = localStorage.getItem('kmaps_mock_assignments');
-  let allAssignments = {};
-  try {
-    allAssignments = raw ? JSON.parse(raw) : {};
-  } catch {
-    allAssignments = {};
-  }
-  allAssignments[userId] = assignments;
-  localStorage.setItem('kmaps_mock_assignments', JSON.stringify(allAssignments));
-}
+export { ApiError };
