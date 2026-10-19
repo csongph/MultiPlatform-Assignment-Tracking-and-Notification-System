@@ -32,7 +32,7 @@ function renderUsers(list) {
       <td>
         <div class="actions">
           <button class="icon-btn edit" data-action="edit" data-id="${u.id}" title="แก้ไข">${ICONS.edit}</button>
-          ${u.status === "suspended" ? "" : `
+          ${u.status === "inactive" ? "" : `
           <button class="icon-btn sync" data-action="sync" data-id="${u.id}" title="ซิงค์ข้อมูล">${ICONS.sync}</button>
           <button class="icon-btn del" data-action="delete" data-id="${u.id}" title="ลบ">${ICONS.trash}</button>`}
         </div>
@@ -59,10 +59,7 @@ function openSyncMenu(btn, id) {
     const choice = e.target.dataset.menu;
     closeSyncMenu();
     if (choice === "sync") {
-      showToast("กำลังซิงค์ข้อมูล...");
-      await DataStore.syncUser(id);
-      showToast("ซิงค์ข้อมูลเรียบร้อย");
-      loadUsers();
+      try { const job = await DataStore.syncUser(id); showToast(`Queued sync: ${job.job_id}`); } catch (err) { showToast(err.message); }
     }
   });
 }
@@ -72,11 +69,11 @@ document.getElementById("usersBody").addEventListener("click", async e => {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
   e.stopPropagation();
-  const id = Number(btn.dataset.id);
+  const id = btn.dataset.id;
   const action = btn.dataset.action;
 
   if (action === "edit") {
-    window.location.href = `edit-user.html?id=${id}`;
+    window.location.href = `edit-user.html?id=${encodeURIComponent(id)}`;
   } else if (action === "sync") {
     const isOpen = btn.parentElement.querySelector(".sync-menu");
     isOpen ? closeSyncMenu() : openSyncMenu(btn, id);
@@ -84,9 +81,7 @@ document.getElementById("usersBody").addEventListener("click", async e => {
     closeSyncMenu();
     const u = allUsers.find(x => x.id === id);
     if (confirm(`ต้องการลบผู้ใช้ ${u.firstName} ${u.lastName} ใช่หรือไม่?`)) {
-      await DataStore.deleteUser(id);
-      showToast("ลบผู้ใช้เรียบร้อย");
-      loadUsers();
+      try { await DataStore.deleteUser(id); await loadUsers(); } catch (err) { showToast(err.message); }
     }
   }
 });

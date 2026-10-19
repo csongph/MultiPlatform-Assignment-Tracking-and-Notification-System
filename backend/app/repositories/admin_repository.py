@@ -1,12 +1,16 @@
 import uuid
 from datetime import datetime, time, timedelta, timezone
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.auth import Role, User, UserRole
-from app.models.core import OAuthConnection, Platform
+from app.models.core import (
+    Assignment, Course, Notification, NotificationRule, NotificationSettings,
+    OAuthConnection, Platform, UserAssignmentStatus,
+)
+from app.models.auth import PasswordRecoveryToken
 from app.models.logs import AuditLog, SyncLog
 
 
@@ -44,6 +48,38 @@ class AdminUserRepository:
             .where(User.id == user_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_by_email(self, email: str) -> User | None:
+        result = await self.db.execute(select(User).where(User.email == email))
+        return result.scalar_one_or_none()
+
+    async def update_profile(self, user: User, full_name: str | None, email: str | None) -> User:
+        if full_name is not None:
+            user.display_name = full_name.strip()
+        if email is not None:
+            user.email = email
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def delete_account(self, user: User) -> None:
+        # Remove dependent learner data in FK order while retaining audit
+        # history with the actor reference detached from the deleted account.
+        course_ids = select(Course.id).where(Course.user_id == user.id)
+        assignment_ids = select(Assignment.id).where(Assignment.course_id.in_(course_ids))
+        await self.db.execute(delete(Notification).where(Notification.user_id == user.id))
+        await self.db.execute(delete(Notification).where(Notification.assignment_id.in_(assignment_ids)))
+        await self.db.execute(delete(UserAssignmentStatus).where(UserAssignmentStatus.user_id == user.id))
+        await self.db.execute(delete(Assignment).where(Assignment.course_id.in_(course_ids)))
+        await self.db.execute(delete(Course).where(Course.user_id == user.id))
+        await self.db.execute(delete(NotificationRule).where(NotificationRule.user_id == user.id))
+        await self.db.execute(delete(NotificationSettings).where(NotificationSettings.user_id == user.id))
+        await self.db.execute(delete(OAuthConnection).where(OAuthConnection.user_id == user.id))
+        await self.db.execute(delete(PasswordRecoveryToken).where(PasswordRecoveryToken.user_id == user.id))
+        await self.db.execute(delete(SyncLog).where(SyncLog.user_id == user.id))
+        await self.db.execute(update(AuditLog).where(AuditLog.actor_user_id == user.id).values(actor_user_id=None))
+        await self.db.delete(user)
+        await self.db.commit()
 
     async def get_role_by_name(self, name: str) -> Role | None:
         result = await self.db.execute(select(Role).where(Role.name == name))

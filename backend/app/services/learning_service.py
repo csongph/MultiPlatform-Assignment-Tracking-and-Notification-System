@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AppError, NotFoundError
 from app.models.core import Assignment, Course, Notification, NotificationRule, NotificationSettings
 from app.models.logs import SyncLog
 from app.repositories.learning_repository import LearningRepository
@@ -14,6 +14,8 @@ from app.schemas.learning import (
     CourseOut,
     DashboardSummary,
     NotificationSettingsUpdate,
+    PersonalAssignmentStatusOut,
+    PersonalAssignmentStatusUpdate,
     NotificationRuleCreate,
     NotificationRuleUpdate,
     SyncJobOut,
@@ -63,13 +65,30 @@ class LearningService:
             due_before=due_before,
             include_deleted=include_deleted,
         )
-        return [self._assignment_out(assignment) for assignment in assignments]
+        statuses = await self.learning.list_user_assignment_statuses(
+            user_id, [assignment.id for assignment in assignments]
+        )
+        return [self._assignment_out(assignment, statuses.get(assignment.id)) for assignment in assignments]
 
     async def get_assignment(self, user_id: uuid.UUID, assignment_id: uuid.UUID) -> AssignmentOut:
         assignment = await self.learning.get_assignment(user_id, assignment_id)
         if assignment is None:
             raise NotFoundError("Assignment not found")
-        return self._assignment_out(assignment)
+        statuses = await self.learning.list_user_assignment_statuses(user_id, [assignment.id])
+        return self._assignment_out(assignment, statuses.get(assignment.id))
+
+    async def update_personal_assignment_status(
+        self, user_id: uuid.UUID, assignment_id: uuid.UUID, payload: PersonalAssignmentStatusUpdate
+    ) -> PersonalAssignmentStatusOut:
+        row = await self.learning.set_personal_assignment_status(
+            user_id, assignment_id, payload.submitted, payload.personal_note
+        )
+        if row is None:
+            raise NotFoundError("Assignment not found")
+        return PersonalAssignmentStatusOut(
+            assignment_id=row.assignment_id, submitted=row.submitted,
+            submitted_at=row.submitted_at, personal_note=row.personal_note,
+        )
 
     async def get_notification_settings(self, user_id: uuid.UUID) -> NotificationSettings:
         return await self.learning.get_notification_settings(user_id)
@@ -159,7 +178,12 @@ class LearningService:
             raise NotFoundError("Notification not found")
         return notification
 
-    async def queue_sync(self, user_id: uuid.UUID, platform_name: str) -> SyncJobOut:
+    async def mark_all_notifications_read(self, user_id: uuid.UUID) -> list[Notification]:
+        return await self.learning.mark_all_notifications_read(user_id)
+
+    async def queue_sync(
+        self, user_id: uuid.UUID, platform_name: str, connection_user_id: uuid.UUID | None = None
+    ) -> SyncJobOut:
         ensure_supported_platform(platform_name)
         platform = await self.platforms.get_by_name(platform_name)
         if platform is None:
@@ -168,17 +192,25 @@ class LearningService:
                 f"Seed it first (see scripts/seed_platforms.py)."
             )
 
-        connection = await self.connections.get_by_user_and_platform(user_id, platform.id)
+        connection_owner = connection_user_id or user_id
+        connection = await self.connections.get_by_user_and_platform(connection_owner, platform.id)
         if connection is None:
             raise NotFoundError(f"'{platform_name}' is not connected yet. Connect it first.")
 
-        sync_log = await self.learning.create_sync_log(user_id, platform.id)
+        sync_log = await self.learning.create_sync_log(connection_owner, platform.id)
 
         # Import here (not at module scope) to avoid importing Celery/worker
         # code into every FastAPI request - only needed on this code path.
         from worker.sync.sync_engine import sync_connection_task
 
-        sync_connection_task.delay(str(connection.id), str(sync_log.id))
+        try:
+            sync_connection_task.delay(str(connection.id), str(sync_log.id))
+        except Exception as exc:
+            sync_log.status = "failed"
+            sync_log.error_detail = {"error": "Sync queue unavailable"}
+            sync_log.finished_at = datetime.now().astimezone()
+            await self.db.commit()
+            raise AppError("Sync queue is unavailable. Please retry later.", 503) from exc
 
         return self._sync_out(sync_log, platform.name)
 
@@ -195,11 +227,13 @@ class LearningService:
             platform=course.platform.name,
             external_course_id=course.external_course_id,
             name=course.name,
+            course_code=course.course_code,
+            instructor_name=course.instructor_name,
             is_deleted=course.is_deleted,
         )
 
     @staticmethod
-    def _assignment_out(assignment: Assignment) -> AssignmentOut:
+    def _assignment_out(assignment: Assignment, personal_status=None) -> AssignmentOut:
         return AssignmentOut(
             id=assignment.id,
             course_id=assignment.course_id,
@@ -210,9 +244,11 @@ class LearningService:
             due_at=assignment.due_at,
             source_status=assignment.source_status,
             computed_status=assignment.computed_status,
-            source_url=assignment.source_url,
+            source_url=assignment.source_url or None,
             is_deleted=assignment.is_deleted,
             last_synced_at=assignment.last_synced_at,
+            personal_submitted=bool(personal_status and personal_status.submitted),
+            personal_note=personal_status.personal_note if personal_status else None,
         )
 
     @staticmethod

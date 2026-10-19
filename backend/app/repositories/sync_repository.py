@@ -79,7 +79,7 @@ class AssignmentRepository:
         due_at: datetime | None,
         source_status: str,
         computed_status: str,
-        source_url: str,
+        source_url: str | None,
     ) -> Assignment:
         assignment = await self.get(course_id, external_assignment_id)
         now = datetime.now(timezone.utc)

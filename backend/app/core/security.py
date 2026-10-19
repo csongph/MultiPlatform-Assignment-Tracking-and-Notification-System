@@ -38,12 +38,13 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-def create_oauth_state_token(user_id: str, platform: str) -> str:
+def create_oauth_state_token(user_id: str, platform: str, nonce: str | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "type": "oauth_state",
         "platform": platform,
+        "jti": nonce or __import__("secrets").token_urlsafe(32),
         "iat": now,
         "exp": now + timedelta(minutes=10),
     }

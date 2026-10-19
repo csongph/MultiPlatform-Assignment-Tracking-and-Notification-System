@@ -53,6 +53,38 @@ class AdminService:
             "page_size": page_size,
         }
 
+    async def get_user(self, user_id: uuid.UUID) -> dict:
+        user = await self.users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        return self._user_out(user)
+
+    async def update_profile(
+        self, actor: User, user_id: uuid.UUID, full_name: str | None, email: str | None
+    ) -> dict:
+        target = await self.users.get_by_id(user_id)
+        if target is None:
+            raise NotFoundError("User not found")
+        if email is not None:
+            existing = await self.users.get_by_email(email)
+            if existing is not None and existing.id != target.id:
+                raise ValueError("Email already exists")
+        await self.users.update_profile(target, full_name, email)
+        await self.audit_logs.create(
+            actor_user_id=actor.id,
+            action="user_profile_change",
+            target=target.email,
+            metadata={"name_changed": full_name is not None, "email_changed": email is not None},
+        )
+        return self._user_out(target)
+
+    async def delete_user(self, actor: User, user_id: uuid.UUID) -> None:
+        target = await self.users.get_by_id(user_id)
+        if target is None:
+            raise NotFoundError("User not found")
+        await self.audit_logs.create(actor_user_id=actor.id, action="delete_user", target=target.email)
+        await self.users.delete_account(target)
+
     async def update_role(self, actor: User, user_id: uuid.UUID, role_name: str) -> dict:
         target = await self.users.get_by_id(user_id)
         if target is None:

@@ -1,37 +1,19 @@
-/**
- * KMAPS - Assignments & Courses page controller (additive; does not modify other pages).
- *
- * Reuses from teammates' code:  sidebar.js, storage.js, auth.js, api.js
- *
- * PREVIEW MODE
- *   If there is no real login session, the page does NOT redirect to login.html.
- *   It shows mock data instead (with an orange banner), so you can work on the UI directly.
- *   - Force preview even when logged in:  assignments.html?preview=1
- *   - Force real API (redirect to login if not signed in):  assignments.html?preview=0
- */
-
 import { isAuthenticated, getUserProfile } from './storage.js';
 import { initSidebar } from './sidebar.js';
-import { buildMockAssignments } from './mock/assignments.mock.js';
 
-/**
- * api.js / auth.js belong to teammates and are loaded lazily on purpose:
- * if one of them has an error, this page still renders (in preview mode with mock data).
- */
 let authModulesPromise = null;
 function loadAuthModules() {
   if (!authModulesPromise) {
     authModulesPromise = Promise.all([import('./api.js'), import('./auth.js')])
       .then(([api, auth]) => ({ api, auth }))
       .catch((err) => {
-        console.warn('[assignments] could not load api.js/auth.js -> preview mode', err);
+        console.error('Could not load application API modules:', err);
         return null;
       });
   }
   return authModulesPromise;
 }
 
-const REMINDER_KEY = 'kmaps_asg_reminders';
 const SOON_HOURS = 48;
 
 const state = {
@@ -43,7 +25,6 @@ const state = {
   search: '',
   openId: null,
   reminderTargetId: null,
-  isPreview: false,
 };
 
 /* ---------------------------------------------------------------- helpers */
@@ -56,18 +37,6 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function loadReminders() {
-  try {
-    return JSON.parse(localStorage.getItem(REMINDER_KEY)) || {};
-  } catch {
-    return {};
-  }
-}
-
-function saveReminders(map) {
-  localStorage.setItem(REMINDER_KEY, JSON.stringify(map));
 }
 
 function isSubmittedStatus(status) {
@@ -98,11 +67,11 @@ function unitLabel(unit) {
   return { minutes: 'นาที', hours: 'ชั่วโมง', days: 'วัน' }[unit] || unit;
 }
 
-/** Normalise items from the API (title/course/platform/due/status) or mock into one shape. */
+/** Normalize provider assignment fields into the page model. */
 function normalize(raw) {
-  const dueDate = raw.due ? new Date(raw.due) : null;
+  const dueDate = raw.dueDate ?? (raw.due_at ? new Date(raw.due_at) : null);
   const validDue = dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null;
-  const submitted = isSubmittedStatus(raw.status);
+  const submitted = isSubmittedStatus(raw.computed_status ?? raw.status);
   const now = new Date();
 
   let state_ = 'pending';
@@ -112,53 +81,34 @@ function normalize(raw) {
 
   return {
     id: String(raw.id),
-    platform: (raw.platform || 'custom').toLowerCase(),
-    course: raw.course || 'ไม่ระบุวิชา',
+    platform: (raw.platform === 'google_classroom' ? 'google' : raw.platform === 'microsoft_teams' ? 'microsoft' : raw.platform || 'custom').toLowerCase(),
+    course: raw.course_name || raw.course || 'ไม่ระบุวิชา',
     courseCode: raw.courseCode || '',
     title: raw.title || '(ไม่มีชื่องาน)',
     description: raw.description || '',
-    todo: Array.isArray(raw.todo) ? raw.todo : [],
+    todo: [],
     requirements: Array.isArray(raw.requirements) ? raw.requirements : [],
-    url: raw.url || raw.externalUrl || '',
+    url: raw.source_url || raw.url || raw.externalUrl || '',
     dueDate: validDue,
     dueToday: !submitted && validDue ? isSameDay(validDue, now) : false,
     submitted,
-    status: state_, // pending | soon | overdue | submitted
+    status: state_
   };
 }
 
 /* ------------------------------------------------------------- data load */
 
 async function loadData() {
-  const params = new URLSearchParams(window.location.search);
-  const previewParam = params.get('preview');
-  const authed = isAuthenticated();
-
-  state.isPreview = previewParam === '1' || (previewParam !== '0' && !authed);
-
-  if (!state.isPreview) {
-    const mods = await loadAuthModules();
-    if (mods) {
-      if (!mods.auth.requireAuth()) return false;
-      try {
-        const res = await mods.api.getAssignments();
-        const list = res?.assignments || [];
-        if (list.length > 0) {
-          state.items = list.map(normalize);
-          return true;
-        }
-      } catch (err) {
-        console.warn('[assignments] API failed, using mock data', err);
-      }
-    }
-    // Logged in but nothing came back (or modules failed) -> mock so the page is never empty
-    state.isPreview = true;
+  const modules = await loadAuthModules();
+  if (!modules) {
+    $('task-list').textContent = 'ไม่สามารถโหลด API ของระบบได้';
+    return false;
   }
-
-  state.items = buildMockAssignments().map(normalize);
+  if (!modules.auth.requireAuth()) return false;
+  const response = await modules.api.getAssignments();
+  state.items = (response?.assignments || []).map(normalize);
   return true;
 }
-
 /* ---------------------------------------------------------------- filter */
 
 function matchesNonTabFilters(item) {
@@ -283,8 +233,8 @@ function renderCourseChips() {
 function renderCard(item) {
   const meta = PLATFORM_META[item.platform] || PLATFORM_META.custom;
   const st = STATUS_META[item.status];
-  const reminders = loadReminders();
-  const rem = reminders[item.id];
+  const reminders = {};
+  const rem = false;
   const isOpen = state.openId === item.id;
 
   const todoHtml = item.todo.length
@@ -444,7 +394,7 @@ function openReminderModal(id) {
   if (!item) return;
   state.reminderTargetId = id;
 
-  const rem = loadReminders()[id];
+  const rem = null;
   $('reminder-task-title').textContent = item.title;
   $('reminder-value').value = rem?.value ?? 1;
   $('reminder-unit').value = rem?.unit ?? 'days';
@@ -469,27 +419,11 @@ function bindReminderModal() {
   });
 
   $('reminder-save').addEventListener('click', () => {
-    const value = Number($('reminder-value').value);
-    const unit = $('reminder-unit').value;
-    if (!Number.isFinite(value) || value < 1 || !Number.isInteger(value)) {
-      $('reminder-error').classList.remove('hidden');
-      return;
-    }
-    // TODO(backend): replace with a real API call once a reminders endpoint exists.
-    const map = loadReminders();
-    map[state.reminderTargetId] = { value, unit };
-    saveReminders(map);
-    closeReminderModal();
-    renderList();
+    $('reminder-error').textContent = 'การตั้งค่าเตือนเฉพาะงานยังไม่รองรับใน backend';
+    $('reminder-error').classList.remove('hidden');
   });
 
-  $('reminder-remove').addEventListener('click', () => {
-    const map = loadReminders();
-    delete map[state.reminderTargetId];
-    saveReminders(map);
-    closeReminderModal();
-    renderList();
-  });
+  $('reminder-remove').addEventListener('click', closeReminderModal);
 }
 
 /* ------------------------------------------------------------------ init */
@@ -501,7 +435,14 @@ function renderProfile() {
 }
 
 async function init() {
-  const ok = await loadData();
+  let ok = false;
+  try {
+    ok = await loadData();
+  } catch (error) {
+    const list = $('task-list');
+    if (list) list.textContent = error.message || 'ไม่สามารถโหลดรายการงานจากระบบได้';
+    return;
+  }
   if (!ok) return;
 
   await initSidebar({
@@ -512,7 +453,8 @@ async function init() {
   });
 
   renderProfile();
-  $('dev-banner').classList.toggle('hidden', !state.isPreview);
+  const developerBanner = $('dev-banner');
+  if (developerBanner) developerBanner.classList.add('hidden');
   bindEvents();
   renderAll();
 }

@@ -12,13 +12,21 @@ const ICONS = {
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M9 6V4h6v2"/><rect x="6" y="6" width="12" height="15" rx="1.5"/></svg>`,
 };
 
-// TODO: ดึงจาก session ของผู้ล็อกอินจริง
-const CURRENT_ADMIN = { name: "K.Saranyapat", role: "ผู้ดูแลระบบ" };
+function getCurrentAdmin() {
+  for (const storage of [sessionStorage, localStorage]) {
+    try {
+      const user = JSON.parse(storage.getItem("kmaps_user_profile") || "null");
+      if (user) return { name: user.full_name || user.display_name || user.email, role: user.role === "admin" ? "ผู้ดูแลระบบ" : "" };
+    } catch { /* Ignore invalid legacy profile values. */ }
+  }
+  return { name: "ผู้ดูแลระบบ", role: "" };
+}
 
 
 function renderLayout() {
   const page = document.body.dataset.page;
   const main = document.querySelector(".main");
+  const currentAdmin = getCurrentAdmin();
 
   const sidebar = document.createElement("aside");
   sidebar.className = "sidebar";
@@ -43,8 +51,8 @@ function renderLayout() {
     <div class="profile">
       <div class="avatar">🧑‍💼</div>
       <div>
-        <div class="profile-name">${escapeHTML(CURRENT_ADMIN.name)}</div>
-        <div class="profile-role">${escapeHTML(CURRENT_ADMIN.role)}</div>
+        <div class="profile-name">${escapeHTML(currentAdmin.name)}</div>
+        <div class="profile-role">${escapeHTML(currentAdmin.role)}</div>
       </div>
     </div>
     <button class="logout-btn" id="logoutBtn" title="ออกจากระบบ">${ICONS.logout}</button>`;
@@ -52,8 +60,11 @@ function renderLayout() {
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
     if (confirm("ต้องการออกจากระบบใช่หรือไม่?")) {
-      // TODO: เรียก API logout แล้วไปหน้า login
-      window.location.href = "login.html";
+      [localStorage, sessionStorage].forEach(storage => [
+        "kmaps_access_token", "kmaps_refresh_token", "kmaps_user_profile",
+        "kmaps_user_profile_fetched_at", "kmaps_token_expires_at",
+      ].forEach(key => storage.removeItem(key)));
+      window.location.href = "../pages/login.html";
     }
   });
 }

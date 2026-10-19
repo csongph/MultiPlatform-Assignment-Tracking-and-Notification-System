@@ -1,142 +1,146 @@
-// ข้อมูลการมอบหมายงาน โดยเพิ่ม bell: true ให้กับวันที่ 27 และ 28
-let tasksData = {
-  "2026-07-21": {
-    displayTitle: "การส่งงานวันที่ 24 กรกฎาคม 2569",
-    tasks: [{ id: 1, title: "การบ้าน คณิตศาสตร์", status: "pending", style: "yellow", bell: true }]
-  },
-  "2026-07-24": {
-    displayTitle: "การส่งงานวันที่ 24 กรกฎาคม 2569",
-    tasks: [{ id: 2, title: "ส่งรายงาน รายวิชาภาษาไทย", status: "pending", style: "red", bell: true }]
-  },
-  "2026-07-25": {
-    displayTitle: "การส่งงานวันที่ 28 กรกฎาคม 2569",
-    tasks: [{ id: 3, title: "แบบฝึกหัด ฟิสิกส์", status: "pending", style: "yellow", bell: true }]
-  },
-  "2026-07-27": {
-    displayTitle: "การส่งงานวันที่ 27 กรกฎาคม 2569",
-    tasks: [{ id: 4, title: "การบ้าน เคมี", status: "pending", style: "red", bell: true }]
-  },
-  "2026-07-28": {
-    displayTitle: "การส่งงานวันที่ 28 กรกฎาคม 2569",
-    tasks: [{ id: 5, title: "โปรเจกต์ LMS Frontend", status: "pending", style: "red", bell: true }]
-  }
-};
+import { getAssignments, updatePersonalAssignmentStatus } from './api.js';
+import { requireAuth, getSignedInUser, logout } from './auth.js';
 
-let selectedDateKey = "";
+let assignments = [];
+let selectedAssignmentId = null;
+let searchTerm = '';
 
-// Render Calendar
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[char]));
+
+function dueDate(item) {
+  if (!item.due_at) return null;
+  const value = new Date(item.due_at);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
+function matchesSearch(item) {
+  return !searchTerm || `${item.title} ${item.course_name}`.toLowerCase().includes(searchTerm);
+}
+
+function renderStats() {
+  $('total-tasks').textContent = assignments.length;
+  $('due-tasks').textContent = assignments.filter((item) => {
+    const due = dueDate(item);
+    const now = new Date();
+    return due && due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate();
+  }).length;
+  $('submitted-tasks').textContent = assignments.filter((item) => item.personal_submitted || item.computed_status === 'submitted').length;
+}
+
 function renderCalendar() {
-  const grid = document.getElementById('daysGrid');
-  grid.innerHTML = '';
-
-  const firstDayIndex = 3; // วันที่ 1 กรกฎาคม 2569 ตรงกับวันพุธ
-  const totalDays = 30;
-
-  // เว้นช่องว่างก่อนวันที่ 1
-  for (let i = 0; i < firstDayIndex; i++) {
-    const emptyCell = document.createElement('div');
-    emptyCell.className = 'h-[48px]';
-    grid.appendChild(emptyCell);
+  const month = Number($('monthSelect').value);
+  const year = Number($('yearSelect').value);
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const byDay = new Map();
+  for (const item of assignments) {
+    const due = dueDate(item);
+    if (!due || due.getFullYear() !== year || due.getMonth() !== month || !matchesSearch(item)) continue;
+    byDay.set(due.getDate(), [...(byDay.get(due.getDate()) || []), item]);
   }
 
-  // สร้างวันที่ 1 ถึง 30
-  for (let day = 1; day <= totalDays; day++) {
-    const dateKey = `2026-07-${day < 10 ? '0' + day : day}`;
-    const dayCell = document.createElement('div');
-    
-    dayCell.className = 'h-[48px] flex items-center justify-center text-[15px] font-medium text-gray-800 rounded-lg relative cursor-pointer hover:bg-gray-100 transition-all';
-    dayCell.innerText = day;
-
-    // ตรวจสอบการแสดงผลสีไฮไลต์และรูปกระดิ่งแจ้งเตือน
-    if (tasksData[dateKey]) {
-      const taskInfo = tasksData[dateKey].tasks[0];
-      
-      if (taskInfo.style === 'yellow') {
-        dayCell.classList.add('bg-[#ffcc00]', 'text-black', 'font-bold');
-      } else if (taskInfo.style === 'red') {
-        dayCell.classList.add('bg-[#ff1e1e]', 'text-white', 'font-bold');
-      }
-
-      // แสดงไอคอนกระดิ่งเมื่อค่า bell เป็น true
-      if (taskInfo.bell) {
-        const bell = document.createElement('i');
-        bell.className = 'fa-solid fa-bell absolute -top-2 -right-2 text-[#ffcc00] text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.2)]';
-        dayCell.appendChild(bell);
-      }
-    }
-
-    dayCell.onclick = () => openModal(dateKey, day);
-    grid.appendChild(dayCell);
+  const cells = Array(firstWeekday).fill('<div aria-hidden="true"></div>');
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dayItems = byDay.get(day) || [];
+    const submitted = dayItems.length > 0 && dayItems.every((item) => item.personal_submitted || item.computed_status === 'submitted');
+    const overdue = dayItems.some((item) => item.computed_status === 'overdue' && !item.personal_submitted);
+    const colors = submitted ? 'bg-[#00e659] text-[#1a1a1a]' : overdue ? 'bg-[#ff1e1e] text-white' : dayItems.length ? 'bg-[#ffcc00] text-black' : 'text-gray-800';
+    cells.push(`<button type="button" data-day="${day}" class="h-[48px] flex items-center justify-center text-[15px] font-medium rounded-lg relative hover:bg-gray-100 transition-all ${colors}" aria-label="${day}, ${dayItems.length} งาน">${day}${dayItems.length ? `<span class="absolute -top-1 -right-1 min-w-4 h-4 rounded-full bg-white text-gray-700 text-[10px] leading-4">${dayItems.length}</span>` : ''}</button>`);
   }
+  $('daysGrid').innerHTML = cells.join('');
 }
 
-// เปิด Pop-up แสดงรายละเอียด
-function openModal(dateKey, dayNumber) {
-  selectedDateKey = dateKey;
-  
-  const dayData = tasksData[dateKey];
-  const titleText = (dayData && dayData.displayTitle) 
-    ? dayData.displayTitle 
-    : `การส่งงานวันที่ ${dayNumber} กรกฎาคม 2569`;
-
-  document.getElementById('modalDateTitle').innerText = titleText;
-  
-  const taskContainer = document.getElementById('modalTaskContent');
-  const tasks = dayData ? dayData.tasks : [];
-
-  if (tasks.length > 0) {
-    taskContainer.innerHTML = tasks.map(t => `
-      <div class="p-3 rounded-lg bg-gray-50 border-l-4 ${t.status === 'submitted' ? 'border-[#00f050]' : 'border-[#ff1e1e]'} flex justify-between items-center mb-2">
-        <div>
-          <strong class="text-sm">${t.title}</strong><br>
-          <small class="text-xs text-gray-600">สถานะ: ${t.status === 'submitted' ? '✅ ส่งแล้ว' : '⏳ ยังไม่ส่ง'}</small>
-        </div>
-      </div>
-    `).join('');
-  } else {
-    taskContainer.innerHTML = `<p class="text-gray-500 text-sm text-center my-3">ไม่มีภารกิจ/งานที่ต้องส่งในวันนี้</p>`;
-  }
-
-  const modal = document.getElementById('taskModal');
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-}
-
-// ปิด Pop-up
-function closeModal() {
-  const modal = document.getElementById('taskModal');
-  modal.classList.remove('flex');
-  modal.classList.add('hidden');
-}
-
-// ระบบจัดการเมื่อกดยืนยันส่งงาน
-function handleTaskSubmit(e) {
-  e.preventDefault();
-  const note = document.getElementById('taskNote').value;
-  
-  if (!tasksData[selectedDateKey]) {
-    tasksData[selectedDateKey] = {
-      displayTitle: `การส่งงานวันที่ ${selectedDateKey.split('-')[2]} กรกฎาคม 2569`,
-      tasks: []
-    };
-  }
-
-  tasksData[selectedDateKey].tasks.push({
-    id: Date.now(),
-    title: `งานที่ส่ง: ${note}`,
-    status: "submitted",
-    style: "green",
-    bell: false
+function openModal(day) {
+  const month = Number($('monthSelect').value);
+  const year = Number($('yearSelect').value);
+  const items = assignments.filter((item) => {
+    const due = dueDate(item);
+    return due && due.getFullYear() === year && due.getMonth() === month && due.getDate() === day && matchesSearch(item);
   });
-
-  let submittedCount = parseInt(document.getElementById('submitted-tasks').innerText);
-  document.getElementById('submitted-tasks').innerText = submittedCount + 1;
-
-  alert(`ส่งงานเรียบร้อยแล้ว!`);
-  
-  document.getElementById('submissionForm').reset();
-  closeModal();
-  renderCalendar();
+  const monthName = new Date(year, month).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+  $('modalDateTitle').textContent = `งานวันที่ ${day} ${monthName}`;
+  $('modalTaskContent').innerHTML = items.length ? items.map((item) => `
+    <button type="button" data-assignment-id="${escapeHtml(item.id)}" class="w-full text-left p-3 rounded-lg bg-gray-50 border-l-4 ${item.personal_submitted || item.computed_status === 'submitted' ? 'border-[#00f050]' : item.computed_status === 'overdue' ? 'border-[#ff1e1e]' : 'border-[#ffcc00]'} mb-2">
+      <strong class="text-sm">${escapeHtml(item.title)}</strong><br>
+      <small class="text-xs text-gray-600">${escapeHtml(item.course_name)} · ${item.personal_submitted ? 'บันทึกว่าส่งแล้ว' : item.computed_status === 'submitted' ? 'ส่งแล้วในแพลตฟอร์ม' : item.computed_status === 'overdue' ? 'เกินกำหนด' : 'ยังไม่ส่ง'}</small>
+    </button>`).join('') : '<p class="text-gray-500 text-sm text-center my-3">ไม่มีงานที่มีกำหนดส่งในวันนี้</p>';
+  $('submissionForm').classList.toggle('hidden', items.length === 0);
+  selectedAssignmentId = null;
+  $('taskNote').value = '';
+  $('taskModal').classList.remove('hidden');
+  $('taskModal').classList.add('flex');
 }
 
-window.onload = renderCalendar;
+function closeModal() {
+  $('taskModal').classList.remove('flex');
+  $('taskModal').classList.add('hidden');
+}
+
+async function handleTaskSubmit(event) {
+  event.preventDefault();
+  if (!selectedAssignmentId) {
+    $('modalTaskContent').insertAdjacentHTML('beforeend', '<p class="text-xs text-red-600">เลือกงานที่ต้องการบันทึกก่อน</p>');
+    return;
+  }
+  const button = $('submissionForm').querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const result = await updatePersonalAssignmentStatus(selectedAssignmentId, {
+      submitted: true,
+      personal_note: $('taskNote').value.trim() || null,
+    });
+    const item = assignments.find((entry) => entry.id === selectedAssignmentId);
+    if (item) {
+      item.personal_submitted = result.submitted;
+      item.personal_note = result.personal_note;
+    }
+    renderStats();
+    renderCalendar();
+    closeModal();
+  } catch (error) {
+    $('modalTaskContent').insertAdjacentHTML('beforeend', `<p class="text-xs text-red-600">${escapeHtml(error.message || 'บันทึกสถานะไม่สำเร็จ')}</p>`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function init() {
+  if (!requireAuth()) return;
+  try {
+    const user = await getSignedInUser();
+    const name = document.querySelector('.user-profile span');
+    if (name) name.textContent = user?.full_name || user?.email || 'ผู้ใช้งาน';
+    document.querySelector('a[title="ออกจากระบบ"]')?.addEventListener('click', (event) => { event.preventDefault(); logout(); });
+    const now = new Date();
+    $('monthSelect').value = String(now.getMonth());
+    $('yearSelect').value = String(now.getFullYear());
+    assignments = (await getAssignments()).assignments || [];
+    renderStats();
+    renderCalendar();
+  } catch (error) {
+    $('daysGrid').innerHTML = `<div class="col-span-7 p-8 text-center text-red-600">${escapeHtml(error.message || 'โหลดรายการงานไม่สำเร็จ')}</div>`;
+  }
+
+  $('monthSelect').addEventListener('change', renderCalendar);
+  $('yearSelect').addEventListener('change', renderCalendar);
+  $('calendar-search').addEventListener('input', (event) => { searchTerm = event.target.value.trim().toLowerCase(); renderCalendar(); });
+  $('daysGrid').addEventListener('click', (event) => {
+    const day = event.target.closest('[data-day]');
+    if (day) openModal(Number(day.dataset.day));
+  });
+  $('modalTaskContent').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-assignment-id]');
+    if (!button) return;
+    selectedAssignmentId = button.dataset.assignmentId;
+    $('modalTaskContent').querySelectorAll('[data-assignment-id]').forEach((item) => item.classList.toggle('ring-2', item === button));
+    $('taskNote').value = assignments.find((item) => item.id === selectedAssignmentId)?.personal_note || '';
+  });
+  $('submissionForm').addEventListener('submit', handleTaskSubmit);
+  $('taskModal').addEventListener('click', (event) => { if (event.target === $('taskModal')) closeModal(); });
+  document.querySelector('.modal-header .fa-xmark')?.addEventListener('click', closeModal);
+}
+
+document.addEventListener('DOMContentLoaded', init);

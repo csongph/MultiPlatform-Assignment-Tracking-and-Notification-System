@@ -4,9 +4,9 @@
    ยังไม่มีข้อมูล -> แสดง 0
    ========================================================= */
 async function loadDashboard() {
-  const [users, growth, courses] = await Promise.all([
-    DataStore.getUsers(),
-    DataStore.getUserGrowth(),
+  const users = await DataStore.getUsers();
+  const [growth, courses] = await Promise.all([
+    DataStore.getUserGrowth(users),
     DataStore.getCourseStats(),
   ]);
 
@@ -25,8 +25,8 @@ function renderCounts(users, growth) {
   const admins = users.filter(u => u.type === "admin").length;
   document.getElementById("studentCount").textContent = students.toLocaleString();
   document.getElementById("adminCount").textContent = admins.toLocaleString();
-  document.getElementById("studentGrowth").textContent = formatGrowth(growth.student);
-  document.getElementById("adminGrowth").textContent = formatGrowth(growth.admin);
+  document.getElementById("studentGrowth").textContent = growth.student == null ? "—" : formatGrowth(growth.student);
+  document.getElementById("adminGrowth").textContent = growth.admin == null ? "—" : formatGrowth(growth.admin);
 }
 
 function renderSyncTable(users) {

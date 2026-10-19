@@ -7,84 +7,102 @@
    ให้เรียก fetch() ไปที่ Backend แทน localStorage
    ========================================================= */
 
-const USE_MOCK = false;
-
-const STORAGE_KEY = "lms_admin_users";
-
 const TYPE_LABEL = { admin: "ผู้ดูแลระบบ", student: "นักเรียน" };
-const STATUS_LABEL = {
-  active: "Active",
-  pending: "Pending",
-  suspended: "Suspended",
-  inactive: "Inactive",
-};
+const STATUS_LABEL = { active: "Active", pending: "Pending", suspended: "Suspended", inactive: "Inactive" };
+const API_BASE = (window.KMAPS_API_BASE || "http://localhost:8000/api/v1").replace(/\/$/, "");
+let refreshRequest = null;
 
-const MOCK_USERS = [
-  { id: 1, firstName: "Somchai",   lastName: "Jaidee",  email: "67000111@gmail.com", type: "admin",   status: "active" },
-  { id: 2, firstName: "Anuwaw",    lastName: "Deejing", email: "67000451@gmail.com", type: "student", status: "pending" },
-  { id: 3, firstName: "Chanittha", lastName: "Sombat",  email: "67000611@gmail.com", type: "student", status: "suspended" },
-  { id: 4, firstName: "Deejai",    lastName: "Meesuk",  email: "67000114@gmail.com", type: "student", status: "inactive" },
-  { id: 5, firstName: "Jaihom",    lastName: "Makmee",  email: "67000146@gmail.com", type: "student", status: "active" },
-];
-
-function readStore() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) { /* storage ใช้ไม่ได้ -> ใช้ค่าเริ่มต้น */ }
-  return USE_MOCK ? JSON.parse(JSON.stringify(MOCK_USERS)) : [];
+async function refreshAccessToken() {
+  const storage = localStorage.getItem("kmaps_refresh_token") ? localStorage : sessionStorage;
+  const refresh_token = storage.getItem("kmaps_refresh_token");
+  if (!refresh_token) return false;
+  if (!refreshRequest) {
+    refreshRequest = fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token }),
+    }).then(async (response) => {
+      if (!response.ok) return false;
+      const tokens = await response.json();
+      storage.setItem("kmaps_access_token", tokens.access_token);
+      storage.setItem("kmaps_refresh_token", tokens.refresh_token);
+      storage.setItem("kmaps_token_expires_at", String(Date.now() + tokens.expires_in * 1000));
+      return true;
+    }).catch(() => false).finally(() => { refreshRequest = null; });
+  }
+  return refreshRequest;
 }
 
-function writeStore(list) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (e) {}
+async function adminRequest(path, options = {}) {
+  const token = localStorage.getItem("kmaps_access_token") || sessionStorage.getItem("kmaps_access_token");
+  let response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+  });
+  if (response.status === 401 && await refreshAccessToken()) {
+    const freshToken = localStorage.getItem("kmaps_access_token") || sessionStorage.getItem("kmaps_access_token");
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}), ...options.headers },
+    });
+  }
+  const data = response.status === 204 ? null : await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.detail || `Admin API returned HTTP ${response.status}`);
+  return data;
+}
+
+function mapUser(user) {
+  const parts = String(user.full_name || "").trim().split(/\s+/);
+  return { ...user, firstName: parts.shift() || "", lastName: parts.join(" "), type: user.role, status: user.is_active ? "active" : "inactive" };
 }
 
 const DataStore = {
-  /** GET /api/users */
   async getUsers() {
-    return readStore();
+    const users = [];
+    for (let page = 1; ; page += 1) {
+      const result = await adminRequest(`/admin/users?page=${page}`);
+      users.push(...(result.users || []));
+      if (users.length >= (result.total || 0) || !(result.users || []).length) break;
+    }
+    return users.map(mapUser);
   },
-
-  /** GET /api/users/:id */
-  async getUser(id) {
-    return readStore().find(u => u.id === Number(id)) || null;
-  },
-
-  /** PUT /api/users/:id */
+  async getUser(id) { return mapUser(await adminRequest(`/admin/users/${encodeURIComponent(id)}`)); },
   async updateUser(id, patch) {
-    const list = readStore();
-    const i = list.findIndex(u => u.id === Number(id));
-    if (i === -1) throw new Error("ไม่พบผู้ใช้");
-    list[i] = { ...list[i], ...patch };
-    writeStore(list);
-    return list[i];
+    if (patch.type) return mapUser(await adminRequest(`/admin/users/${encodeURIComponent(id)}/role`, { method: "PUT", body: JSON.stringify({ role: patch.type }) }));
+    if (patch.status) return mapUser(await adminRequest(`/admin/users/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ is_active: patch.status === "active" }) }));
+    const full_name = patch.full_name ?? [patch.firstName, patch.lastName].filter(Boolean).join(" ");
+    return mapUser(await adminRequest(`/admin/users/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ full_name, email: patch.email }) }));
   },
-
-  /** DELETE /api/users/:id */
-  async deleteUser(id) {
-    writeStore(readStore().filter(u => u.id !== Number(id)));
-  },
-
-  /** POST /api/users/:id/sync – ดึงข้อมูลใหม่จาก Google Classroom / Teams */
+  async deleteUser(id) { return adminRequest(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" }); },
   async syncUser(id) {
-    // TODO: เรียก API ซิงค์จริง
-    await new Promise(r => setTimeout(r, 600));
-    return { ok: true };
+    const result = await adminRequest(`/admin/connections?status=connected`);
+    const connection = (result.connections || []).find((item) => item.user_id === id);
+    if (!connection) throw new Error("User has no connected learning platform.");
+    return adminRequest("/sync", { method: "POST", body: JSON.stringify({ user_id: id, platform: connection.platform === "google" ? "google_classroom" : "microsoft_teams" }) });
   },
-
-  /** GET /api/stats/users – % การเติบโตเทียบเดือนที่แล้ว */
-  async getUserGrowth() {
-    // TODO: ดึงจาก Backend
-    return { student: 0, admin: 0 };
+  async getUserGrowth(users) {
+    const now = new Date();
+    const startCurrent = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startPrevious = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const counts = { student: [0, 0], admin: [0, 0] };
+    users.forEach((user) => {
+      const created = new Date(user.created_at);
+      if (created >= startCurrent) counts[user.role === "admin" ? "admin" : "student"][0] += 1;
+      else if (created >= startPrevious) counts[user.role === "admin" ? "admin" : "student"][1] += 1;
+    });
+    return Object.fromEntries(Object.entries(counts).map(([role, [current, previous]]) => [
+      role, previous === 0 ? (current === 0 ? 0 : null) : ((current - previous) / previous) * 100,
+    ]));
   },
-
-  /** GET /api/stats/courses – จำนวนรายวิชาที่เชื่อมต่อแต่ละแพลตฟอร์ม */
   async getCourseStats() {
-    // TODO: ดึงจาก Google Classroom API + Microsoft Graph API
-    return { classroom: 0, teams: 0, both: 0 };
+    const connections = await adminRequest("/admin/connections?status=connected");
+    const users = new Map();
+    for (const item of connections.connections || []) {
+      if (!users.has(item.user_id)) users.set(item.user_id, new Set());
+      users.get(item.user_id).add(item.platform);
+    }
+    return { classroom: [...users.values()].filter((items) => items.has("google")).length, teams: [...users.values()].filter((items) => items.has("microsoft")).length, both: [...users.values()].filter((items) => items.has("google") && items.has("microsoft")).length };
   },
 };
-
 /* ---------- helpers ใช้ร่วมกันทุกหน้า ---------- */
 function escapeHTML(str) {
   return String(str ?? "").replace(/[&<>"']/g, c => ({

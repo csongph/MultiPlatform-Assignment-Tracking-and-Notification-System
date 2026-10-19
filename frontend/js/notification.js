@@ -74,6 +74,7 @@ async function loadStats() {
     document.getElementById('stat-rate').textContent = `${rate}%`;
   } catch (err) {
     console.error('Failed to load assignment stats:', err);
+    showToast(err.message || 'ไม่สามารถโหลดสถิติงานได้', 'error');
   }
 }
 
@@ -181,7 +182,7 @@ async function handleMarkAllRead() {
   btn.disabled = true;
 
   try {
-    await markAllNotificationsRead(unreadIds);
+    await markAllNotificationsRead();
     allNotifications.forEach((n) => {
       if (unreadIds.includes(n.id)) n.status = 'read';
     });

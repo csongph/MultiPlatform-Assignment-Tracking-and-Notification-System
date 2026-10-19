@@ -1,4 +1,3 @@
-```javascript
 import {
   adminListUsers,
   adminUpdateUserRole,
@@ -662,4 +661,3 @@ function setText(id, value) {
 }
 
 init();
-```

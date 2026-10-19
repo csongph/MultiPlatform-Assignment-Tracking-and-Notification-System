@@ -1,4 +1,3 @@
-```javascript
 /**
  * ==========================================================================
  * KMAPS Navigation System — JavaScript (ES6+ OOP Module)
@@ -379,4 +378,3 @@ export function initNavigation(activeTab = 'overview') {
 
   return navManager;
 }
-```

@@ -18,6 +18,8 @@ class CourseOut(BaseModel):
     platform: str
     external_course_id: str
     name: str
+    course_code: str | None = None
+    instructor_name: str | None = None
     is_deleted: bool
 
 
@@ -31,9 +33,23 @@ class AssignmentOut(BaseModel):
     due_at: datetime | None
     source_status: str
     computed_status: str
-    source_url: str
+    source_url: str | None
     is_deleted: bool
     last_synced_at: datetime
+    personal_submitted: bool = False
+    personal_note: str | None = None
+
+
+class PersonalAssignmentStatusUpdate(BaseModel):
+    submitted: bool
+    personal_note: str | None = Field(default=None, max_length=5000)
+
+
+class PersonalAssignmentStatusOut(BaseModel):
+    assignment_id: uuid.UUID
+    submitted: bool
+    submitted_at: datetime | None
+    personal_note: str | None
 
 
 class NotificationSettingsOut(BaseModel):
@@ -102,6 +118,7 @@ class NotificationRuleOut(BaseModel):
 
 class SyncRequest(BaseModel):
     platform: str
+    user_id: uuid.UUID | None = None
 
 
 class SyncJobOut(BaseModel):

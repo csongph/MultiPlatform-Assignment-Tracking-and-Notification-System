@@ -43,16 +43,19 @@ class SyncService:
 
         try:
             results = await self._fetch_with_refresh(connection, fetcher)
-        except NotImplementedError as exc:
+        except Exception as exc:  # noqa: BLE001 - we want to log *any* failure, not crash the worker
+            await self.db.rollback()
+            connection.status = "broken"
             await self.sync_logs.mark_finished(
-                sync_log, status="skipped", items_synced=0, error_detail={"reason": str(exc)}
+                sync_log, status="failed", items_synced=0,
+                error_detail={"error": f"{type(exc).__name__}: {exc}"},
             )
             return sync_log
-        except Exception as exc:  # noqa: BLE001 - we want to log *any* failure, not crash the worker
-            connection.status = "broken"
-            await self.db.commit()
+
+        if not results:
             await self.sync_logs.mark_finished(
-                sync_log, status="failed", items_synced=0, error_detail={"error": str(exc)}
+                sync_log, status="success", items_synced=0,
+                error_detail={"info": "Provider returned no courses; existing synced records were retained."},
             )
             return sync_log
 
@@ -83,9 +86,13 @@ class SyncService:
                 seen_assignment_ids.add(remote_assignment.external_id)
                 items_synced += 1
 
-            await self.assignments.soft_delete_missing(course.id, seen_assignment_ids)
+            if seen_assignment_ids:
+                await self.assignments.soft_delete_missing(course.id, seen_assignment_ids)
 
-        await self.courses.soft_delete_missing(connection.user_id, connection.platform_id, seen_course_ids)
+        # Do not archive previously synced data if the provider returned an empty course
+        # list unexpectedly (permissions, transient inconsistency, or account transition).
+        if seen_course_ids:
+            await self.courses.soft_delete_missing(connection.user_id, connection.platform_id, seen_course_ids)
 
         if connection.status != "connected":
             connection.status = "connected"

@@ -1,4 +1,3 @@
-```javascript
 /**
  * KMAPS UI Module
  * Toast notifications, loading states, component loader, animations
@@ -302,4 +301,3 @@ export function initAuthFooter(type) {
 export function redirect(path) {
   window.location.href = path;
 }
-```

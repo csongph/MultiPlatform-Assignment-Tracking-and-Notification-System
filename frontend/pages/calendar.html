@@ -35,15 +35,15 @@
       </div>
 
       <nav class="nav-menu flex flex-col gap-4 flex-grow justify-center">
-        <a href="#" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-[#d1d0d7] text-sm font-medium hover:text-white transition-all">
+        <a href="dashboard.html" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-[#d1d0d7] text-sm font-medium hover:text-white transition-all">
           <i class="fa-solid fa-border-all text-xl"></i>
           <span>ภาพรวม</span>
         </a>
-        <a href="#" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-[#d1d0d7] text-sm font-medium hover:text-white transition-all">
+        <a href="assignments.html" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-[#d1d0d7] text-sm font-medium hover:text-white transition-all">
           <i class="fa-solid fa-square-check text-xl"></i>
           <span>งานที่ได้รับมอบหมาย</span>
         </a>
-        <a href="#" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] bg-[#ccff00] text-[#1a1a1a] font-semibold shadow-[0_4px_12px_rgba(204,255,0,0.3)] text-sm">
+        <a href="calendar.html" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] bg-[#ccff00] text-[#1a1a1a] font-semibold shadow-[0_4px_12px_rgba(204,255,0,0.3)] text-sm">
           <i class="fa-solid fa-calendar-days text-xl"></i>
           <span>ปฏิทินและการแจ้งเตือน</span>
         </a>
@@ -55,7 +55,7 @@
       <!-- Top Bar Header -->
       <header class="top-bar flex justify-between items-center gap-4">
         <div class="search-box flex-1 relative">
-          <input type="text" placeholder="ค้นหารายวิชา" class="w-full py-2.5 pl-5 pr-10 rounded-full border border-[#dcdcdc] outline-none text-sm text-gray-800">
+          <input id="calendar-search" type="search" placeholder="ค้นหารายวิชา" class="w-full py-2.5 pl-5 pr-10 rounded-full border border-[#dcdcdc] outline-none text-sm text-gray-800">
           <i class="fa-solid fa-magnifying-glass absolute right-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
         </div>
 
@@ -78,15 +78,15 @@
       <section class="summary-cards grid grid-cols-3 gap-4">
         <div class="card bg-[#ffff52] text-[#1a1a1a] rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
           <span class="text-xs font-semibold">งานที่ได้รับมอบหมายทั้งหมด</span>
-          <span class="text-4xl font-bold leading-none" id="total-tasks">6</span>
+          <span class="text-4xl font-bold leading-none" id="total-tasks">0</span>
         </div>
         <div class="card bg-[#ff1e1e] text-white rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
           <span class="text-xs font-semibold">ครบกำหนดวันนี้</span>
-          <span class="text-4xl font-bold leading-none" id="due-tasks">1</span>
+          <span class="text-4xl font-bold leading-none" id="due-tasks">0</span>
         </div>
         <div class="card bg-[#00e659] text-[#1a1a1a] rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
           <span class="text-xs font-semibold">งานที่ส่งแล้ว</span>
-          <span class="text-4xl font-bold leading-none" id="submitted-tasks">5</span>
+          <span class="text-4xl font-bold leading-none" id="submitted-tasks">0</span>
         </div>
       </section>
 
@@ -94,14 +94,14 @@
       <section class="calendar-wrapper flex-1 bg-[#e5e5e8] rounded-[20px] p-5 flex flex-col items-center gap-4 overflow-y-auto">
         <div class="calendar-header-controls flex gap-2.5">
           <select id="monthSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer">
-            <option value="6" selected>กรกฎาคม</option>
-            <option value="7">สิงหาคม</option>
-            <option value="8">กันยายน</option>
+            <option value="0">มกราคม</option><option value="1">กุมภาพันธ์</option><option value="2">มีนาคม</option>
+            <option value="3">เมษายน</option><option value="4">พฤษภาคม</option><option value="5">มิถุนายน</option>
+            <option value="6">กรกฎาคม</option><option value="7">สิงหาคม</option><option value="8">กันยายน</option>
+            <option value="9">ตุลาคม</option><option value="10">พฤศจิกายน</option><option value="11">ธันวาคม</option>
           </select>
 
           <select id="yearSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer">
-            <option value="2026" selected>2569</option>
-            <option value="2027">2570</option>
+            <option value="2025">2568</option><option value="2026">2569</option><option value="2027">2570</option><option value="2028">2571</option>
           </select>
         </div>
 
@@ -131,25 +131,22 @@
     <div class="modal-card bg-white w-[90%] max-w-[450px] rounded-[20px] p-6 shadow-2xl">
       <div class="modal-header flex justify-between items-center mb-4">
         <h3 class="text-lg font-bold text-[#1a1a1a]" id="modalDateTitle">การส่งงานวันที่ -</h3>
-        <i class="fa-solid fa-xmark text-xl text-gray-400 cursor-pointer hover:text-gray-600" onclick="closeModal()"></i>
+        <i class="fa-solid fa-xmark text-xl text-gray-400 cursor-pointer hover:text-gray-600"></i>
       </div>
 
       <div id="modalTaskContent"></div>
 
-      <form class="submission-form mt-4" id="submissionForm" onsubmit="handleTaskSubmit(event)">
+      <form class="submission-form mt-4" id="submissionForm">
         <hr class="my-4 border-gray-200">
-        <label for="taskNote" class="block text-xs font-semibold mb-1.5">ข้อความส่งงาน / หมายเหตุ:</label>
+        <label for="taskNote" class="block text-xs font-semibold mb-1.5">ข้อความส่งงาน / หมายเหตุส่วนตัว:</label>
         <input type="text" id="taskNote" placeholder="ระบุข้อความ..." required class="w-full p-[10px] rounded-lg border border-gray-300 mb-3 text-xs outline-none focus:border-green-500">
-
-        <label for="fileUpload" class="block text-xs font-semibold mb-1.5">แนบไฟล์งาน:</label>
-        <input type="file" id="fileUpload" required class="w-full p-2 rounded-lg border border-gray-300 mb-3 text-xs">
-
-        <button type="submit" class="w-full py-3 bg-[#00e659] hover:bg-[#00c74b] rounded-lg font-bold text-[#1a1a1a] transition-colors">ยืนยันการส่งงาน</button>
+        <p class="text-xs text-gray-500 mb-3">บันทึกสถานะส่วนตัวใน KMAPS ไม่ได้ส่งงานไปยัง Google Classroom หรือ Microsoft Teams</p>
+        <button type="submit" class="w-full py-3 bg-[#00e659] hover:bg-[#00c74b] rounded-lg font-bold text-[#1a1a1a] transition-colors">บันทึกว่าส่งแล้ว</button>
       </form>
     </div>
   </div>
 
   <!-- JavaScript File -->
-  <script src="script.js"></script>
+  <script type="module" src="../js/calendar.js"></script>
 </body>
 </html>

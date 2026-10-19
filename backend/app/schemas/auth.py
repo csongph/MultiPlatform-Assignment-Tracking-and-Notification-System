@@ -36,6 +36,10 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
+
 class OnboardingConnections(BaseModel):
     google: bool = False
     microsoft: bool = False

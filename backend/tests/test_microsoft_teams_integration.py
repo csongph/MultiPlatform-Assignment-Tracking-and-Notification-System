@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
-import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from jose import jwt
 import pytest
 
 from app.core.exceptions import OAuthProviderError
@@ -12,6 +10,7 @@ from app.integrations.microsoft_teams_adapter import (
     GRAPH_API_BASE,
     MicrosoftTeamsAdapter,
     MicrosoftTeamsFetcher,
+    SCOPES,
 )
 
 
@@ -19,7 +18,11 @@ from app.integrations.microsoft_teams_adapter import (
 async def test_adapter_post_token_request_network_error():
     """Verify that network errors raise OAuthProviderError."""
     adapter = MicrosoftTeamsAdapter()
-    with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Network down")):
+    client = AsyncMock()
+    client.post.side_effect = httpx.ConnectError("Network down")
+    context = AsyncMock()
+    context.__aenter__.return_value = client
+    with patch("app.integrations.microsoft_teams_adapter.httpx.AsyncClient", return_value=context):
         with pytest.raises(OAuthProviderError) as exc_info:
             await adapter.exchange_code_for_token("any_code")
         assert "Failed to communicate with Microsoft token endpoint" in str(exc_info.value)
@@ -30,50 +33,41 @@ async def test_adapter_refresh_token_preserves_old_refresh_token_if_absent():
     """Verify that if response lacks refresh_token, old refresh_token is kept."""
     adapter = MicrosoftTeamsAdapter()
 
-    fake_response = httpx.Response(
-        200,
-        json={
+    response = httpx.Response(200, json={
             "access_token": "new_access_token_123",
             "expires_in": 3600,
             # No refresh_token returned by provider
-        },
-        request=httpx.Request("POST", "https://login.microsoftonline.com/dummy"),
-    )
+        }, request=httpx.Request("POST", "https://login.microsoftonline.com/test"))
 
-    with patch("httpx.AsyncClient.post", return_value=fake_response):
+    client = AsyncMock()
+    client.post.return_value = response
+    context = AsyncMock()
+    context.__aenter__.return_value = client
+    with patch("app.integrations.microsoft_teams_adapter.httpx.AsyncClient", return_value=context):
         bundle = await adapter.refresh_access_token("existing_refresh_token_xyz")
         assert bundle.access_token == "new_access_token_123"
         assert bundle.refresh_token == "existing_refresh_token_xyz"
 
 
 @pytest.mark.asyncio
-async def test_adapter_extracts_id_token_claims():
-    """Verify oid, tid, preferred_username extracted into raw."""
+async def test_adapter_does_not_request_or_decode_unneeded_identity_claims():
+    """Classroom data access does not need a separate Microsoft identity scope."""
     adapter = MicrosoftTeamsAdapter()
-
-    claims = {
-        "oid": "user-oid-111",
-        "tid": "tenant-tid-222",
-        "preferred_username": "student@kmitl.ac.th",
-    }
-    encoded_id_token = jwt.encode(claims, "dummy_secret", algorithm="HS256")
-
-    fake_response = httpx.Response(
-        200,
-        json={
+    response = httpx.Response(200, json={
             "access_token": "acc_123",
             "refresh_token": "ref_123",
             "expires_in": 3600,
-            "id_token": encoded_id_token,
-        },
-        request=httpx.Request("POST", "https://login.microsoftonline.com/dummy"),
-    )
+            "id_token": "not-used",
+        }, request=httpx.Request("POST", "https://login.microsoftonline.com/test"))
 
-    with patch("httpx.AsyncClient.post", return_value=fake_response):
+    client = AsyncMock()
+    client.post.return_value = response
+    context = AsyncMock()
+    context.__aenter__.return_value = client
+    with patch("app.integrations.microsoft_teams_adapter.httpx.AsyncClient", return_value=context):
         bundle = await adapter.exchange_code_for_token("test_code")
-        assert bundle.raw.get("oid") == "user-oid-111"
-        assert bundle.raw.get("tid") == "tenant-tid-222"
-        assert bundle.raw.get("preferred_username") == "student@kmitl.ac.th"
+        assert bundle.raw == {}
+        assert "openid" not in SCOPES
 
 
 @pytest.mark.asyncio

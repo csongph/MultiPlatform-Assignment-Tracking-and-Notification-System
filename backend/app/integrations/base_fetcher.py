@@ -22,7 +22,7 @@ class RemoteAssignment:
     due_at: datetime | None
     source_status: str  # raw state string from the provider, e.g. "PUBLISHED"
     computed_status: str  # normalized: not_submitted / submitted / overdue
-    source_url: str
+    source_url: str | None
 
 
 @dataclass

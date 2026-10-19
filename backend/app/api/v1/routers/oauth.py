@@ -137,7 +137,7 @@ async def oauth_callback(
             )
             return RedirectResponse(url=error_url, status_code=302)
 
-        logger.error("OAuth callback error for platform %s: %s", platform, exc)
+        logger.error("OAuth callback error for platform %s (%s)", platform, type(exc).__name__)
         error_url = (
             f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
             f"?oauth_error={provider_slug}_failed"
@@ -158,19 +158,22 @@ async def oauth_callback(
     # the repository rather than touching the lazy relationship directly
     # (that would raise MissingGreenlet on the async engine).
     synced_count = 0
+    sync_failed = connection is None
     connection = await OAuthConnectionRepository(db).get_by_id_with_platform(connection.id)
     if connection is not None:
         try:
             sync_log = await SyncService(db).sync_connection(connection)
             synced_count = sync_log.items_synced
+            sync_failed = sync_log.status == "failed"
         except Exception:
             # The connection itself succeeded - that's what matters for
             # onboarding. The periodic sync will retry if this failed.
-            pass
+            sync_failed = True
 
     success_url = (
         f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_SUCCESS_PATH}"
         f"?oauth_success={provider_slug}&synced={synced_count}"
+        f"{'&sync_error=1' if sync_failed else ''}"
     )
     return RedirectResponse(url=success_url, status_code=302)
 

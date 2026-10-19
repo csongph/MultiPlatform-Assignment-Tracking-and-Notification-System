@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user, get_db
@@ -17,6 +17,8 @@ from app.schemas.learning import (
     NotificationRuleUpdate,
     NotificationSettingsOut,
     NotificationSettingsUpdate,
+    PersonalAssignmentStatusOut,
+    PersonalAssignmentStatusUpdate,
     SyncJobOut,
     SyncRequest,
 )
@@ -48,6 +50,8 @@ async def list_courses(
 
 @router.get("/assignments", response_model=list[AssignmentOut])
 async def list_assignments(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=100, ge=1, le=500),
     status: str | None = None,
     course_id: uuid.UUID | None = None,
     due_before: datetime | None = None,
@@ -55,13 +59,15 @@ async def list_assignments(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await LearningService(db).list_assignments(
+    assignments = await LearningService(db).list_assignments(
         user_id=current_user.id,
         status=status,
         course_id=course_id,
         due_before=due_before,
         include_deleted=include_deleted,
     )
+    start = (page - 1) * page_size
+    return assignments[start:start + page_size]
 
 
 @router.get("/assignments/{assignment_id}", response_model=AssignmentOut)
@@ -72,6 +78,21 @@ async def get_assignment(
 ):
     try:
         return await LearningService(db).get_assignment(current_user.id, assignment_id)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.put("/assignments/{assignment_id}/personal-status", response_model=PersonalAssignmentStatusOut)
+async def update_personal_assignment_status(
+    assignment_id: uuid.UUID,
+    payload: PersonalAssignmentStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await LearningService(db).update_personal_assignment_status(
+            current_user.id, assignment_id, payload
+        )
     except AppError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
@@ -150,6 +171,13 @@ async def list_notifications(
     return await LearningService(db).list_notifications(current_user.id, status)
 
 
+@router.post("/notifications/mark-all-read", response_model=list[NotificationOut])
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    return await LearningService(db).mark_all_notifications_read(current_user.id)
+
+
 @router.post("/notifications/{notification_id}/mark-read", response_model=NotificationOut)
 async def mark_notification_read(
     notification_id: uuid.UUID,
@@ -169,7 +197,13 @@ async def queue_sync(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await LearningService(db).queue_sync(current_user.id, payload.platform)
+        if payload.user_id is not None and payload.user_id != current_user.id:
+            roles = {role.role.name for role in current_user.user_roles}
+            if "admin" not in roles:
+                raise HTTPException(status_code=403, detail="Only administrators can sync another user's account.")
+        return await LearningService(db).queue_sync(
+            current_user.id, payload.platform, connection_user_id=payload.user_id
+        )
     except AppError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 

@@ -116,6 +116,46 @@ class LearningRepository:
         )
         return result.scalar_one_or_none()
 
+    async def list_user_assignment_statuses(
+        self, user_id: uuid.UUID, assignment_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, UserAssignmentStatus]:
+        if not assignment_ids:
+            return {}
+        result = await self.db.execute(
+            select(UserAssignmentStatus).where(
+                UserAssignmentStatus.user_id == user_id,
+                UserAssignmentStatus.assignment_id.in_(assignment_ids),
+            )
+        )
+        return {row.assignment_id: row for row in result.scalars().all()}
+
+    async def set_personal_assignment_status(
+        self, user_id: uuid.UUID, assignment_id: uuid.UUID, submitted: bool, personal_note: str | None
+    ) -> UserAssignmentStatus | None:
+        if await self.get_assignment(user_id, assignment_id) is None:
+            return None
+        result = await self.db.execute(
+            select(UserAssignmentStatus).where(
+                UserAssignmentStatus.user_id == user_id,
+                UserAssignmentStatus.assignment_id == assignment_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if row is None:
+            row = UserAssignmentStatus(
+                user_id=user_id, assignment_id=assignment_id, submitted=submitted,
+                submitted_at=now if submitted else None, personal_note=personal_note,
+            )
+            self.db.add(row)
+        else:
+            row.submitted = submitted
+            row.submitted_at = now if submitted else None
+            row.personal_note = personal_note
+        await self.db.commit()
+        await self.db.refresh(row)
+        return row
+
     async def get_notification_settings(self, user_id: uuid.UUID) -> NotificationSettings:
         result = await self.db.execute(
             select(NotificationSettings).where(NotificationSettings.user_id == user_id)
@@ -240,6 +280,18 @@ class LearningRepository:
         await self.db.commit()
         await self.db.refresh(notification)
         return notification
+
+    async def mark_all_notifications_read(self, user_id: uuid.UUID) -> list[Notification]:
+        result = await self.db.execute(
+            select(Notification).where(Notification.user_id == user_id, Notification.status != "read")
+        )
+        notifications = list(result.scalars().all())
+        now = datetime.now(timezone.utc)
+        for notification in notifications:
+            notification.status = "read"
+            notification.delivered_at = notification.delivered_at or now
+        await self.db.commit()
+        return notifications
 
     async def create_due_notifications(self, now: datetime) -> list[uuid.UUID]:
         """Create due-soon rows once per user/rule/assignment.

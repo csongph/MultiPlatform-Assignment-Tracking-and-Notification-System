@@ -6,7 +6,6 @@ import re
 from urllib.parse import urlencode
 
 import httpx
-from jose import JWTError, jwt
 
 from app.core.config import settings
 from app.core.exceptions import OAuthProviderError
@@ -25,14 +24,8 @@ GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 
 SCOPES = [
     "offline_access",
-    "openid",
-    "email",
-    "profile",
-    "https://graph.microsoft.com/User.Read",
     "https://graph.microsoft.com/EduAssignments.ReadBasic",
-    "https://graph.microsoft.com/EduAssignments.Read",
-    "https://graph.microsoft.com/Team.ReadBasic.All",
-    "https://graph.microsoft.com/EduRoster.Read",
+    "https://graph.microsoft.com/EduRoster.ReadBasic",
 ]
 
 
@@ -89,39 +82,27 @@ class MicrosoftTeamsAdapter(BaseOAuthAdapter):
                 response = await client.post(_token_endpoint(), data=data)
         except httpx.RequestError as exc:
             raise OAuthProviderError(
-                f"Failed to communicate with Microsoft token endpoint: {exc}"
+                "Failed to communicate with Microsoft token endpoint"
             ) from exc
 
         if response.status_code != 200:
             raise OAuthProviderError(
-                f"Microsoft token endpoint returned {response.status_code}: {response.text}"
+                f"Microsoft token endpoint returned {response.status_code}"
             )
 
         payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("access_token"):
+            raise OAuthProviderError("Microsoft token endpoint response did not contain an access token")
         expires_in = payload.get("expires_in")
         expires_at = (
             datetime.now(timezone.utc) + timedelta(seconds=expires_in) if expires_in else None
         )
 
-        # Extract user & tenant identifiers from id_token without signature verification
-        # (token received directly from Microsoft token endpoint over TLS).
-        raw_data = dict(payload)
-        id_token = payload.get("id_token")
-        if id_token:
-            try:
-                id_token_claims = jwt.get_unverified_claims(id_token)
-                if isinstance(id_token_claims, dict):
-                    raw_data["oid"] = id_token_claims.get("oid")
-                    raw_data["tid"] = id_token_claims.get("tid")
-                    raw_data["preferred_username"] = id_token_claims.get("preferred_username")
-            except (JWTError, Exception) as exc:
-                logger.warning("Could not extract unverified claims from id_token: %s", exc)
-
         return TokenBundle(
             access_token=payload["access_token"],
             refresh_token=payload.get("refresh_token"),
             expires_at=expires_at,
-            raw=raw_data,
+            raw={},
         )
 
 
@@ -179,27 +160,22 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
             # 3. Process each class and its assignments concurrently with semaphore
             results: list[RemoteCourseWithAssignments] = []
 
-            for cls in classes:
+            async def load_class(cls: dict) -> RemoteCourseWithAssignments | None:
                 class_id = cls.get("id")
+                if not class_id:
+                    return None
                 class_name = cls.get("displayName") or "Untitled Class"
                 course = RemoteCourse(external_id=class_id, name=class_name)
-
                 class_raw_assignments = assignments_by_class.get(class_id, [])
-
-                # Process assignments for this class
                 assignments_for_course = await self._process_assignments_for_class(
                     client=client,
                     class_id=class_id,
                     raw_assignments=class_raw_assignments,
                 )
-                results.append(
-                    RemoteCourseWithAssignments(
-                        course=course,
-                        assignments=assignments_for_course,
-                    )
-                )
+                return RemoteCourseWithAssignments(course=course, assignments=assignments_for_course)
 
-            return results
+            loaded = await asyncio.gather(*(load_class(cls) for cls in classes))
+            return [item for item in loaded if item is not None]
 
     async def _get_with_retry(
         self,
@@ -210,9 +186,15 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         """GET request with HTTP 429 Retry-After handling up to self.max_retries times."""
         for attempt in range(self.max_retries + 1):
             async with self.semaphore:
-                response = await client.get(url, params=params)
+                try:
+                    response = await client.get(url, params=params)
+                except httpx.RequestError as exc:
+                    if attempt >= self.max_retries:
+                        raise OAuthProviderError("Microsoft Graph network request failed after retries") from exc
+                    await asyncio.sleep(min(60, 2 ** attempt))
+                    continue
 
-            if response.status_code == 429:
+            if response.status_code == 429 or response.status_code >= 500:
                 if attempt >= self.max_retries:
                     self._raise_for_status(response)
 
@@ -224,9 +206,10 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
 
                 # Safety cap for sleep duration in retry
                 sleep_time = min(max(retry_seconds, 1.0), 60.0)
+                reason = "rate limit" if response.status_code == 429 else "server error"
                 logger.warning(
-                    "Hit HTTP 429 on %s, waiting %s seconds before retry %d/%d",
-                    url,
+                    "Graph API %s; waiting %s seconds before retry %d/%d",
+                    reason,
                     sleep_time,
                     attempt + 1,
                     self.max_retries,
@@ -279,11 +262,12 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         raw_assignments: list[dict],
     ) -> list[RemoteAssignment]:
         """Processes assignments for a class and calculates submission status."""
-        tasks = [
-            self._to_remote_assignment(client, class_id, raw_asg)
-            for raw_asg in raw_assignments
-            if raw_asg.get("status") != "draft" and raw_asg.get("status") != "deactivated"
-        ]
+        async def limited(raw_asg: dict) -> RemoteAssignment:
+            async with self.semaphore:
+                return await self._to_remote_assignment(client, class_id, raw_asg)
+
+        tasks = [limited(raw_asg) for raw_asg in raw_assignments
+                 if raw_asg.get("status") not in ("draft", "deactivated")]
         if not tasks:
             return []
         return await asyncio.gather(*tasks)
@@ -308,8 +292,9 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
             if raw_content:
                 description = self._clean_html(raw_content)
 
-        # Web URL: fallback to Teams deep-link format if null
-        web_url = raw_asg.get("webUrl") or f"https://teams.microsoft.com/l/entity/classroom/{class_id}?assignmentId={assignment_id}"
+        # Graph may omit webUrl; preserve null rather than constructing an
+        # undocumented Teams deep link.
+        web_url = raw_asg.get("webUrl")
 
         # Fetch submission status for the current user
         computed_status = await self._compute_submission_status(
@@ -351,11 +336,7 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
                 if sub_status in ("submitted", "returned"):
                     return "submitted"
         except (TokenExpiredError, OAuthProviderError):
-            # Let TokenExpiredError and permissions errors propagate
             raise
-        except Exception as exc:
-            # Fall through to due date comparison on unexpected transient submission fetch error
-            logger.warning("Could not fetch submission for assignment %s: %s", assignment_id, exc)
 
         if due_at is not None and due_at < now:
             return "overdue"
@@ -386,9 +367,9 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
             raise TokenExpiredError("Microsoft Graph rejected the access token (401)")
         if response.status_code == 403:
             raise OAuthProviderError(
-                f"Microsoft Graph forbidden (403): Tenant requires admin consent or Education is disabled. Detail: {response.text}"
+                "Microsoft Graph forbidden (403): tenant consent or Education access may be required."
             )
         if response.status_code >= 400:
             raise OAuthProviderError(
-                f"Microsoft Graph API returned {response.status_code}: {response.text}"
+                f"Microsoft Graph API returned {response.status_code}"
             )

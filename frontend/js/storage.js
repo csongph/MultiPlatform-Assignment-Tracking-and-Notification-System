@@ -1,4 +1,3 @@
-```javascript
 /**
  * KMAPS Storage Module
  * Manages authentication tokens and user profile storage.
@@ -14,7 +13,6 @@ const STORAGE_KEYS = {
   USER_PROFILE_FETCHED_AT: 'kmaps_user_profile_fetched_at',
   REMEMBER_ME: 'kmaps_remember_me',
   TOKEN_EXPIRES_AT: 'kmaps_token_expires_at',
-  MOCK_SESSION_USER_ID: 'kmaps_mock_session_user_id',
 };
 
 /**
@@ -191,15 +189,13 @@ export function isTokenExpired() {
 export function isAuthenticated() {
   const token = getAccessToken();
 
-  if (!token || token === 'mock-preview-session-token') {
+  if (!token) {
     return false;
   }
 
   if (isTokenExpired()) {
-    clearAuthSession();
-    return false;
+    return Boolean(getRefreshToken());
   }
 
   return true;
 }
-```

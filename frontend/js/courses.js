@@ -7,6 +7,7 @@
  */
 
 import { initNavigation } from './navigation.js';
+import { getCourses, getAssignments, normalizePlatform } from './api.js';
 
 /**
  * 1. CourseModel (คลาสจำลองโมเดลข้อมูลรายวิชา)
@@ -301,16 +302,33 @@ export class CoursePageManager {
     this.platformFilterComponent = null;
   }
 
-  /**
-   * เมธอดเริ่มต้นทำงาน โหลดข้อมูล Mock Data และสั่ง Render โครงสร้างหน้าเว็บ
-   */
+  /** Initialize navigation and load provider-backed courses. */
   async init() {
     // 1. เรียกใช้ Navigation System เดิมของระบบ
     initNavigation('courses');
 
-    // 2. โหลดข้อมูล Mock Data ตรงตามรูปตัวอย่างใน UI Reference
-    this.loadMockData();
-
+    try {
+      const [remoteCourses, assignmentsResponse] = await Promise.all([getCourses(), getAssignments()]);
+      const assignments = assignmentsResponse.assignments || [];
+      this.courses = remoteCourses.map((course) => {
+        const related = assignments.filter((item) => item.course_id === course.id);
+        const completedAssignments = related.filter((item) => ['submitted', 'completed'].includes(String(item.computed_status || item.status).toLowerCase())).length;
+        return new CourseModel({
+          id: course.id,
+          title: course.name,
+          code: course.course_code || '',
+          instructor: course.instructor_name || '',
+          platform: normalizePlatform(course.platform),
+          totalAssignments: related.length,
+          completedAssignments,
+          pendingAssignments: related.length - completedAssignments,
+        });
+      });
+    } catch (error) {
+      const grid = document.getElementById('courses-grid');
+      if (grid) grid.textContent = error.message || 'ไม่สามารถโหลดรายวิชาจากระบบได้';
+      throw error;
+    }
     // 3. เริ่มต้น Component ตัวกรองแพลตฟอร์ม
     this.platformFilterComponent = new PlatformFilterComponent({
       containerId: 'platform-filter-bar',
@@ -328,46 +346,6 @@ export class CoursePageManager {
     // 5. Render หน้าจอครั้งแรก
     this.statSummaryComponent.render(this.courses);
     this.applyFiltersAndRender();
-  }
-
-  /**
-   * สร้างชุดข้อมูลจำลอง (Mock Data) ตรงตามภาพ UI Reference
-   */
-  loadMockData() {
-    const rawData = [
-      {
-        id: 'c1',
-        title: 'การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น',
-        code: 'รหัสวิชา 30901-1005',
-        instructor: 'อ. นายธนกฤต วงศ์สวัสดิ์',
-        platform: 'google',
-        pendingAssignments: 1,
-        completedAssignments: 1,
-        totalAssignments: 2,
-      },
-      {
-        id: 'c2',
-        title: 'ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ',
-        code: 'รหัสวิชา 30901-2008',
-        instructor: 'อ. นางสาวปาริชาติ อินทร์แก้ว',
-        platform: 'google',
-        pendingAssignments: 1,
-        completedAssignments: 0,
-        totalAssignments: 1,
-      },
-      {
-        id: 'c3',
-        title: 'การออกแบบและพัฒนาเว็บไซต์',
-        code: 'รหัสวิชา 30201-2109',
-        instructor: 'อ. นางสาวพิมพชนก ศรีสุวรรณ',
-        platform: 'microsoft',
-        pendingAssignments: 1,
-        completedAssignments: 0,
-        totalAssignments: 1,
-      },
-    ];
-
-    this.courses = rawData.map((item) => new CourseModel(item));
   }
 
   /**

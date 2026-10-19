@@ -19,9 +19,6 @@ import {
 import { requireAuth, getSignedInUser, logout } from './auth.js';
 
 import {
-  getAccessToken,
-  clearAuthSession,
-  getUserProfile,
   setUserProfile,
 } from './storage.js';
 
@@ -46,39 +43,9 @@ let isSyncing = false;
 
 const COMPLETED_STATUSES = ['completed', 'submitted', 'done'];
 
-const DEFAULT_MOCKUP_COURSES = [
-  {
-    id: 'c-db',
-    name: 'วิชา ฐานข้อมูลสำหรับงานเทคโนโลยีสารสนเทศ',
-    completedTasks: 0,
-    totalTasks: 4,
-    percentage: 10,
-  },
-  {
-    id: 'c-prog',
-    name: 'วิชา การเขียนโปรแกรมคอมพิวเตอร์เบื้องต้น',
-    completedTasks: 1,
-    totalTasks: 3,
-    percentage: 60,
-  },
-  {
-    id: 'c-web',
-    name: 'วิชา การออกแบบและพัฒนาเว็บไซต์',
-    completedTasks: 4,
-    totalTasks: 4,
-    percentage: 96,
-  },
-];
+
 
 async function init() {
-  // Clear the old demo session if one is still present.
-  if (
-    getAccessToken() === 'mock-preview-session-token' ||
-    getUserProfile()?.id === 'demo-kunagron'
-  ) {
-    clearAuthSession();
-  }
-
   if (!requireAuth()) return;
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -227,42 +194,37 @@ async function triggerManualSync() {
   if (syncText) syncText.textContent = 'กำลังซิงก์...';
 
   try {
-    const job = await queueSync('google_classroom');
-    const jobId = job?.job_id;
-
-    if (!jobId) {
-      await finishSync(true, 'เริ่มซิงก์แล้ว กำลังอัปเดตข้อมูล...');
+    const platforms = [
+      ...(connectionsState.google ? ['google_classroom'] : []),
+      ...(connectionsState.microsoft ? ['microsoft_teams'] : []),
+    ];
+    if (!platforms.length) {
+      await finishSync(false, 'ยังไม่มีแพลตฟอร์มที่เชื่อมต่อ กรุณาเชื่อมต่อก่อนซิงก์');
       return;
     }
-
     showToast('กำลังซิงก์ข้อมูลงานจากแพลตฟอร์ม...', 'info');
+    const jobs = await Promise.all(platforms.map((platform) => queueSync(platform)));
+    const jobIds = jobs.map((job) => job?.job_id).filter(Boolean);
+    if (jobIds.length !== platforms.length) throw new Error('ระบบไม่สามารถเริ่มงานซิงก์ได้ครบทุกแพลตฟอร์ม');
 
-    const startTime = Date.now();
+    const deadline = Date.now() + 60000;
+    let statuses = [];
+    do {
+      statuses = await Promise.all(jobIds.map((jobId) => getSyncJob(jobId)));
+      if (statuses.every((item) => ['success', 'succeeded', 'completed', 'failed', 'error'].includes((item.status || '').toLowerCase()))) break;
+      if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 2500));
+    } while (Date.now() < deadline);
 
-    const pollInterval = setInterval(async () => {
-      try {
-        const statusData = await getSyncJob(jobId);
-        const status = (statusData?.status || '').toLowerCase();
-
-        if (['completed', 'succeeded', 'success'].includes(status)) {
-          clearInterval(pollInterval);
-
-          await finishSync(
-            true,
-            `ซิงก์สำเร็จ! อัปเดตงาน ${statusData.items_synced || 0} รายการ`,
-          );
-        } else if (['failed', 'error'].includes(status)) {
-          clearInterval(pollInterval);
-          await finishSync(false, 'การซิงก์ล้มเหลว กรุณาลองใหม่');
-        } else if (Date.now() - startTime > 60000) {
-          clearInterval(pollInterval);
-          await finishSync(true, 'การซิงก์ยังทำงานอยู่เบื้องหลัง');
-        }
-      } catch {
-        clearInterval(pollInterval);
-        await finishSync(false, 'ไม่สามารถตรวจสอบสถานะการซิงก์ได้');
-      }
-    }, 2500);
+    const failed = statuses.find((item) => ['failed', 'error'].includes((item.status || '').toLowerCase()));
+    if (failed) {
+      const detail = failed.error_detail?.error || failed.error_detail?.reason;
+      await finishSync(false, detail || 'การซิงก์ล้มเหลว กรุณาตรวจสอบสิทธิ์การเชื่อมต่อแล้วลองใหม่');
+    } else if (Date.now() >= deadline && !statuses.every((item) => ['success', 'succeeded', 'completed'].includes((item.status || '').toLowerCase()))) {
+      await finishSync(true, 'การซิงก์ยังทำงานอยู่เบื้องหลัง');
+    } else {
+      const totalItems = statuses.reduce((total, item) => total + (item.items_synced || 0), 0);
+      await finishSync(true, `ซิงก์สำเร็จ! อัปเดตงาน ${totalItems} รายการ`);
+    }
   } catch (error) {
     await finishSync(
       false,
@@ -381,6 +343,7 @@ async function loadDashboardData() {
     console.warn('Failed to load platform connections:', error);
     connectionsState = {};
     renderConnectionsSidebar(connectionsState);
+    showToast(error.message || 'ไม่สามารถโหลดสถานะการเชื่อมต่อได้', 'error');
   }
 
   const [assignmentsResult, summaryResult] = await Promise.allSettled([
@@ -399,7 +362,7 @@ async function loadDashboardData() {
   } else {
     console.warn('Failed to load assignments:', assignmentsResult.reason);
     allAssignments = [];
-    showToast('ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่', 'error');
+    showToast(assignmentsResult.reason?.message || 'ไม่สามารถโหลดรายการงานได้', 'error');
   }
 
   const summary =
@@ -435,7 +398,7 @@ function updateMetrics(summary = null) {
 
   const completedCount = allAssignments.filter((assignment) =>
     COMPLETED_STATUSES.includes(
-      (assignment.status || '').toLowerCase(),
+      (assignment.computed_status || assignment.status || '').toLowerCase(),
     ),
   ).length;
 
@@ -464,7 +427,7 @@ function updateMetrics(summary = null) {
           dueDate.getDate() === now.getDate();
 
         const isIncomplete = !COMPLETED_STATUSES.includes(
-          (assignment.status || '').toLowerCase(),
+          (assignment.computed_status || assignment.status || '').toLowerCase(),
         );
 
         return isToday && isIncomplete;
@@ -505,23 +468,14 @@ function renderCourseProgress() {
 
     if (
       COMPLETED_STATUSES.includes(
-        (assignment.status || '').toLowerCase(),
+        (assignment.computed_status || assignment.status || '').toLowerCase(),
       )
     ) {
       course.completedTasks += 1;
     }
   });
 
-  let courses = courseMap.size
-    ? Array.from(courseMap.values()).map((course) => ({
-        ...course,
-        percentage: course.totalTasks
-          ? Math.round(
-              (course.completedTasks / course.totalTasks) * 100,
-            )
-          : 0,
-      }))
-    : [...DEFAULT_MOCKUP_COURSES];
+  let courses = Array.from(courseMap.values()).map((course) => ({ ...course, percentage: course.totalTasks ? Math.round((course.completedTasks / course.totalTasks) * 100) : 0 }));
 
   if (currentSearchTerm) {
     courses = courses.filter((course) =>
@@ -642,13 +596,13 @@ function renderAssignmentsFeed() {
     filtered = filtered.filter(
       (assignment) =>
         !COMPLETED_STATUSES.includes(
-          (assignment.status || '').toLowerCase(),
+          (assignment.computed_status || assignment.status || '').toLowerCase(),
         ),
     );
   } else if (statusFilter === 'completed') {
     filtered = filtered.filter((assignment) =>
       COMPLETED_STATUSES.includes(
-        (assignment.status || '').toLowerCase(),
+        (assignment.computed_status || assignment.status || '').toLowerCase(),
       ),
     );
   }

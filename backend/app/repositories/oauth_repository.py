@@ -32,6 +32,14 @@ class OAuthConnectionRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_user_and_platform_name(self, user_id: uuid.UUID, platform_name: str) -> OAuthConnection | None:
+        result = await self.db.execute(
+            select(OAuthConnection)
+            .join(Platform)
+            .where(OAuthConnection.user_id == user_id, Platform.name == platform_name)
+        )
+        return result.scalar_one_or_none()
+
     async def list_for_user(self, user_id: uuid.UUID) -> list[OAuthConnection]:
         result = await self.db.execute(
             select(OAuthConnection)
@@ -97,7 +105,8 @@ class OAuthConnectionRepository:
         existing = await self.get_by_user_and_platform(user_id, platform_id)
         if existing:
             existing.access_token_enc = access_token_enc
-            existing.refresh_token_enc = refresh_token_enc
+            if refresh_token_enc is not None:
+                existing.refresh_token_enc = refresh_token_enc
             existing.token_expires_at = token_expires_at
             existing.status = status
             await self.db.commit()

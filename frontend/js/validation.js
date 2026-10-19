@@ -1,4 +1,3 @@
-```javascript
 /**
  * KMAPS Validation Module
  * Client-side form validation for auth pages
@@ -238,4 +237,3 @@ export function applyFieldErrors(form, fieldErrors) {
     setFieldError(form, field, message);
   });
 }
-```

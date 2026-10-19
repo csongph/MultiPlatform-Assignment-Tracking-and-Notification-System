@@ -1,4 +1,3 @@
-```javascript
 /**
  * KMAPS Onboarding Page
  * จัดการการเชื่อมต่อ Google Classroom และ Microsoft Teams
@@ -42,20 +41,21 @@ async function init() {
   const oauthSuccess = urlParams.get('oauth_success');
   const oauthError = urlParams.get('oauth_error');
   const synced = urlParams.get('synced');
+  const syncError = urlParams.get('sync_error');
 
   if (oauthSuccess === 'google') {
     const message = synced
       ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
       : 'Google Classroom เชื่อมต่อสำเร็จ!';
 
-    showToast(message, 'success');
+    showToast(syncError ? 'เชื่อมต่อ Google Classroom แล้ว แต่ดึงข้อมูลไม่สำเร็จ กรุณากดซิงก์อีกครั้ง' : message, syncError ? 'warning' : 'success');
     cleanOAuthUrl();
   } else if (oauthSuccess === 'microsoft') {
     const message = synced
       ? `Microsoft Teams เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
       : 'Microsoft Teams เชื่อมต่อสำเร็จ!';
 
-    showToast(message, 'success');
+    showToast(syncError ? 'เชื่อมต่อ Microsoft Teams แล้ว แต่ดึงข้อมูลไม่สำเร็จ กรุณากดซิงก์อีกครั้ง' : message, syncError ? 'warning' : 'success');
     cleanOAuthUrl();
   } else if (oauthError) {
     const errorMessages = {
@@ -215,4 +215,3 @@ function renderStatus(connections) {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-```

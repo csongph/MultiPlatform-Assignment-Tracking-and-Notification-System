@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -43,6 +44,13 @@ class Settings(BaseSettings):
     GMAIL_SENDER_REDIRECT_URI: str = "http://localhost:8085"
     TOKEN_REFRESH_LEAD_MINUTES: int = 15
     CACHE_TTL_SECONDS: int = 300
+
+    @field_validator("JWT_SECRET_KEY", "TOKEN_ENCRYPTION_KEY")
+    @classmethod
+    def validate_security_secret(cls, value: str) -> str:
+        if len(value) < 32 or value.lower().startswith(("replace-", "your-", "change-")):
+            raise ValueError("Security secrets must be configured with unique values of at least 32 characters")
+        return value
 
 
 @lru_cache

@@ -50,17 +50,17 @@ document.getElementById("editForm").addEventListener("submit", async e => {
     return;
   }
 
-  const patch = {};
-  if (firstName) patch.firstName = firstName;
-  if (lastName) patch.lastName = lastName;
-  if (email) patch.email = email;
-
   try {
-    await DataStore.updateUser(userId, patch);
-    showToast("บันทึกข้อมูลเรียบร้อย");
-    setTimeout(() => (window.location.href = "users.html"), 800);
-  } catch (err) {
-    showToast(err.message);
+    const updated = await DataStore.updateUser(currentUser.id, {
+      firstName: firstName || currentUser.firstName,
+      lastName: lastName || currentUser.lastName,
+      email: email || currentUser.email,
+    });
+    currentUser = updated;
+    showToast("บันทึกข้อมูลผู้ใช้เรียบร้อยแล้ว");
+    window.location.href = "users.html";
+  } catch (error) {
+    setError("email", error.message || "ไม่สามารถบันทึกข้อมูลผู้ใช้ได้");
   }
 });
 

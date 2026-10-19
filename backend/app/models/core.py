@@ -84,7 +84,7 @@ class Assignment(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
     source_status: Mapped[str] = mapped_column(String(30), nullable=False)
     computed_status: Mapped[str] = mapped_column(String(20), index=True, nullable=False)  # not_submitted/submitted/overdue
-    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
