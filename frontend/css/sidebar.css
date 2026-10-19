@@ -1,0 +1,85 @@
+/* ==========================================================================
+   KMAPS Centralized / Shared Sidebar Styles (Material 3 + SIET Theme)
+   ========================================================================== */
+
+:root {
+  --color-brand-purple: #2d1b4e;
+  --color-brand-purple-dark: #23153d;
+  --color-brand-lime: #c8f561;
+  --color-brand-lime-hover: #b8e850;
+  --color-brand-yellow: #fff159;
+  --color-brand-red: #ff173d;
+  --color-brand-green: #00e65b;
+  --color-brand-surface: #ececf1;
+  --color-brand-progress: #c884c7;
+
+  --sidebar-width-sm: 220px;
+  --sidebar-width-lg: 240px;
+  --sidebar-radius: 28px;
+}
+
+/* Sidebar Shell */
+.md3-sidebar {
+  background-color: var(--color-brand-purple);
+  border-radius: var(--sidebar-radius);
+  box-shadow: 0 10px 30px rgba(45, 27, 78, 0.25);
+  box-sizing: border-box;
+  color: #ffffff;
+}
+
+/* Sidebar Navigation Items */
+.md3-nav-item {
+  display: flex;
+  align-items: center;
+  border-radius: 9999px;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  user-select: none;
+  text-decoration: none;
+  font-family: inherit;
+  border: none;
+  background: transparent;
+}
+
+.md3-nav-item:hover:not(.md3-nav-pill-active) {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* Active Nav Pill (Lime Theme) */
+.md3-nav-pill-active {
+  background-color: var(--color-brand-lime) !important;
+  color: #152402 !important;
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(200, 245, 97, 0.35);
+}
+
+.md3-nav-pill-active svg {
+  color: #152402 !important;
+  stroke: #152402;
+}
+
+/* Footer Links & Admin Button */
+.md3-footer-link {
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.md3-footer-link:hover {
+  color: var(--color-brand-lime);
+}
+
+.md3-footer-link.is-active {
+  color: var(--color-brand-lime) !important;
+  font-weight: 700;
+}
+
+/* Custom Item Badge */
+.sidebar-item-badge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}

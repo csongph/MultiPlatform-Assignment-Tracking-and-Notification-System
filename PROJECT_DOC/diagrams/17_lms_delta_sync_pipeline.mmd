@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant SCH as Sync Scheduler (Every 10-15m)
+    participant W as Sync Worker
+    participant Vault as Crypto Vault
+    participant LMS as External LMS API (Google/MS)
+    participant DB as Neon PostgreSQL
+    participant Cache as Redis Cache
+
+    SCH->>W: Trigger Sync Job for User
+    W->>DB: ดึง OAuth Connection (Status = 'connected')
+    W->>Vault: ถอดรหัส Refresh Token (AES-256-GCM)
+    alt Token ใกล้หมดอายุ (< 15 นาที)
+        W->>LMS: Request New Access Token (Refresh Flow)
+        LMS-->>W: New Token Payload
+        W->>Vault: เข้ารหัส Token ใหม่
+        W->>DB: Update oauth_connections (Token + Expiration)
+    end
+    W->>LMS: GET /courses & /coursework (Paginated)
+    LMS-->>W: Raw Course & Assignment Payloads
+    W->>W: 1. Normalize Payload เป็น Common Schema
+    W->>W: 2. Cross-Platform Deduplication (วิชา/งานซ้ำ)
+    W->>W: 3. Compute Status (now > due_at ? overdue : not_submitted)
+    W->>DB: Batch Upsert courses & assignments (Soft-delete removed items)
+    W->>DB: Insert sync_logs (Status = success, items_synced = N)
+    W->>Cache: Invalidate Course Cache for User

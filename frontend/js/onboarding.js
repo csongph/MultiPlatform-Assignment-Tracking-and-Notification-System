@@ -1,4 +1,16 @@
-import { getOnboardingStatus, updateOnboardingConnection, connectGoogleClassroom, connectMicrosoft } from './api.js';
+```javascript
+/**
+ * KMAPS Onboarding Page
+ * จัดการการเชื่อมต่อ Google Classroom และ Microsoft Teams
+ */
+
+import {
+  getOnboardingStatus,
+  disconnectPlatform,
+  connectGoogleClassroom,
+  connectMicrosoft,
+} from './api.js';
+
 import { requireAuth, logout } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
 import { initNavigation } from './navigation.js';
@@ -11,103 +23,173 @@ const providerLabels = {
 async function init() {
   if (!requireAuth()) return;
 
-  // โหลด Navigation Bar (Sidebar สีม่วง + Topbar สีเขียวมะนาว)
+  // Initialize navigation.
   initNavigation('overview');
 
-  document.getElementById('logout-button')?.addEventListener('click', logout);
+  document
+    .getElementById('logout-button')
+    ?.addEventListener('click', logout);
 
+  // Bind provider buttons.
   document.querySelectorAll('[data-provider]').forEach((button) => {
     button.addEventListener('click', () => toggleProvider(button));
   });
 
   await refreshStatus();
 
-  // แสดงผลหลังจาก Google OAuth callback
+  // Handle OAuth callback.
   const urlParams = new URLSearchParams(window.location.search);
   const oauthSuccess = urlParams.get('oauth_success');
   const oauthError = urlParams.get('oauth_error');
   const synced = urlParams.get('synced');
 
   if (oauthSuccess === 'google') {
-    const msg = synced ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ` : 'Google Classroom เชื่อมต่อสำเร็จ!';
-    showToast(msg, 'success');
-    window.history.replaceState({}, '', window.location.pathname);
+    const message = synced
+      ? `Google Classroom เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
+      : 'Google Classroom เชื่อมต่อสำเร็จ!';
+
+    showToast(message, 'success');
+    cleanOAuthUrl();
   } else if (oauthSuccess === 'microsoft') {
-    const msg = synced ? `Microsoft Teams / To Do เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ` : 'Microsoft Teams / To Do เชื่อมต่อสำเร็จ!';
-    showToast(msg, 'success');
-    window.history.replaceState({}, '', window.location.pathname);
+    const message = synced
+      ? `Microsoft Teams เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
+      : 'Microsoft Teams เชื่อมต่อสำเร็จ!';
+
+    showToast(message, 'success');
+    cleanOAuthUrl();
   } else if (oauthError) {
     const errorMessages = {
       google_denied: 'ยกเลิกการเข้าสู่ระบบ Google แล้ว',
       google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
       microsoft_denied: 'ยกเลิกการเข้าสู่ระบบ Microsoft แล้ว',
-      microsoft_failed: 'เชื่อมต่อ Microsoft ไม่สำเร็จ กรุณาลองใหม่',
-      invalid_state: 'Session หมดอายุ กรุณาลองใหม่',
-      session_expired: 'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่',
+      microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่',
+      microsoft_admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      admin_consent_required:
+        'ต้องรอผู้ดูแลระบบ KMITL อนุมัติสิทธิ์ก่อนจึงเชื่อมต่อได้',
+      invalid_state: 'เซสชันการเชื่อมต่อหมดอายุ กรุณาลองใหม่อีกครั้ง',
+      session_expired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
     };
-    showToast(errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่', 'error');
-    window.history.replaceState({}, '', window.location.pathname);
+
+    showToast(
+      errorMessages[oauthError] ||
+        'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
+
+    cleanOAuthUrl();
   }
 }
 
+/**
+ * ลบ OAuth parameters หลังแสดงผลแล้ว
+ */
+function cleanOAuthUrl() {
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
+/**
+ * โหลดสถานะการเชื่อมต่อจาก API
+ */
 async function refreshStatus() {
   try {
     const status = await getOnboardingStatus();
-    renderStatus(status.connections || {});
-  } catch {
-    showToast('Unable to load platform status. Please sign in again.', 'error');
+    renderStatus(status?.connections || {});
+  } catch (error) {
+    console.error('[Onboarding] Failed to load status:', error);
+
+    showToast(
+      'ไม่สามารถโหลดสถานะการเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง',
+      'error',
+    );
   }
 }
 
+/**
+ * เชื่อมต่อหรือยกเลิกการเชื่อมต่อแพลตฟอร์ม
+ */
 async function toggleProvider(button) {
   const provider = button.dataset.provider;
-  const card = document.querySelector(`[data-provider-card="${provider}"]`);
-  const isConnected = card?.classList.contains('connected');
+  const card = document.querySelector(
+    `[data-provider-card="${provider}"]`,
+  );
 
-  // Google/Microsoft connect → ใช้ OAuth flow จริง
-  if ((provider === 'google' || provider === 'microsoft') && !isConnected) {
-    setButtonLoading(button, true, 'Connecting...');
-    if (provider === 'microsoft') {
-      connectMicrosoft();
-    } else {
-      connectGoogleClassroom();
-    }
+  if (!providerLabels[provider]) {
+    showToast('ไม่พบแพลตฟอร์มที่ต้องการเชื่อมต่อ', 'error');
     return;
   }
 
-  let nextStatus = null;
-  setButtonLoading(button, true, isConnected ? 'Disconnecting...' : 'Connecting...');
+  const isConnected = card?.classList.contains('connected');
+
+  setButtonLoading(
+    button,
+    true,
+    isConnected ? 'Disconnecting...' : 'Connecting...',
+  );
 
   try {
-    nextStatus = await updateOnboardingConnection(provider, !isConnected);
+    if (isConnected) {
+      await disconnectPlatform(provider);
+
+      showToast(
+        `${providerLabels[provider]} ยกเลิกการเชื่อมต่อแล้ว`,
+        'success',
+      );
+
+      await refreshStatus();
+      return;
+    }
+
+    // เริ่ม OAuth flow ของแพลตฟอร์มที่เลือก
+    if (provider === 'google') {
+      await connectGoogleClassroom();
+    } else if (provider === 'microsoft') {
+      await connectMicrosoft();
+    }
+  } catch (error) {
+    console.error(`[Onboarding] ${provider} action failed:`, error);
+
     showToast(
-      `${providerLabels[provider]} ${isConnected ? 'disconnected' : 'connected'} successfully.`,
-      'success'
+      error?.message ||
+        `ไม่สามารถดำเนินการกับ ${providerLabels[provider]} ได้ กรุณาลองใหม่`,
+      'error',
     );
-  } catch {
-    showToast('Unable to update connection. Please try again.', 'error');
   } finally {
     setButtonLoading(button, false);
-    if (nextStatus) renderStatus(nextStatus.connections || {});
   }
 }
 
+/**
+ * แสดงสถานะการเชื่อมต่อบนหน้าเว็บ
+ */
 function renderStatus(connections) {
   const connectedCount = Object.values(connections).filter(Boolean).length;
   const continueLink = document.getElementById('continue-link');
   const summary = document.getElementById('connection-summary');
 
   Object.entries(providerLabels).forEach(([provider, label]) => {
-    const card = document.querySelector(`[data-provider-card="${provider}"]`);
-    const button = document.querySelector(`[data-provider="${provider}"]`);
+    const card = document.querySelector(
+      `[data-provider-card="${provider}"]`,
+    );
+
+    const button = document.querySelector(
+      `[data-provider="${provider}"]`,
+    );
+
     const connected = Boolean(connections[provider]);
 
     card?.classList.toggle('connected', connected);
 
     if (button) {
-      button.textContent = connected ? `Disconnect ${label.split(' ')[0]}` : `Connect ${label.split(' ')[0]}`;
+      const shortName = provider === 'google' ? 'Google' : 'Microsoft';
+
+      button.textContent = connected
+        ? `Disconnect ${shortName}`
+        : `Connect ${shortName}`;
+
       button.classList.toggle('btn-danger', connected);
       button.classList.toggle('btn-primary', !connected);
+      button.disabled = false;
     }
   });
 
@@ -119,8 +201,18 @@ function renderStatus(connections) {
 
   if (continueLink) {
     continueLink.classList.toggle('disabled', connectedCount === 0);
-    continueLink.setAttribute('aria-disabled', connectedCount === 0 ? 'true' : 'false');
+    continueLink.setAttribute(
+      'aria-disabled',
+      connectedCount === 0 ? 'true' : 'false',
+    );
+
+    if (connectedCount === 0) {
+      continueLink.setAttribute('tabindex', '-1');
+    } else {
+      continueLink.removeAttribute('tabindex');
+    }
   }
 }
 
 document.addEventListener('DOMContentLoaded', init);
+```

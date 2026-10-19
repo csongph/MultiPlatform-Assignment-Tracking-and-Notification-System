@@ -1,122 +1,498 @@
+```html
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="KMAPS assignment dashboard" />
+  <meta
+    name="description"
+    content="KMAPS - MultiPlatform Assignment Tracking and Notification System"
+  />
+  <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png" />
   <title>Dashboard - KMAPS</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              purple: '#2d1b4e',
+              'purple-dark': '#23153d',
+              lime: '#c8f561',
+              'lime-hover': '#b8e850',
+              yellow: '#fff159',
+              red: '#ff173d',
+              green: '#00e65b',
+              surface: '#ececf1',
+              progress: '#c884c7'
+            }
+          },
+          fontFamily: {
+            prompt: ['Prompt', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            outfit: ['Outfit', 'sans-serif']
+          },
+          borderRadius: {
+            '3xl': '24px',
+            '4xl': '28px',
+            '5xl': '32px'
+          }
+        }
+      }
+    };
+  </script>
+
   <link rel="stylesheet" href="../css/auth.css" />
   <link rel="stylesheet" href="../css/navigation.css" />
+  <link rel="stylesheet" href="../css/sidebar.css" />
   <link rel="stylesheet" href="../css/dashboard.css" />
 </head>
-<body class="app-page">
-  <div class="app-viewport-layout">
-    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
-    <div class="app-main-container">
+
+<body class="bg-[#f0f2f6] text-slate-800 font-prompt min-h-screen p-3 md:p-6 lg:p-8 flex justify-center items-start">
+
+  <div class="w-full max-w-[1400px] flex flex-col md:flex-row gap-5 lg:gap-6 items-stretch">
+
+    <!-- Sidebar -->
+    <div
+      id="sidebar-container"
+      class="app-sidebar-container shrink-0 w-full md:w-[220px] lg:w-[240px]"
+    ></div>
+
+    <!-- Main Content -->
+    <main class="app-main-container flex-1 flex flex-col gap-5 lg:gap-6 min-w-0" role="main">
+
+      <!-- Topbar -->
       <div id="kmaps-topbar-container"></div>
-      <main class="app-shell" role="main" style="width: 100%; max-width: 1200px; padding: 0.5rem 0;">
+
+      <header class="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-4 w-full">
+
+        <div class="relative w-full sm:flex-1 max-w-[560px]">
+          <input
+            type="text"
+            id="search-course-input"
+            class="md3-search-pill w-full py-2.5 pl-5 pr-11 text-sm bg-white text-slate-800 placeholder-slate-400 focus:outline-none font-prompt"
+            placeholder="ค้นหารายวิชา"
+            aria-label="ค้นหารายวิชา"
+          />
+
+          <button
+            type="button"
+            id="search-course-btn"
+            class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
+            aria-label="ค้นหา"
+          >
+            <svg
+              class="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+
+          <div
+            class="md3-chip-lime flex items-center gap-2.5 py-1.5 px-3.5 shadow-sm"
+            title="ข้อมูลผู้ใช้งาน"
+          >
+            <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center overflow-hidden border border-lime-600/20 shrink-0">
+              <svg
+                class="w-7 h-7 text-amber-700"
+                viewBox="0 0 36 36"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path fill="#FFCC4D" d="M18 3c-4.4 0-8 3.6-8 8v5c0 4.4 3.6 8 8 8s8-3.6 8-8v-5c0-4.4-3.6-8-8-8z"/>
+                <path fill="#DD2E44" d="M11 6c1 2 4 4 7 4s6-2 7-4c-2-3-5-4-7-4s-5 1-7 4z"/>
+                <circle cx="14" cy="14" r="1.5" fill="#292F33"/>
+                <circle cx="22" cy="14" r="1.5" fill="#292F33"/>
+                <path fill="#55ACEE" d="M18 24c-6 0-11 4-11 9v3h22v-3c0-5-5-9-11-9z"/>
+              </svg>
+            </div>
+
+            <div class="flex flex-col text-left leading-tight">
+              <span
+                id="user-display-name"
+                class="font-bold text-xs sm:text-sm text-slate-900 tracking-tight"
+              >กำลังโหลด...</span>
+              <span
+                id="user-role-badge"
+                class="text-[11px] font-medium text-slate-700"
+              >นักเรียน</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="sync-now-button"
+            class="md3-chip-lime px-3.5 py-2 flex items-center gap-2 shadow-sm cursor-pointer focus:outline-none text-xs font-bold text-slate-900 transition-transform active:scale-95"
+            title="ซิงก์งานจากทุกแพลตฟอร์มทันที"
+            aria-label="ซิงก์งานตอนนี้"
+          >
+            <span id="sync-icon" class="inline-block text-sm">🔄</span>
+            <span id="sync-text">ซิงก์ตอนนี้</span>
+          </button>
+
+          <button
+            type="button"
+            id="logout-button"
+            class="md3-chip-lime w-10 h-10 flex items-center justify-center p-2 shadow-sm cursor-pointer focus:outline-none"
+            title="ออกจากระบบ"
+            aria-label="ออกจากระบบ"
+          >
+            <svg
+              class="w-5 h-5 text-slate-900"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Overview -->
+      <div id="view-overview" class="view-fade-in flex flex-col gap-5 lg:gap-6">
+
         <header class="app-header">
           <div>
             <p class="app-eyebrow">Assignment dashboard</p>
-            <h1 id="dashboard-title">Welcome to KMAPS</h1>
-            <p id="dashboard-subtitle">Your connected assignment feed is ready.</p>
+            <h1 id="dashboard-title">ยินดีต้อนรับสู่ KMAPS</h1>
+            <p id="dashboard-subtitle">
+              ดูและติดตามงานจากทุกแพลตฟอร์มได้ในที่เดียว
+            </p>
           </div>
+
           <div class="header-actions">
-            <a class="btn btn-secondary app-link-button" href="onboarding.html">Connections</a>
+            <a
+              class="btn btn-secondary app-link-button"
+              href="onboarding.html"
+            >
+              จัดการการเชื่อมต่อ
+            </a>
           </div>
         </header>
 
-    <section class="metrics-grid" aria-label="Assignment overview">
-      <article class="metric-card metric-due">
-        <span class="metric-label">Due Soon</span>
-        <strong id="metric-due-soon">0</strong>
-        <span class="metric-note">Next 7 days</span>
-      </article>
-      <article class="metric-card metric-progress">
-        <span class="metric-label">In Progress</span>
-        <strong id="metric-in-progress">0</strong>
-        <span class="metric-note">Across all courses</span>
-      </article>
-      <article class="metric-card metric-complete">
-        <span class="metric-label">Completed</span>
-        <strong id="metric-completed">0</strong>
-        <span class="metric-note">Across all syncs</span>
-      </article>
-    </section>
+        <!-- Assignment Metrics -->
+        <section
+          class="grid grid-cols-1 sm:grid-cols-3 gap-4"
+          aria-label="ภาพรวมสถิติงาน"
+        >
+          <article class="stat-card stat-card-yellow p-5 flex flex-col justify-between min-h-[120px]">
+            <span class="text-xs sm:text-sm font-medium tracking-tight">
+              งานที่ได้รับมอบหมายทั้งหมด
+            </span>
+            <strong
+              id="metric-total-tasks"
+              class="font-outfit text-4xl sm:text-5xl font-bold tracking-tight mt-2"
+            >0</strong>
+          </article>
 
-    <section class="dashboard-layout">
-      <article class="assignment-panel">
-        <div class="section-heading" style="align-items: center;">
-          <div>
-            <h2>Unified Assignment Feed</h2>
-            <p>Sync assignments from your connected platforms and custom tasks.</p>
+          <article class="stat-card stat-card-red p-5 flex flex-col justify-between min-h-[120px]">
+            <span class="text-xs sm:text-sm font-medium tracking-tight">
+              ครบกำหนดวันนี้
+            </span>
+            <strong
+              id="metric-due-today"
+              class="font-outfit text-4xl sm:text-5xl font-bold tracking-tight mt-2"
+            >0</strong>
+          </article>
+
+          <article class="stat-card stat-card-green p-5 flex flex-col justify-between min-h-[120px]">
+            <span class="text-xs sm:text-sm font-medium tracking-tight">
+              งานที่ส่งแล้ว
+            </span>
+            <strong
+              id="metric-submitted-tasks"
+              class="font-outfit text-4xl sm:text-5xl font-bold tracking-tight mt-2"
+            >0</strong>
+          </article>
+        </section>
+
+        <!-- Legacy Dashboard Metrics -->
+        <section
+          class="metrics-grid"
+          aria-label="Assignment status overview"
+        >
+          <article class="metric-card metric-due">
+            <span class="metric-label">Due Soon</span>
+            <strong id="metric-due-soon">0</strong>
+            <span class="metric-note">Next 7 days</span>
+          </article>
+
+          <article class="metric-card metric-progress">
+            <span class="metric-label">In Progress</span>
+            <strong id="metric-in-progress">0</strong>
+            <span class="metric-note">Across all courses</span>
+          </article>
+
+          <article class="metric-card metric-complete">
+            <span class="metric-label">Completed</span>
+            <strong id="metric-completed">0</strong>
+            <span class="metric-note">Across all syncs</span>
+          </article>
+        </section>
+
+        <!-- Course Progress -->
+        <section
+          class="md3-surface-panel p-6 sm:p-8 flex flex-col gap-6"
+          aria-label="ความคืบหน้ารายวิชา"
+        >
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
+              ความคืบหน้ารายวิชา
+            </h2>
+
+            <button
+              type="button"
+              id="sort-progress-btn"
+              class="p-2 rounded-lg text-slate-700 hover:bg-black/5 transition-colors focus:outline-none"
+              title="เรียงลำดับความคืบหน้า"
+              aria-label="เรียงลำดับความคืบหน้า"
+            >
+              <svg
+                class="w-6 h-6"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <rect x="3" y="6" width="18" height="2.5" rx="1.25"/>
+                <rect x="5" y="11" width="14" height="2.5" rx="1.25"/>
+                <rect x="8" y="16" width="8" height="2.5" rx="1.25"/>
+              </svg>
+            </button>
           </div>
-          <div class="dashboard-toolbar">
-            <select id="filter-platform" class="toolbar-select" aria-label="Filter by Platform">
-              <option value="all">All Platforms</option>
-              <option value="google">Google Classroom</option>
-              <option value="microsoft">Microsoft Teams</option>
-              <option value="custom">Custom Tasks</option>
-            </select>
-            <select id="filter-status" class="toolbar-select" aria-label="Filter by Status">
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
-            </select>
-            <select id="sort-by" class="toolbar-select" aria-label="Sort by">
-              <option value="due">Due Date</option>
-              <option value="title">Title (A-Z)</option>
-            </select>
-          </div>
-        </div>
 
-        <div class="assignment-list" id="assignment-list"></div>
-      </article>
-
-      <div class="sidebar-panels" style="display: flex; flex-direction: column; gap: 1rem;">
-        <aside class="connection-panel">
-          <h2>Connected Platforms</h2>
-          <div class="connection-list" id="connection-list"></div>
-        </aside>
-
-        <aside class="connection-panel">
-          <h2>Add Custom Task</h2>
-          <form id="create-assignment-form" class="custom-assignment-form" novalidate>
-            <div class="form-group">
-              <label class="form-label" for="task-title" style="font-size: 0.75rem;">Task Title</label>
-              <div class="input-group" style="min-height: 2.6rem;">
-                <input type="text" id="task-title" name="title" class="form-input" style="min-height: 2.5rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Solve Homework 3" required />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="task-course" style="font-size: 0.75rem;">Course Name</label>
-              <div class="input-group" style="min-height: 2.6rem;">
-                <input type="text" id="task-course" name="course" class="form-input" style="min-height: 2.5rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Advanced Calculus" required />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="task-due" style="font-size: 0.75rem;">Due Date / Time</label>
-              <div class="input-group" style="min-height: 2.6rem;">
-                <input type="text" id="task-due" name="due" class="form-input" style="min-height: 2.5rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Tomorrow, 18:00" required />
-              </div>
-            </div>
-            <button type="submit" class="btn btn-primary" style="min-height: 2.5rem; padding: 0.5rem 1rem; font-size: 0.875rem;">Add Task</button>
-          </form>
-        </aside>
+          <div
+            id="courses-progress-container"
+            class="flex flex-col gap-6"
+          ></div>
+        </section>
       </div>
-    </section>
-  </main>
-</div>
-</div>
 
+      <!-- Assignment Feed -->
+      <div id="view-assignments" class="view-fade-in hidden flex flex-col gap-6">
+
+        <div class="flex flex-col lg:flex-row gap-6 items-start">
+
+          <section class="flex-1 w-full bg-white rounded-4xl p-6 sm:p-8 shadow-sm border border-slate-200/80">
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+              <div>
+                <h2 class="text-xl font-bold text-slate-900">
+                  รายการงานทั้งหมด
+                </h2>
+                <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
+                  งานจาก Google Classroom, Microsoft Teams และงานที่เพิ่มเอง
+                </p>
+              </div>
+
+              <div class="dashboard-toolbar flex flex-wrap items-center gap-2">
+                <select
+                  id="filter-platform"
+                  class="toolbar-select px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
+                  aria-label="กรองตามแพลตฟอร์ม"
+                >
+                  <option value="all">ทุกแพลตฟอร์ม</option>
+                  <option value="google">Google Classroom</option>
+                  <option value="microsoft">Microsoft Teams</option>
+                  <option value="custom">งานที่เพิ่มเอง</option>
+                </select>
+
+                <select
+                  id="filter-status"
+                  class="toolbar-select px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
+                  aria-label="กรองตามสถานะ"
+                >
+                  <option value="all">ทุกสถานะ</option>
+                  <option value="pending">ยังไม่เสร็จ</option>
+                  <option value="completed">เสร็จสิ้นแล้ว</option>
+                </select>
+
+                <select
+                  id="sort-by"
+                  class="toolbar-select px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full font-prompt focus:outline-none"
+                  aria-label="จัดเรียงตาม"
+                >
+                  <option value="due">กำหนดส่ง</option>
+                  <option value="title">ชื่อ (A-Z)</option>
+                </select>
+              </div>
+            </div>
+
+            <div
+              class="assignment-list mt-4 flex flex-col gap-3"
+              id="assignment-list"
+            ></div>
+          </section>
+
+          <aside class="sidebar-panels w-full lg:w-[320px] shrink-0 flex flex-col gap-4">
+
+            <!-- Add Custom Task -->
+            <div class="connection-panel bg-white rounded-4xl p-6 shadow-sm border border-slate-200/80">
+              <h3 class="text-base font-bold text-slate-900 mb-3">
+                เพิ่มการบ้าน / งานใหม่
+              </h3>
+
+              <form
+                id="create-assignment-form"
+                class="custom-assignment-form flex flex-col gap-3"
+                novalidate
+              >
+                <div class="form-group">
+                  <label
+                    for="task-title"
+                    class="form-label block text-xs font-medium text-slate-700 mb-1"
+                  >
+                    ชื่องาน
+                  </label>
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="task-title"
+                      name="title"
+                      class="form-input w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none"
+                      placeholder="เช่น รายงานส่งท้ายสัปดาห์"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label
+                    for="task-course"
+                    class="form-label block text-xs font-medium text-slate-700 mb-1"
+                  >
+                    ชื่อวิชา
+                  </label>
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="task-course"
+                      name="course"
+                      class="form-input w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none"
+                      placeholder="เช่น การเขียนโปรแกรม"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label
+                    for="task-due"
+                    class="form-label block text-xs font-medium text-slate-700 mb-1"
+                  >
+                    กำหนดส่ง
+                  </label>
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="task-due"
+                      name="due"
+                      class="form-input w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none"
+                      placeholder="เช่น พรุ่งนี้ 18:00"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  class="btn btn-primary w-full mt-2 py-2 px-4 text-xs font-semibold rounded-xl"
+                >
+                  เพิ่มงาน
+                </button>
+              </form>
+            </div>
+
+            <!-- Connected Platforms -->
+            <aside class="connection-panel bg-white rounded-4xl p-6 shadow-sm border border-slate-200/80">
+              <h3 class="text-sm font-bold text-slate-900 mb-3">
+                แพลตฟอร์มที่เชื่อมต่อ
+              </h3>
+
+              <div
+                class="connection-list flex flex-col gap-2"
+                id="connection-list"
+              ></div>
+
+              <a
+                href="onboarding.html"
+                class="inline-block mt-3 text-xs text-brand-purple font-semibold hover:underline"
+              >
+                จัดการการเชื่อมต่อแพลตฟอร์ม →
+              </a>
+            </aside>
+          </aside>
+        </div>
+      </div>
+
+      <!-- Calendar -->
+      <div id="view-calendar" class="view-fade-in hidden flex flex-col gap-6">
+        <section class="bg-white rounded-4xl p-6 sm:p-8 shadow-sm border border-slate-200/80">
+          <h2 class="text-xl font-bold text-slate-900 mb-1">
+            ปฏิทินและกำหนดส่งงาน
+          </h2>
+
+          <p class="text-xs sm:text-sm text-slate-500 mb-6">
+            ตารางกำหนดการส่งงานทั้งหมดของสัปดาห์นี้และสัปดาห์ถัดไป
+          </p>
+
+          <div
+            id="calendar-timeline-container"
+            class="flex flex-col gap-4"
+          ></div>
+        </section>
+      </div>
+
+      <!-- Notifications -->
+      <div id="view-notifications" class="view-fade-in hidden flex flex-col gap-6">
+        <section class="bg-white rounded-4xl p-6 sm:p-8 shadow-sm border border-slate-200/80">
+          <h2 class="text-xl font-bold text-slate-900 mb-1">
+            การแจ้งเตือน
+          </h2>
+
+          <p class="text-xs sm:text-sm text-slate-500 mb-6">
+            ตรวจสอบการแจ้งเตือนเกี่ยวกับงานและกำหนดส่ง
+          </p>
+
+          <div id="notifications-container" class="flex flex-col gap-4"></div>
+        </section>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Runtime Config -->
   <script>
     window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
     window.KMAPS_USE_MOCK_API = false;
   </script>
+
   <script type="module" src="../js/dashboard.js"></script>
 </body>
 </html>
+```

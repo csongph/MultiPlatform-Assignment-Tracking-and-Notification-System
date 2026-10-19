@@ -1,3 +1,4 @@
+```javascript
 /**
  * KMAPS Validation Module
  * Client-side form validation for auth pages
@@ -5,6 +6,9 @@
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * ตรวจสอบรูปแบบอีเมล
+ */
 export function validateEmail(email) {
   const errors = [];
   const trimmed = (email || '').trim();
@@ -15,22 +19,50 @@ export function validateEmail(email) {
     errors.push('Please enter a valid email address.');
   }
 
-  return { valid: errors.length === 0, errors, value: trimmed };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value: trimmed,
+  };
 }
 
-export function validatePassword(password, { minLength = 8 } = {}) {
+/**
+ * ตรวจสอบรหัสผ่าน
+ * ค่าเริ่มต้น: อย่างน้อย 8 ตัวอักษร และไม่เกิน 72 ไบต์
+ */
+export function validatePassword(
+  password,
+  { minLength = 8, maxLengthBytes = 72 } = {},
+) {
   const errors = [];
   const value = password || '';
 
   if (!value) {
     errors.push('Password is required.');
   } else if (value.length < minLength) {
-    errors.push(`Password must be at least ${minLength} characters.`);
+    errors.push(
+      `Password must be at least ${minLength} characters.`,
+    );
+  } else {
+    const byteLength = new TextEncoder().encode(value).length;
+
+    if (byteLength > maxLengthBytes) {
+      errors.push(
+        `Password must not exceed ${maxLengthBytes} bytes (currently ${byteLength} bytes).`,
+      );
+    }
   }
 
-  return { valid: errors.length === 0, errors, value };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value,
+  };
 }
 
+/**
+ * ตรวจสอบการยืนยันรหัสผ่าน
+ */
 export function validateConfirmPassword(password, confirmPassword) {
   const errors = [];
   const value = confirmPassword || '';
@@ -41,9 +73,16 @@ export function validateConfirmPassword(password, confirmPassword) {
     errors.push('Passwords do not match.');
   }
 
-  return { valid: errors.length === 0, errors, value };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value,
+  };
 }
 
+/**
+ * ตรวจสอบชื่อ-นามสกุล
+ */
 export function validateFullName(fullName) {
   const errors = [];
   const trimmed = (fullName || '').trim();
@@ -54,16 +93,33 @@ export function validateFullName(fullName) {
     errors.push('Full name must be at least 2 characters.');
   }
 
-  return { valid: errors.length === 0, errors, value: trimmed };
+  return {
+    valid: errors.length === 0,
+    errors,
+    value: trimmed,
+  };
 }
 
+/**
+ * ตรวจสอบข้อมูลเข้าสู่ระบบ
+ * Login ต้องมีรหัสผ่าน แต่ไม่บังคับความยาวขั้นต่ำ 8 ตัว
+ */
 export function validateLoginForm({ email, password }) {
   const emailResult = validateEmail(email);
-  const passwordResult = validatePassword(password, { minLength: 1 });
+
+  const passwordResult = validatePassword(password, {
+    minLength: 1,
+  });
 
   const fieldErrors = {};
-  if (!emailResult.valid) fieldErrors.email = emailResult.errors[0];
-  if (!passwordResult.valid) fieldErrors.password = passwordResult.errors[0];
+
+  if (!emailResult.valid) {
+    fieldErrors.email = emailResult.errors[0];
+  }
+
+  if (!passwordResult.valid) {
+    fieldErrors.password = passwordResult.errors[0];
+  }
 
   return {
     valid: emailResult.valid && passwordResult.valid,
@@ -75,17 +131,41 @@ export function validateLoginForm({ email, password }) {
   };
 }
 
-export function validateRegisterForm({ full_name, email, password, confirm_password }) {
+/**
+ * ตรวจสอบข้อมูลสมัครสมาชิก
+ */
+export function validateRegisterForm({
+  full_name,
+  email,
+  password,
+  confirm_password,
+}) {
   const fullNameResult = validateFullName(full_name);
   const emailResult = validateEmail(email);
   const passwordResult = validatePassword(password);
-  const confirmResult = validateConfirmPassword(password, confirm_password);
+
+  const confirmResult = validateConfirmPassword(
+    password,
+    confirm_password,
+  );
 
   const fieldErrors = {};
-  if (!fullNameResult.valid) fieldErrors.full_name = fullNameResult.errors[0];
-  if (!emailResult.valid) fieldErrors.email = emailResult.errors[0];
-  if (!passwordResult.valid) fieldErrors.password = passwordResult.errors[0];
-  if (!confirmResult.valid) fieldErrors.confirm_password = confirmResult.errors[0];
+
+  if (!fullNameResult.valid) {
+    fieldErrors.full_name = fullNameResult.errors[0];
+  }
+
+  if (!emailResult.valid) {
+    fieldErrors.email = emailResult.errors[0];
+  }
+
+  if (!passwordResult.valid) {
+    fieldErrors.password = passwordResult.errors[0];
+  }
+
+  if (!confirmResult.valid) {
+    fieldErrors.confirm_password = confirmResult.errors[0];
+  }
 
   return {
     valid:
@@ -102,25 +182,42 @@ export function validateRegisterForm({ full_name, email, password, confirm_passw
   };
 }
 
+/**
+ * แสดงข้อผิดพลาดของแต่ละช่อง
+ */
 export function setFieldError(form, fieldName, message) {
+  if (!form) return;
+
   const input = form.querySelector(`[name="${fieldName}"]`);
-  const errorEl = form.querySelector(`[data-error-for="${fieldName}"]`);
+
+  const errorElement = form.querySelector(
+    `[data-error-for="${fieldName}"]`,
+  );
 
   if (input) {
-    input.setAttribute('aria-invalid', message ? 'true' : 'false');
+    input.setAttribute(
+      'aria-invalid',
+      message ? 'true' : 'false',
+    );
+
     input.classList.toggle('input-error', Boolean(message));
   }
 
-  if (errorEl) {
-    errorEl.textContent = message || '';
-    errorEl.classList.toggle('visible', Boolean(message));
+  if (errorElement) {
+    errorElement.textContent = message || '';
+    errorElement.classList.toggle('visible', Boolean(message));
   }
 }
 
+/**
+ * ล้างข้อความและสถานะข้อผิดพลาดทั้งหมด
+ */
 export function clearFormErrors(form) {
-  form.querySelectorAll('[data-error-for]').forEach((el) => {
-    el.textContent = '';
-    el.classList.remove('visible');
+  if (!form) return;
+
+  form.querySelectorAll('[data-error-for]').forEach((element) => {
+    element.textContent = '';
+    element.classList.remove('visible');
   });
 
   form.querySelectorAll('[aria-invalid="true"]').forEach((input) => {
@@ -129,9 +226,16 @@ export function clearFormErrors(form) {
   });
 }
 
+/**
+ * แสดงข้อผิดพลาดหลายช่องพร้อมกัน
+ */
 export function applyFieldErrors(form, fieldErrors) {
+  if (!form) return;
+
   clearFormErrors(form);
-  Object.entries(fieldErrors).forEach(([field, message]) => {
+
+  Object.entries(fieldErrors || {}).forEach(([field, message]) => {
     setFieldError(form, field, message);
   });
 }
+```

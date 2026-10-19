@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>แก้ไขบัญชีผู้ใช้ | LMS Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-page="users">
+  <div class="app">
+    <main class="main">
+      <div class="page-head">
+        <h1 class="page-title">แก้ไขบัญชีผู้ใช้</h1>
+        <form class="search" action="users.html">
+          <input type="text" placeholder="ค้นหา" />
+          <button type="submit" id="searchBtn" title="ค้นหา"></button>
+        </form>
+      </div>
+
+      <section class="card edit-card">
+        <div class="edit-inner">
+          <div class="current-info" id="currentInfo"></div>
+
+          <form id="editForm" novalidate>
+            <div class="form-row">
+              <label for="firstName">ชื่อ</label>
+              <input type="text" id="firstName" />
+              <div class="field-error" id="firstNameErr"></div>
+            </div>
+            <div class="form-row">
+              <label for="lastName">นามสกุล</label>
+              <input type="text" id="lastName" />
+              <div class="field-error" id="lastNameErr"></div>
+            </div>
+            <div class="form-row wide gap-top">
+              <label for="email">Email</label>
+              <input type="email" id="email" />
+              <div class="field-error" id="emailErr"></div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-cancel" id="cancelBtn">ยกเลิก</button>
+              <button type="submit" class="btn btn-save">บันทึก</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="layout.js"></script>
+  <script src="edit-user.js"></script>
+</body>
+</html>
