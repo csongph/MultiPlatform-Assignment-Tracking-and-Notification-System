@@ -108,14 +108,19 @@ export function requireAuth() {
 
 export async function getSignedInUser() {
   const cached = getUserProfile();
-  if (cached) return cached;
+  if (cached && cached.id !== 'demo-kunagron') return cached;
 
-  const user = await getCurrentUser();
-  if (user) {
-    setAuthSession({ userProfile: user });
+  try {
+    const user = await getCurrentUser();
+    if (user) {
+      setAuthSession({ userProfile: user });
+      return user;
+    }
+  } catch {
+    /* Fallback if fetch fails */
   }
 
-  return user;
+  return cached;
 }
 
 export function logout() {
