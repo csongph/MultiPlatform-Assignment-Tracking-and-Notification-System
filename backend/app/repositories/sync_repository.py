@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.core import Assignment, Course
@@ -154,9 +154,22 @@ class SyncLogRepository:
         items_synced: int,
         error_detail: dict | None = None,
     ) -> None:
+        # Update by primary key instead of mutating + refreshing an ORM row.
+        # The log may have been committed before the provider call; keeping
+        # this operation explicit avoids lazy/expired attribute access in an
+        # async session during OAuth's immediate first sync.
+        await self.db.execute(
+            update(SyncLog)
+            .where(SyncLog.id == sync_log.id)
+            .values(
+                status=status,
+                items_synced=items_synced,
+                error_detail=error_detail,
+                finished_at=datetime.now(timezone.utc),
+            )
+        )
+        await self.db.commit()
         sync_log.status = status
         sync_log.items_synced = items_synced
         sync_log.error_detail = error_detail
         sync_log.finished_at = datetime.now(timezone.utc)
-        await self.db.commit()
-        await self.db.refresh(sync_log)

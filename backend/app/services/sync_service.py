@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -7,6 +9,8 @@ from app.integrations.base_fetcher import BaseAssignmentFetcher, TokenExpiredErr
 from app.models.core import OAuthConnection
 from app.models.logs import SyncLog
 from app.repositories.sync_repository import AssignmentRepository, CourseRepository, SyncLogRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SyncService:
@@ -45,14 +49,30 @@ class SyncService:
             results = await self._fetch_with_refresh(connection, fetcher)
         except Exception as exc:  # noqa: BLE001 - we want to log *any* failure, not crash the worker
             await self.db.rollback()
-            connection.status = "broken"
+            # A Graph permission/server error does not invalidate the OAuth
+            # connection. Only mark it broken when the access token remains
+            # expired after the refresh path has already failed.
+            if isinstance(exc, TokenExpiredError):
+                connection.status = "broken"
+            error_message = f"{type(exc).__name__}: {exc}"
+            logger.error(
+                "Provider sync failed: platform=%s sync_log_id=%s error=%s",
+                connection.platform.name,
+                sync_log.id,
+                error_message,
+            )
             await self.sync_logs.mark_finished(
                 sync_log, status="failed", items_synced=0,
-                error_detail={"error": f"{type(exc).__name__}: {exc}"},
+                error_detail={"error": error_message},
             )
             return sync_log
 
         if not results:
+            logger.warning(
+                "Provider sync returned no courses: platform=%s sync_log_id=%s",
+                connection.platform.name,
+                sync_log.id,
+            )
             await self.sync_logs.mark_finished(
                 sync_log, status="success", items_synced=0,
                 error_detail={"info": "Provider returned no courses; existing synced records were retained."},
@@ -98,7 +118,34 @@ class SyncService:
             connection.status = "connected"
         await self.db.commit()
 
-        await self.sync_logs.mark_finished(sync_log, status="success", items_synced=items_synced)
+        diagnostic = None
+        if items_synced == 0:
+            diagnostic = {
+                "info": (
+                    f"Provider returned {len(seen_course_ids)} courses but no active assignments."
+                )
+            }
+            logger.warning(
+                "Provider sync returned courses but no active assignments: platform=%s "
+                "sync_log_id=%s courses=%s",
+                connection.platform.name,
+                sync_log.id,
+                len(seen_course_ids),
+            )
+        else:
+            logger.info(
+                "Provider sync finished: platform=%s sync_log_id=%s courses=%s assignments=%s",
+                connection.platform.name,
+                sync_log.id,
+                len(seen_course_ids),
+                items_synced,
+            )
+        await self.sync_logs.mark_finished(
+            sync_log,
+            status="success",
+            items_synced=items_synced,
+            error_detail=diagnostic,
+        )
         return sync_log
 
     async def _fetch_with_refresh(

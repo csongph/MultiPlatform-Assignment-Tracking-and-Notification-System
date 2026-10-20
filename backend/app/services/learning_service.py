@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 
@@ -21,6 +22,8 @@ from app.schemas.learning import (
     SyncJobOut,
 )
 from app.services.oauth_service import ensure_supported_platform
+
+logger = logging.getLogger(__name__)
 
 
 class LearningService:
@@ -218,6 +221,14 @@ class LearningService:
         sync_log = await self.learning.get_sync_log(user_id, sync_id)
         if sync_log is None:
             raise NotFoundError("Sync job not found")
+        if sync_log.status in {"success", "succeeded", "completed", "failed", "error", "skipped", "partial"}:
+            logger.info(
+                "Sync finished: platform=%s status=%s items_synced=%s detail=%s",
+                sync_log.platform.name,
+                sync_log.status,
+                sync_log.items_synced,
+                sync_log.error_detail,
+            )
         return self._sync_out(sync_log, sync_log.platform.name)
 
     @staticmethod

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -209,6 +210,77 @@ async def test_fetcher_assignment_without_due_date():
         asg = results[0].assignments[0]
         assert asg.due_at is None
         assert asg.computed_status == "not_submitted"
+
+
+@pytest.mark.asyncio
+async def test_fetcher_processes_more_assignments_than_http_concurrency_limit():
+    """Assignment fan-out must not deadlock while fetching submissions."""
+    fetcher = MicrosoftTeamsFetcher(max_concurrency=2)
+    assignments = [
+        {
+            "id": f"asg_{index}",
+            "classId": "c1",
+            "displayName": f"Assignment {index}",
+            "status": "published",
+            "dueDateTime": None,
+        }
+        for index in range(6)
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url_str = str(request.url)
+        if "/education/me/classes" in url_str:
+            return httpx.Response(200, json={"value": [{"id": "c1", "displayName": "Class"}]})
+        if "/education/me/assignments" in url_str:
+            return httpx.Response(200, json={"value": assignments})
+        if "/submissions" in url_str:
+            return httpx.Response(200, json={"value": []})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.AsyncClient(transport=transport)
+    try:
+        with patch("app.integrations.microsoft_teams_adapter.httpx.AsyncClient", return_value=client):
+            results = await asyncio.wait_for(fetcher.fetch_assignments("token"), timeout=2)
+    finally:
+        await client.aclose()
+
+    assert len(results) == 1
+    assert len(results[0].assignments) == len(assignments)
+
+
+@pytest.mark.asyncio
+async def test_fetcher_expands_submissions_to_avoid_one_request_per_assignment():
+    fetcher = MicrosoftTeamsFetcher()
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        url_str = str(request.url)
+        if "/education/me/classes" in url_str:
+            return httpx.Response(200, json={"value": [{"id": "c1", "displayName": "Class"}]})
+        if "/education/me/assignments" in url_str:
+            assert request.url.params.get("$expand") == "submissions"
+            return httpx.Response(200, json={"value": [{
+                "id": "a1",
+                "classId": "c1",
+                "displayName": "Assignment",
+                "status": "published",
+                "dueDateTime": None,
+                "submissions": [{"id": "s1", "status": "submitted"}],
+            }]})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.AsyncClient(transport=transport)
+    try:
+        with patch("app.integrations.microsoft_teams_adapter.httpx.AsyncClient", return_value=client):
+            results = await fetcher.fetch_assignments("token")
+    finally:
+        await client.aclose()
+
+    assert len(requests) == 2  # classes + assignments; no per-assignment call
+    assert results[0].assignments[0].computed_status == "submitted"
 
 
 @pytest.mark.asyncio

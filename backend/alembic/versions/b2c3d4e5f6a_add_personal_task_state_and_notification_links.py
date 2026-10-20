@@ -67,15 +67,52 @@ def upgrade() -> None:
         "ON user_assignment_status(user_id, assignment_id) WHERE is_overdue = TRUE"
     )
     op.execute("CREATE INDEX IF NOT EXISTS ix_notifications_notification_rule_id ON notifications(notification_rule_id)")
+    # notification_rules may already use the value/unit schema even when the
+    # Alembic version is behind. Ensure both the legacy calculation column and
+    # current UI columns exist before seeding a default rule.
+    op.execute(
+        "ALTER TABLE notification_rules "
+        "ADD COLUMN IF NOT EXISTS lead_time_minutes INTEGER NOT NULL DEFAULT 60"
+    )
+    op.execute("ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS lead_time_value INTEGER")
+    op.execute("ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS lead_time_unit VARCHAR(10)")
+    op.execute("""
+        UPDATE notification_rules
+        SET
+            lead_time_value = CASE
+                WHEN lead_time_minutes % 1440 = 0 THEN lead_time_minutes / 1440
+                WHEN lead_time_minutes % 60 = 0 THEN lead_time_minutes / 60
+                ELSE lead_time_minutes
+            END,
+            lead_time_unit = CASE
+                WHEN lead_time_minutes % 1440 = 0 THEN 'day'
+                WHEN lead_time_minutes % 60 = 0 THEN 'hour'
+                ELSE 'minute'
+            END
+        WHERE lead_time_value IS NULL OR lead_time_unit IS NULL
+    """)
     op.execute("""
         INSERT INTO notification_rules (
-            id, user_id, type, lead_time_minutes, sequence_order, is_enabled, created_at, updated_at
+            id, user_id, type, lead_time_minutes, lead_time_value, lead_time_unit,
+            sequence_order, is_enabled, created_at, updated_at
         )
         SELECT
             gen_random_uuid(),
             users.id,
             'due_soon',
             COALESCE(notification_settings.lead_time_minutes, 60),
+            CASE
+                WHEN COALESCE(notification_settings.lead_time_minutes, 60) % 1440 = 0
+                    THEN COALESCE(notification_settings.lead_time_minutes, 60) / 1440
+                WHEN COALESCE(notification_settings.lead_time_minutes, 60) % 60 = 0
+                    THEN COALESCE(notification_settings.lead_time_minutes, 60) / 60
+                ELSE COALESCE(notification_settings.lead_time_minutes, 60)
+            END,
+            CASE
+                WHEN COALESCE(notification_settings.lead_time_minutes, 60) % 1440 = 0 THEN 'day'
+                WHEN COALESCE(notification_settings.lead_time_minutes, 60) % 60 = 0 THEN 'hour'
+                ELSE 'minute'
+            END,
             1,
             TRUE,
             now(),

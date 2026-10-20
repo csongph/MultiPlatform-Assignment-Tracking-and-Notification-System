@@ -8,8 +8,6 @@ Create Date: 2026-08-31 09:33:00.000000
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = '7a8b9c0d1e2f'
@@ -20,29 +18,42 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # 1. Add description and instructor_name to courses
-    op.add_column('courses', sa.Column('description', sa.Text(), nullable=True))
-    op.add_column('courses', sa.Column('instructor_name', sa.String(length=150), nullable=True))
+    op.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS description TEXT")
+    op.execute("ALTER TABLE courses ADD COLUMN IF NOT EXISTS instructor_name VARCHAR(150)")
 
     # 2. Add reminder_intervals to notification_settings
-    op.add_column('notification_settings', sa.Column('reminder_intervals', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.execute("ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS reminder_intervals JSONB")
 
     # 3. Add tier to notifications and unique constraint
-    op.add_column('notifications', sa.Column('tier', sa.SmallInteger(), server_default='1', nullable=False))
-    op.create_unique_constraint('uq_notification_user_ass_type_tier', 'notifications', ['user_id', 'assignment_id', 'type', 'tier'])
+    op.execute("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tier SMALLINT NOT NULL DEFAULT 1")
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'uq_notification_user_ass_type_tier'
+                  AND conrelid = 'notifications'::regclass
+            ) THEN
+                ALTER TABLE notifications
+                    ADD CONSTRAINT uq_notification_user_ass_type_tier
+                    UNIQUE (user_id, assignment_id, type, tier);
+            END IF;
+        END $$
+    """)
 
     # 4. Create password_recovery_tokens table
-    op.create_table('password_recovery_tokens',
-        sa.Column('id', sa.UUID(), nullable=False),
-        sa.Column('user_id', sa.UUID(), nullable=False),
-        sa.Column('token_hash', sa.String(length=255), nullable=False),
-        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('is_used', sa.Boolean(), server_default=sa.text('false'), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_password_recovery_tokens_user_id'), 'password_recovery_tokens', ['user_id'], unique=False)
-    op.create_index(op.f('ix_password_recovery_tokens_token_hash'), 'password_recovery_tokens', ['token_hash'], unique=False)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS password_recovery_tokens (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash VARCHAR(255) NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            is_used BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_password_recovery_tokens_user_id ON password_recovery_tokens(user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_password_recovery_tokens_token_hash ON password_recovery_tokens(token_hash)")
 
 
 def downgrade() -> None:

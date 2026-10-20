@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, ServiceUnavailableError, UnauthorizedError
 from app.integrations import SUPPORTED_PLATFORMS
 from app.models.auth import User
 from app.repositories.oauth_repository import OAuthConnectionRepository
@@ -138,9 +138,15 @@ async def oauth_callback(
             return RedirectResponse(url=error_url, status_code=302)
 
         logger.error("OAuth callback error for platform %s (%s)", platform, type(exc).__name__)
+        if isinstance(exc, UnauthorizedError):
+            public_error = "invalid_state"
+        elif isinstance(exc, ServiceUnavailableError):
+            public_error = f"{provider_slug}_service_unavailable"
+        else:
+            public_error = f"{provider_slug}_failed"
         error_url = (
             f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_ERROR_PATH}"
-            f"?oauth_error={provider_slug}_failed"
+            f"?oauth_error={public_error}"
         )
         return RedirectResponse(url=error_url, status_code=302)
     except Exception as exc:
@@ -159,21 +165,47 @@ async def oauth_callback(
     # (that would raise MissingGreenlet on the async engine).
     synced_count = 0
     sync_failed = connection is None
+    sync_error_reason = "provider_error" if sync_failed else None
     connection = await OAuthConnectionRepository(db).get_by_id_with_platform(connection.id)
     if connection is not None:
         try:
             sync_log = await SyncService(db).sync_connection(connection)
             synced_count = sync_log.items_synced
-            sync_failed = sync_log.status == "failed"
-        except Exception:
+            # A provider returning no classes is a successful HTTP exchange,
+            # but it is not a successful initial import. Surface that result
+            # so the user knows the connected account did not provide data.
+            sync_failed = sync_log.status == "failed" or bool(
+                sync_log.error_detail and sync_log.error_detail.get("info")
+            )
+            if sync_failed:
+                detail = sync_log.error_detail or {}
+                info = str(detail.get("info", "")).lower()
+                error_detail = str(detail.get("error", "")).lower()
+                if "no courses" in info:
+                    sync_error_reason = "no_classes"
+                elif "no active assignments" in info:
+                    sync_error_reason = "no_assignments"
+                elif "forbidden (403)" in error_detail:
+                    sync_error_reason = "permission_denied"
+                elif "401" in error_detail or "tokenexpired" in error_detail:
+                    sync_error_reason = "token_expired"
+                else:
+                    sync_error_reason = "provider_error"
+        except Exception as exc:
             # The connection itself succeeded - that's what matters for
             # onboarding. The periodic sync will retry if this failed.
+            logger.exception("Initial sync failed after OAuth connection for platform %s (%s)", platform, type(exc).__name__)
             sync_failed = True
+            sync_error_reason = "provider_error"
 
+    sync_error_query = (
+        f"&sync_error=1&sync_reason={sync_error_reason or 'provider_error'}"
+        if sync_failed else ""
+    )
     success_url = (
         f"{settings.FRONTEND_ORIGIN}{settings.FRONTEND_ONBOARDING_SUCCESS_PATH}"
         f"?oauth_success={provider_slug}&synced={synced_count}"
-        f"{'&sync_error=1' if sync_failed else ''}"
+        f"{sync_error_query}"
     )
     return RedirectResponse(url=success_url, status_code=302)
 

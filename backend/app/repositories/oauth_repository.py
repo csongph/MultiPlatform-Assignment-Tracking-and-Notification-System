@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,20 +25,35 @@ class OAuthConnectionRepository:
         self, user_id: uuid.UUID, platform_id: int
     ) -> OAuthConnection | None:
         result = await self.db.execute(
-            select(OAuthConnection).where(
+            select(OAuthConnection)
+            .where(
                 OAuthConnection.user_id == user_id,
                 OAuthConnection.platform_id == platform_id,
             )
+            # Be deterministic when cleaning up databases created before the
+            # unique constraint was installed. The migration removes extras.
+            .order_by(
+                case((OAuthConnection.status == "connected", 0), else_=1),
+                OAuthConnection.connected_at.desc(),
+                OAuthConnection.id.desc(),
+            )
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_by_user_and_platform_name(self, user_id: uuid.UUID, platform_name: str) -> OAuthConnection | None:
         result = await self.db.execute(
             select(OAuthConnection)
             .join(Platform)
             .where(OAuthConnection.user_id == user_id, Platform.name == platform_name)
+            .order_by(
+                case((OAuthConnection.status == "connected", 0), else_=1),
+                OAuthConnection.connected_at.desc(),
+                OAuthConnection.id.desc(),
+            )
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def list_for_user(self, user_id: uuid.UUID) -> list[OAuthConnection]:
         result = await self.db.execute(
@@ -66,8 +81,14 @@ class OAuthConnectionRepository:
                 OAuthConnection.user_id == user_id,
                 OAuthConnection.platform_id == platform_id,
             )
+            .order_by(
+                case((OAuthConnection.status == "connected", 0), else_=1),
+                OAuthConnection.connected_at.desc(),
+                OAuthConnection.id.desc(),
+            )
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def list_all_connected(self) -> list[OAuthConnection]:
         """Every currently-connected connection, across all users — used by

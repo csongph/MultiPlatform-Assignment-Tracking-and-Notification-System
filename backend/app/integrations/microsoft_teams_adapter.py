@@ -47,6 +47,9 @@ class MicrosoftTeamsAdapter(BaseOAuthAdapter):
             "response_type": "code",
             "response_mode": "query",
             "scope": " ".join(SCOPES),
+            # Do not silently reuse a Microsoft account cached by the browser;
+            # users may have separate personal and school/work accounts.
+            "prompt": "select_account",
             "state": state,
         }
         return f"{_authorization_endpoint()}?{urlencode(params)}"
@@ -252,8 +255,12 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         return await self._fetch_paged_items(client, f"{GRAPH_API_BASE}/education/me/classes")
 
     async def _list_user_assignments(self, client: httpx.AsyncClient) -> list[dict]:
-        """Fetch all assignments for the user in a single aggregated call."""
-        return await self._fetch_paged_items(client, f"{GRAPH_API_BASE}/education/me/assignments")
+        """Fetch assignments and their submissions together to avoid N+1 calls."""
+        return await self._fetch_paged_items(
+            client,
+            f"{GRAPH_API_BASE}/education/me/assignments",
+            params={"$expand": "submissions"},
+        )
 
     async def _process_assignments_for_class(
         self,
@@ -263,8 +270,10 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
     ) -> list[RemoteAssignment]:
         """Processes assignments for a class and calculates submission status."""
         async def limited(raw_asg: dict) -> RemoteAssignment:
-            async with self.semaphore:
-                return await self._to_remote_assignment(client, class_id, raw_asg)
+            # _get_with_retry applies the shared semaphore to each actual HTTP
+            # request. Acquiring it here as well deadlocks when concurrent
+            # assignment tasks hold every permit while waiting for submissions.
+            return await self._to_remote_assignment(client, class_id, raw_asg)
 
         tasks = [limited(raw_asg) for raw_asg in raw_assignments
                  if raw_asg.get("status") not in ("draft", "deactivated")]
@@ -302,6 +311,7 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
             class_id=class_id,
             assignment_id=assignment_id,
             due_at=due_at,
+            submissions=self._expanded_submissions(raw_asg),
         )
 
         return RemoteAssignment(
@@ -320,6 +330,7 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         class_id: str,
         assignment_id: str,
         due_at: datetime | None,
+        submissions: list[dict] | None = None,
     ) -> str:
         """
         Fetches submissions for this assignment and maps to standard computed status:
@@ -329,7 +340,11 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         url = f"{GRAPH_API_BASE}/education/classes/{class_id}/assignments/{assignment_id}/submissions"
 
         try:
-            submissions = await self._fetch_paged_items(client, url)
+            # Graph supports expanding submissions on an assignment collection.
+            # Keep the per-assignment endpoint as a compatibility fallback only
+            # when the provider omitted the expanded relation entirely.
+            if submissions is None:
+                submissions = await self._fetch_paged_items(client, url)
             if submissions:
                 # In delegated student permissions, this list only includes the student's submission.
                 sub_status = (submissions[0].get("status") or "").lower()
@@ -341,6 +356,19 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         if due_at is not None and due_at < now:
             return "overdue"
         return "not_submitted"
+
+    @staticmethod
+    def _expanded_submissions(raw_assignment: dict) -> list[dict] | None:
+        """Normalize the expanded collection while distinguishing missing from empty."""
+        if "submissions" not in raw_assignment:
+            return None
+        value = raw_assignment.get("submissions")
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            items = value.get("value")
+            return items if isinstance(items, list) else []
+        return []
 
     @staticmethod
     def _parse_iso_datetime(iso_str: str | None) -> datetime | None:

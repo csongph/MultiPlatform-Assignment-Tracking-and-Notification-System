@@ -219,6 +219,10 @@ async function triggerManualSync() {
     if (failed) {
       const detail = failed.error_detail?.error || failed.error_detail?.reason;
       await finishSync(false, detail || 'การซิงก์ล้มเหลว กรุณาตรวจสอบสิทธิ์การเชื่อมต่อแล้วลองใหม่');
+    } else if (statuses.some((item) => item.status === 'success' && item.error_detail?.info)) {
+      const emptyProvider = statuses.find((item) => item.status === 'success' && item.error_detail?.info);
+      const providerName = emptyProvider.platform === 'microsoft_teams' ? 'Microsoft Teams' : 'Google Classroom';
+      await finishSync(false, `${providerName}: ${emptyProvider.error_detail.info}`);
     } else if (Date.now() >= deadline && !statuses.every((item) => ['success', 'succeeded', 'completed'].includes((item.status || '').toLowerCase()))) {
       await finishSync(true, 'การซิงก์ยังทำงานอยู่เบื้องหลัง');
     } else {

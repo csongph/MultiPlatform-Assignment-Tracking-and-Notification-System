@@ -42,6 +42,7 @@ async function init() {
   const oauthError = urlParams.get('oauth_error');
   const synced = urlParams.get('synced');
   const syncError = urlParams.get('sync_error');
+  const syncReason = urlParams.get('sync_reason');
 
   if (oauthSuccess === 'google') {
     const message = synced
@@ -55,12 +56,26 @@ async function init() {
       ? `Microsoft Teams เชื่อมต่อสำเร็จ! ดึงงานได้ ${synced} รายการ`
       : 'Microsoft Teams เชื่อมต่อสำเร็จ!';
 
-    showToast(syncError ? 'เชื่อมต่อ Microsoft Teams แล้ว แต่ดึงข้อมูลไม่สำเร็จ กรุณากดซิงก์อีกครั้ง' : message, syncError ? 'warning' : 'success');
+    const microsoftSyncMessages = {
+      no_classes: 'เชื่อม Microsoft แล้ว แต่บัญชีนี้ไม่พบชั้นเรียน Teams Education ที่เข้าถึงได้ ตรวจว่าใช้บัญชีโรงเรียนและเข้าร่วมชั้นเรียนแล้ว',
+      no_assignments: 'เชื่อม Microsoft แล้ว แต่ไม่พบงานที่เผยแพร่ในชั้นเรียนที่เข้าถึงได้',
+      permission_denied: 'Microsoft Graph ปฏิเสธสิทธิ์ Education (403) ให้ผู้ดูแล Microsoft 365 ตรวจ admin consent และสิทธิ์ Education ของ tenant',
+      token_expired: 'โทเคน Microsoft หมดอายุและต่ออายุไม่สำเร็จ ให้ยกเลิกการเชื่อมต่อแล้วเชื่อม Microsoft ใหม่',
+      provider_error: 'เชื่อม Microsoft แล้ว แต่ซิงก์ข้อมูลไม่สำเร็จ ตรวจบรรทัด Provider sync ในหน้าต่าง backend',
+    };
+    const syncMessage = syncError
+      ? microsoftSyncMessages[syncReason] || microsoftSyncMessages.provider_error
+      : message;
+    showToast(syncMessage, syncError ? 'warning' : 'success');
     cleanOAuthUrl();
   } else if (oauthError) {
+    const syncError = urlParams.get('sync_error') === '1';
     const errorMessages = {
       google_denied: 'ยกเลิกการเข้าสู่ระบบ Google แล้ว',
       google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
+      google_admin_consent_required: 'Google Classroom ต้องการสิทธิ์เพิ่มเติม กรุณาตรวจสอบการตั้งค่า OAuth และสิทธิ์ Classroom API',
+      google_service_unavailable: 'ระบบตรวจสอบเซสชันเชื่อมต่อใช้งานไม่ได้ กรุณาตรวจ Redis แล้วเริ่มเชื่อมต่อใหม่',
+      microsoft_service_unavailable: 'ระบบตรวจสอบเซสชันเชื่อมต่อใช้งานไม่ได้ กรุณาตรวจ Redis แล้วเริ่มเชื่อมต่อใหม่',
       microsoft_denied: 'ยกเลิกการเข้าสู่ระบบ Microsoft แล้ว',
       microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่',
       microsoft_admin_consent_required:
@@ -72,9 +87,10 @@ async function init() {
     };
 
     showToast(
-      errorMessages[oauthError] ||
-        'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
-      'error',
+      syncError
+        ? 'เชื่อมต่อบัญชีแล้ว แต่ดึงข้อมูลจากแพลตฟอร์มไม่สำเร็จ ตรวจสอบสิทธิ์ Classroom API และ log ของ backend'
+        : errorMessages[oauthError] || 'การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      syncError ? 'warning' : 'error',
     );
 
     cleanOAuthUrl();

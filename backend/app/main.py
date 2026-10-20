@@ -20,14 +20,6 @@ origins = [
     "http://127.0.0.1:5501",
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.include_router(api_router, prefix="/api/v1")
 
 
@@ -71,3 +63,15 @@ async def health(db: AsyncSession = Depends(get_db)):
 @app.get("/api/v1/ping")
 async def ping():
     return {"message": "KMAPS MultiPlatform Assignment Tracking API is running."}
+
+
+# Wrap the complete ASGI app so even unexpected 500 responses carry CORS
+# headers. Otherwise browsers hide the actual backend error behind a CORS
+# message, making failed requests (including /sync) impossible to diagnose.
+app = CORSMiddleware(
+    app,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

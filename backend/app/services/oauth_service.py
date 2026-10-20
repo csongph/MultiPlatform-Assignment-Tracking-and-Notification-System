@@ -4,7 +4,7 @@ import secrets
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.exceptions import NotFoundError, ServiceUnavailableError, UnauthorizedError
 from app.core.security import create_oauth_state_token, decode_oauth_state_token, encrypt_token
 from app.integrations import SUPPORTED_PLATFORMS, get_adapter
 from app.models.core import OAuthConnection
@@ -53,7 +53,7 @@ class OAuthOnboardingService:
         except UnauthorizedError:
             raise
         except Exception as exc:
-            raise UnauthorizedError("OAuth state verification service is unavailable") from exc
+            raise ServiceUnavailableError("OAuth state verification service is unavailable") from exc
 
         platform = await self.platforms.get_by_name(platform_name)
         if platform is None:
