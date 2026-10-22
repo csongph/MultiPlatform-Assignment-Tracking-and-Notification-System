@@ -10,9 +10,10 @@ import {
   connectMicrosoft,
 } from './api.js';
 
-import { requireAuth } from './auth.js';
+import { requireAuth, getSignedInUser, logout } from './auth.js';
+import { getUserProfile } from './storage.js';
 import { showToast, setButtonLoading } from './ui.js';
-import { initNavigation } from './navigation.js';
+import { initSidebar, updateSidebarAdminStatus } from './sidebar.js';
 
 const providerLabels = {
   google: 'Google Classroom',
@@ -22,8 +23,26 @@ const providerLabels = {
 async function init() {
   if (!requireAuth()) return;
 
-  // Initialize navigation.
-  initNavigation('connect');
+  // Initialize shared sidebar component.
+  await initSidebar({
+    container: 'sidebar-container',
+    active: 'onboarding',
+    onNavigate: (tabId) => {
+      if (tabId === 'assignments') {
+        window.location.href = 'assignments.html';
+        return true;
+      }
+      return false;
+    },
+  });
+
+  await renderUserProfile();
+
+  document
+    .getElementById('logout-button')
+    ?.addEventListener('click', logout);
+
+  setupSearchFilter();
 
   // Bind provider buttons.
   document.querySelectorAll('[data-provider]').forEach((button) => {
@@ -94,6 +113,54 @@ async function init() {
 }
 
 /**
+ * แสดงข้อมูลผู้ใช้งานบนแถบด้านบน
+ */
+async function renderUserProfile() {
+  let user = getUserProfile();
+  if (!user) {
+    try {
+      user = await getSignedInUser();
+    } catch {
+      user = null;
+    }
+  }
+
+  const nameEl = document.getElementById('user-display-name');
+  const roleEl = document.getElementById('user-role-badge');
+
+  const displayName =
+    user?.full_name || user?.display_name || user?.name || user?.email || 'ผู้ใช้งาน';
+
+  if (nameEl) {
+    nameEl.textContent = displayName;
+  }
+
+  if (roleEl) {
+    roleEl.textContent = user?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักเรียน';
+  }
+
+  if (user?.role === 'admin') {
+    updateSidebarAdminStatus(true);
+  }
+}
+
+/**
+ * กรองการ์ดแพลตฟอร์มจากช่องค้นหาด้านบน
+ */
+function setupSearchFilter() {
+  const searchInput = document.getElementById('search-platform-input');
+  if (!searchInput) return;
+
+  searchInput.addEventListener('input', (event) => {
+    const query = (event.target.value || '').trim().toLowerCase();
+    document.querySelectorAll('[data-provider-card]').forEach((card) => {
+      const text = (card.textContent || '').toLowerCase();
+      card.classList.toggle('hidden', Boolean(query && !text.includes(query)));
+    });
+  });
+}
+
+/**
  * ลบ OAuth parameters หลังแสดงผลแล้ว
  */
 function cleanOAuthUrl() {
@@ -136,7 +203,7 @@ async function toggleProvider(button) {
   setButtonLoading(
     button,
     true,
-    isConnected ? 'Disconnecting...' : 'Connecting...',
+    isConnected ? 'กำลังยกเลิกการเชื่อมต่อ...' : 'กำลังเชื่อมต่อ...',
   );
 
   try {
@@ -175,9 +242,24 @@ async function toggleProvider(button) {
  * แสดงสถานะการเชื่อมต่อบนหน้าเว็บ
  */
 function renderStatus(connections) {
-  const connectedCount = Object.values(connections).filter(Boolean).length;
+  const normalized = {
+    google: Boolean(connections.google ?? connections.google_classroom),
+    microsoft: Boolean(connections.microsoft ?? connections.microsoft_teams),
+  };
+
+  const totalPlatforms = Object.keys(providerLabels).length;
+  const connectedCount = Object.values(normalized).filter(Boolean).length;
+  const pendingCount = Math.max(0, totalPlatforms - connectedCount);
+
   const continueLink = document.getElementById('continue-link');
   const summary = document.getElementById('connection-summary');
+  const statTotalEl = document.getElementById('stat-total-platforms');
+  const statConnectedEl = document.getElementById('stat-connected-count');
+  const statPendingEl = document.getElementById('stat-pending-count');
+
+  if (statTotalEl) statTotalEl.textContent = String(totalPlatforms);
+  if (statConnectedEl) statConnectedEl.textContent = String(connectedCount);
+  if (statPendingEl) statPendingEl.textContent = String(pendingCount);
 
   Object.entries(providerLabels).forEach(([provider, label]) => {
     const card = document.querySelector(
@@ -188,16 +270,31 @@ function renderStatus(connections) {
       `[data-provider="${provider}"]`,
     );
 
-    const connected = Boolean(connections[provider]);
+    const statusBadge = document.getElementById(`${provider}-status-badge`);
+    const connected = Boolean(normalized[provider]);
 
     card?.classList.toggle('connected', connected);
 
-    if (button) {
-      const shortName = provider === 'google' ? 'Google' : 'Microsoft';
+    if (statusBadge) {
+      statusBadge.innerHTML = connected
+        ? `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            เชื่อมต่อแล้ว
+          </span>
+        `
+        : `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+            ยังไม่ได้เชื่อมต่อ
+          </span>
+        `;
+    }
 
+    if (button) {
       button.textContent = connected
-        ? `Disconnect ${shortName}`
-        : `Connect ${shortName}`;
+        ? `ยกเลิกการเชื่อมต่อ ${label}`
+        : `เชื่อมต่อ ${label}`;
 
       button.classList.toggle('btn-danger', connected);
       button.classList.toggle('btn-primary', !connected);
@@ -207,8 +304,8 @@ function renderStatus(connections) {
 
   if (summary) {
     summary.textContent = connectedCount
-      ? `${connectedCount} platform${connectedCount > 1 ? 's' : ''} connected. You can continue to the dashboard.`
-      : 'Connect one platform to unlock your dashboard.';
+      ? `เชื่อมต่อแล้ว ${connectedCount} แพลตฟอร์ม คุณสามารถเข้าสู่หน้าแดชบอร์ดได้ทันที`
+      : 'เชื่อมต่ออย่างน้อย 1 แพลตฟอร์มเพื่อปลดล็อกแดชบอร์ดของคุณ';
   }
 
   if (continueLink) {
