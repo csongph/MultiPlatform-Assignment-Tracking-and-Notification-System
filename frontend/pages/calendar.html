@@ -3,11 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KMAPS - ปฏิทินและการแจ้งเตือน</title>
+  <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png">
+  <title>ปฏิทิน - LMS KMAPS</title>
   <!-- Google Fonts: Prompt -->
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="../css/auth.css">
+  <link rel="stylesheet" href="../css/calendarstyle.css">
+  <link rel="stylesheet" href="../css/navigation.css">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -22,58 +26,15 @@
     }
   </script>
 </head>
-<body class="bg-[#f0f0f2] flex justify-center items-center min-h-screen p-5 font-prompt">
+<body class="app-page">
 
-  <div class="app-container flex w-full max-w-[1280px] h-[850px] bg-white rounded-[24px] overflow-hidden shadow-lg p-4 gap-5">
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <main class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <div class="app-content">
     
-    <!-- Left Sidebar -->
-    <aside class="sidebar w-[260px] bg-gradient-to-b from-[#1d0c33] via-[#3a225e] to-[#573a81] rounded-[20px] flex flex-col p-[24px_16px] text-white">
-      <div class="brand-logo flex justify-center items-center mb-10 mt-2">
-        <div class="w-[70px] h-[70px] bg-gradient-to-br from-[#7b2cbf] to-[#ff007f] rounded-full flex justify-center items-center text-3xl shadow-[0_4px_15px_rgba(255,0,127,0.4)]">
-          <i class="fa-solid fa-graduation-cap text-white"></i>
-        </div>
-      </div>
-
-      <nav class="nav-menu flex flex-col gap-4 flex-grow justify-center">
-        <a href="dashboard.html" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-[#d1d0d7] text-sm font-medium hover:text-white transition-all">
-          <i class="fa-solid fa-border-all text-xl"></i>
-          <span>ภาพรวม</span>
-        </a>
-        <a href="assignments.html" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] text-[#d1d0d7] text-sm font-medium hover:text-white transition-all">
-          <i class="fa-solid fa-square-check text-xl"></i>
-          <span>งานที่ได้รับมอบหมาย</span>
-        </a>
-        <a href="calendar.html" class="flex items-center gap-3 px-4 py-3.5 rounded-[14px] bg-[#ccff00] text-[#1a1a1a] font-semibold shadow-[0_4px_12px_rgba(204,255,0,0.3)] text-sm">
-          <i class="fa-solid fa-calendar-days text-xl"></i>
-          <span>ปฏิทินและการแจ้งเตือน</span>
-        </a>
-      </nav>
-    </aside>
-
-    <!-- Right Main Content -->
-    <main class="main-content flex-1 flex flex-col gap-4">
-      <!-- Top Bar Header -->
-      <header class="top-bar flex justify-between items-center gap-4">
-        <div class="search-box flex-1 relative">
-          <input id="calendar-search" type="search" placeholder="ค้นหารายวิชา" class="w-full py-2.5 pl-5 pr-10 rounded-full border border-[#dcdcdc] outline-none text-sm text-gray-800">
-          <i class="fa-solid fa-magnifying-glass absolute right-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
-        </div>
-
-        <div class="user-profile flex items-center gap-3 bg-[#ccff00] px-4 py-1.5 rounded-full">
-          <div class="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center overflow-hidden">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Kunagron" alt="User Avatar" class="w-full h-full object-cover">
-          </div>
-          <div class="flex flex-col leading-tight">
-            <span class="text-xs font-bold text-[#1a1a1a]">K.Kunagron</span>
-            <span class="text-[11px] text-gray-600">นักเรียน</span>
-          </div>
-        </div>
-
-        <a href="login.html" class="w-[46px] h-[46px] bg-[#ccff00] rounded-xl flex items-center justify-center text-[#1a1a1a] text-lg hover:scale-105 transition-transform" title="ออกจากระบบ">
-          <i class="fa-solid fa-right-from-bracket"></i>
-        </a>
-      </header>
-
+      <header class="app-header"><div><p class="app-eyebrow">KMAPS</p><h1>ปฏิทิน</h1></div></header>
       <!-- Dashboard Stats Cards -->
       <section class="summary-cards grid grid-cols-3 gap-4">
         <div class="card bg-[#ffff52] text-[#1a1a1a] rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
@@ -100,12 +61,19 @@
             <option value="9">ตุลาคม</option><option value="10">พฤศจิกายน</option><option value="11">ธันวาคม</option>
           </select>
 
-          <select id="yearSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer">
-            <option value="2025">2568</option><option value="2026">2569</option><option value="2027">2570</option><option value="2028">2571</option>
+          <select id="yearSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer" aria-label="เลือกปี">
+            <option value="">กำลังโหลดปี...</option>
           </select>
         </div>
 
+        <div class="calendar-legend" aria-label="คำอธิบายสัญลักษณ์ปฏิทิน">
+          <span><i class="calendar-legend-dot due" aria-hidden="true"></i> วันครบกำหนด</span>
+          <span><i class="calendar-legend-dot reminder" aria-hidden="true">🔔</i> วันแจ้งเตือนล่วงหน้า</span>
+          <span><i class="calendar-legend-dot submitted" aria-hidden="true">✓</i> ส่งแล้ว</span>
+        </div>
+
         <div class="calendar-card bg-white rounded-[20px] w-full max-w-[650px] p-6 shadow-sm">
+          <p id="calendar-status" class="calendar-status hidden" role="status" aria-live="polite"></p>
           <!-- Weekdays Grid -->
           <div class="weekdays-grid grid grid-cols-7 text-center font-semibold text-gray-600 text-sm mb-5">
             <div>อา.</div>
@@ -123,6 +91,7 @@
           </div>
         </div>
       </section>
+      </div>
     </main>
   </div>
 
@@ -146,7 +115,7 @@
     </div>
   </div>
 
-  <!-- JavaScript File -->
+  <script src="../config.js"></script>
   <script type="module" src="../js/calendar.js"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ import {
   connectMicrosoft,
 } from './api.js';
 
-import { requireAuth, logout } from './auth.js';
+import { requireAuth } from './auth.js';
 import { showToast, setButtonLoading } from './ui.js';
 import { initNavigation } from './navigation.js';
 
@@ -23,11 +23,7 @@ async function init() {
   if (!requireAuth()) return;
 
   // Initialize navigation.
-  initNavigation('overview');
-
-  document
-    .getElementById('logout-button')
-    ?.addEventListener('click', logout);
+  initNavigation('connect');
 
   // Bind provider buttons.
   document.querySelectorAll('[data-provider]').forEach((button) => {

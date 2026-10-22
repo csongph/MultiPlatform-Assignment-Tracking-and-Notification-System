@@ -130,6 +130,8 @@ async def create_notification_rule(
 ):
     try:
         return await LearningService(db).create_notification_rule(current_user.id, payload)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

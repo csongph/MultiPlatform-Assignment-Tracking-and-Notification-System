@@ -6,6 +6,9 @@
  */
 
 import { getSignedInUser, logout } from './auth.js';
+import { getUserProfile } from './storage.js';
+import { getOnboardingStatus, queueSync, getSyncJob } from './api.js';
+import { showToast } from './ui.js';
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -19,8 +22,16 @@ const escapeHtml = (value) =>
  * SidebarComponent: จัดการเมนูด้านซ้าย
  */
 export class SidebarComponent {
-  constructor(activeKey = 'overview') {
-    this.activeKey = activeKey;
+  constructor(activeTab = 'overview') {
+    this.activeTab = activeTab;
+    this.menuItems = [
+      { key: 'overview', label: 'ภาพรวม', icon: this.getOverviewIcon(), href: 'dashboard.html?view=overview' },
+      { key: 'courses', label: 'รายวิชา', icon: this.getCoursesIcon(), href: 'courses.html' },
+      { key: 'assignments', label: 'รายการงาน', icon: this.getSubmissionsIcon(), href: 'assignments.html' },
+      { key: 'submissions', label: 'การส่งงาน', icon: this.getSubmissionsIcon(), href: 'dashboard.html?view=assignments' },
+      { key: 'notifications', label: 'การแจ้งเตือน', icon: this.getNotificationsIcon(), href: 'notification.html' },
+      { key: 'calendar', label: 'ปฏิทิน', icon: this.getCalendarIcon(), href: 'calendar.html' },
+    ];
   }
 
   getOverviewIcon() {
@@ -53,6 +64,10 @@ export class SidebarComponent {
     </svg>`;
   }
 
+  getConnectIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.72-1.71"/></svg>`;
+  }
+
   getAdminIcon() {
     return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -60,60 +75,13 @@ export class SidebarComponent {
     </svg>`;
   }
 
-  render(user) {
-    const isAdmin = user?.role === 'admin';
-
-    const menuItems = [
-      {
-        key: 'overview',
-        label: 'ภาพรวม',
-        href: 'dashboard.html?view=overview',
-        icon: this.getOverviewIcon(),
-      },
-      {
-        key: 'courses',
-        label: 'รายวิชา',
-        href: 'dashboard.html?view=overview#courses-progress-container',
-        icon: this.getCoursesIcon(),
-      },
-      {
-        key: 'assignments',
-        label: 'รายการงาน',
-        href: 'assignments.html',
-        icon: this.getSubmissionsIcon(),
-      },
-      {
-        key: 'submissions',
-        label: 'การส่งงาน',
-        href: 'dashboard.html?view=assignments',
-        icon: this.getSubmissionsIcon(),
-      },
-      {
-        key: 'notifications',
-        label: 'การแจ้งเตือน',
-        href: 'dashboard.html?view=notifications',
-        icon: this.getNotificationsIcon(),
-      },
-      {
-        key: 'calendar',
-        label: 'ปฏิทิน',
-        href: 'dashboard.html?view=calendar',
-        icon: this.getCalendarIcon(),
-      },
-    ];
-
-    if (isAdmin) {
-      menuItems.push({
-        key: 'admin',
-        label: 'ผู้ดูแลระบบ',
-        href: 'admin.html',
-        icon: this.getAdminIcon(),
-      });
-    }
+  render(user, basePath = 'pages/') {
+    const activeKey = getActiveNavKey() || this.activeTab;
+    const menuItems = this.menuItems.map((item) => ({ ...item, href: `${basePath}${item.href}` }));
 
     const itemsHtml = menuItems
       .map((item) => {
-        const activeClass = item.key === this.activeKey ? 'active' : '';
+        const activeClass = item.key === activeKey ? 'active' : '';
 
         return `
           <li class="sidebar-menu-item">
@@ -144,6 +112,12 @@ export class SidebarComponent {
         <ul class="sidebar-menu">
           ${itemsHtml}
         </ul>
+        <div class="sidebar-footer">
+          <a href="${basePath}onboarding.html" class="sidebar-link sidebar-connect-link ${activeKey === 'connect' ? 'active' : ''}" data-nav-key="connect">
+            <span class="sidebar-icon">${this.getConnectIcon()}</span>
+            <span class="sidebar-label">เชื่อมต่อแพลตฟอร์ม</span>
+          </a>
+        </div>
       </aside>
     `;
   }
@@ -168,6 +142,7 @@ export class TopbarComponent {
           type="button"
           class="mobile-sidebar-toggle"
           id="mobile-sidebar-toggle"
+          aria-expanded="false"
           aria-label="Toggle Sidebar Menu"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -195,6 +170,10 @@ export class TopbarComponent {
           </button>
         </div>
 
+        <button type="button" class="topbar-sync-btn" id="sync-now-button" title="ซิงก์งานจากทุกแพลตฟอร์มทันที">
+          <span id="sync-icon" aria-hidden="true">🔄</span><span id="sync-text">ซิงก์ตอนนี้</span>
+        </button>
+
         <div class="topbar-actions">
           <a href="dashboard.html" class="user-profile-badge" title="โปรไฟล์ผู้ใช้">
             <div class="profile-avatar">
@@ -204,15 +183,16 @@ export class TopbarComponent {
             </div>
 
             <div class="profile-info">
-              <span class="profile-name">${escapeHtml(userName)}</span>
-              <span class="profile-role">${escapeHtml(userRole)}</span>
+              <span class="profile-name" id="user-display-name">${escapeHtml(userName)}</span>
+              <span class="profile-role" id="user-role-badge">${escapeHtml(userRole)}</span>
             </div>
           </a>
 
           <button
             type="button"
             class="topbar-logout-btn"
-            id="topbar-logout-button"
+            id="logout-button"
+            data-logout
             title="ออกจากระบบ"
             aria-label="ออกจากระบบ"
           >
@@ -231,7 +211,7 @@ export class TopbarComponent {
  */
 export class NavigationManager {
   constructor(config = {}) {
-    this.activeTab = config.activeTab || 'overview';
+    this.activeTab = getActiveNavKey() || config.activeTab || 'overview';
     this.user = null;
     this.sidebarComponent = new SidebarComponent(this.activeTab);
     this.topbarComponent = new TopbarComponent();
@@ -242,17 +222,29 @@ export class NavigationManager {
     if (this.initialized) return;
     this.initialized = true;
 
+    // Mount the shared shell immediately so a slow profile/API request does
+    // not leave every page without its navigation or topbar.
+    this.user = getUserProfile();
+    this.mountLayout();
+    this.attachEventListeners();
+
     try {
-      this.user = await getSignedInUser();
+      const user = await getSignedInUser();
+      if (user) {
+        this.user = user;
+        const name = user.display_name || user.full_name || user.email || 'ผู้ใช้งาน';
+        const role = user.role === 'admin' ? 'แอดมิน' : 'นักเรียน';
+        const nameElement = document.getElementById('user-display-name');
+        const roleElement = document.getElementById('user-role-badge');
+        if (nameElement) nameElement.textContent = name;
+        if (roleElement) roleElement.textContent = role;
+      }
     } catch (error) {
       console.warn(
         '[NavigationManager] ไม่สามารถดึงข้อมูลผู้ใช้ได้',
         error
       );
     }
-
-    this.mountLayout();
-    this.attachEventListeners();
   }
 
   mountLayout() {
@@ -277,7 +269,8 @@ export class NavigationManager {
     }
 
     if (sidebarContainer) {
-      sidebarContainer.innerHTML = this.sidebarComponent.render(this.user);
+      const basePath = window.location.pathname.includes('/pages/') ? '' : 'pages/';
+      sidebarContainer.innerHTML = this.sidebarComponent.render(this.user, basePath);
     }
 
     if (topbarContainer) {
@@ -315,9 +308,7 @@ export class NavigationManager {
   }
 
   attachEventListeners() {
-    document
-      .getElementById('topbar-logout-button')
-      ?.addEventListener('click', () => logout());
+    document.querySelectorAll('[data-logout]').forEach((button) => button.addEventListener('click', () => logout()));
 
     const searchInput = document.getElementById('topbar-search-input');
 
@@ -340,13 +331,32 @@ export class NavigationManager {
 
     if (mobileToggle && sidebarContainer) {
       mobileToggle.addEventListener('click', () => {
-        sidebarContainer.classList.toggle('open');
+        const isOpen = sidebarContainer.classList.toggle('open');
+        mobileToggle.setAttribute('aria-expanded', String(isOpen));
+      });
+
+      sidebarContainer.addEventListener('click', (event) => {
+        if (event.target === sidebarContainer) {
+          sidebarContainer.classList.remove('open');
+          mobileToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && sidebarContainer.classList.contains('open')) {
+          sidebarContainer.classList.remove('open');
+          mobileToggle.setAttribute('aria-expanded', 'false');
+          mobileToggle.focus();
+        }
       });
     }
+
+    document.getElementById('sync-now-button')?.addEventListener('click', () => this.syncNow());
 
     sidebarContainer?.querySelectorAll('[data-nav-key]').forEach((link) => {
       link.addEventListener('click', () => {
         sidebarContainer.classList.remove('open');
+          mobileToggle?.setAttribute('aria-expanded', 'false');
       });
     });
   }
@@ -358,6 +368,63 @@ export class NavigationManager {
       })
     );
   }
+
+  async syncNow() {
+    const button = document.getElementById('sync-now-button');
+    const icon = document.getElementById('sync-icon');
+    const label = document.getElementById('sync-text');
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    if (icon) icon.classList.add('spin-animate');
+    if (label) label.textContent = 'กำลังซิงก์...';
+    try {
+      const connections = (await getOnboardingStatus())?.connections || {};
+      const platforms = [
+        ...((connections.google ?? connections.google_classroom) ? ['google_classroom'] : []),
+        ...((connections.microsoft ?? connections.microsoft_teams) ? ['microsoft_teams'] : []),
+      ];
+      if (!platforms.length) throw new Error('ยังไม่มีแพลตฟอร์มที่เชื่อมต่อ กรุณาเชื่อมต่อก่อนซิงก์');
+      const jobs = await Promise.all(platforms.map((platform) => queueSync(platform)));
+      const ids = jobs.map((job) => job?.job_id).filter(Boolean);
+      if (ids.length !== platforms.length) throw new Error('ระบบไม่สามารถเริ่มงานซิงก์ได้ครบทุกแพลตฟอร์ม');
+      const deadline = Date.now() + 60000;
+      let statuses;
+      do {
+        statuses = await Promise.all(ids.map((id) => getSyncJob(id)));
+        if (statuses.every((job) => ['success', 'succeeded', 'completed', 'failed', 'error'].includes(String(job.status).toLowerCase()))) break;
+        if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 2500));
+      } while (Date.now() < deadline);
+      const failed = statuses.find((job) => ['failed', 'error'].includes(String(job.status).toLowerCase()));
+      if (failed) throw new Error(failed.error_detail?.error || failed.error_detail?.reason || 'การซิงก์ล้มเหลว กรุณาตรวจสอบสิทธิ์แล้วลองใหม่');
+      const emptyProvider = statuses.find((job) => job.status === 'success' && job.error_detail?.info);
+      if (emptyProvider) {
+        const providerName = emptyProvider.platform === 'microsoft_teams' ? 'Microsoft Teams' : 'Google Classroom';
+        throw new Error(`${providerName}: ${emptyProvider.error_detail.info}`);
+      }
+      const total = statuses.reduce((sum, job) => sum + (job.items_synced || 0), 0);
+      showToast(Date.now() >= deadline ? 'การซิงก์ยังทำงานอยู่เบื้องหลัง' : `ซิงก์สำเร็จ! อัปเดตงาน ${total} รายการ`, 'success');
+      window.dispatchEvent(new CustomEvent('kmaps:sync-complete'));
+    } catch (error) {
+      showToast(error.message || 'ไม่สามารถเริ่มการซิงก์ได้', 'error');
+    } finally {
+      button.disabled = false;
+      icon?.classList.remove('spin-animate');
+      if (label) label.textContent = 'ซิงก์ตอนนี้';
+    }
+  }
+}
+
+function getActiveNavKey() {
+  const path = window.location.pathname.toLowerCase();
+  const view = new URLSearchParams(window.location.search).get('view');
+  if (path.endsWith('/courses.html')) return 'courses';
+  if (path.endsWith('/assignments.html')) return 'assignments';
+  if (path.endsWith('/notification.html')) return 'notifications';
+  if (path.endsWith('/calendar.html')) return 'calendar';
+  if (path.endsWith('/onboarding.html')) return 'connect';
+  if (path.endsWith('/admin.html')) return 'admin';
+  if (path.endsWith('/dashboard.html')) return view === 'assignments' ? 'submissions' : view === 'calendar' ? 'calendar' : view === 'notifications' ? 'notifications' : 'overview';
+  return null;
 }
 
 /**

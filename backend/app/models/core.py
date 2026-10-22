@@ -6,12 +6,14 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -123,11 +125,25 @@ class UserAssignmentStatus(Base):
 class NotificationRule(Base):
     __tablename__ = "notification_rules"
     __table_args__ = (
-        UniqueConstraint("user_id", "type", "sequence_order", name="uq_notification_rule_user_type_seq"),
+        Index(
+            "uq_notification_rule_global_user_type_seq",
+            "user_id", "type", "sequence_order",
+            unique=True,
+            postgresql_where=text("assignment_id IS NULL"),
+        ),
+        Index(
+            "uq_notification_rule_user_type_assignment",
+            "user_id", "type", "assignment_id",
+            unique=True,
+            postgresql_where=text("assignment_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    assignment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=True
+    )
     type: Mapped[str] = mapped_column(String(20), default="due_soon", nullable=False)
     lead_time_value: Mapped[int] = mapped_column(Integer, nullable=False)
     lead_time_unit: Mapped[str] = mapped_column(String(10), nullable=False)  # day/hour/minute

@@ -395,7 +395,7 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
             raise TokenExpiredError("Microsoft Graph rejected the access token (401)")
         if response.status_code == 403:
             raise OAuthProviderError(
-                "Microsoft Graph forbidden (403): tenant consent or Education access may be required."
+                "Microsoft Graph forbidden (403): admin consent or Education access may be required."
             )
         if response.status_code >= 400:
             raise OAuthProviderError(

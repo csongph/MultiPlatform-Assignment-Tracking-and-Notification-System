@@ -8,6 +8,7 @@ from app.integrations import get_adapter, get_fetcher
 from app.integrations.base_fetcher import BaseAssignmentFetcher, TokenExpiredError
 from app.models.core import OAuthConnection
 from app.models.logs import SyncLog
+from app.repositories.learning_repository import LearningRepository
 from app.repositories.sync_repository import AssignmentRepository, CourseRepository, SyncLogRepository
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class SyncService:
         self.courses = CourseRepository(db)
         self.assignments = AssignmentRepository(db)
         self.sync_logs = SyncLogRepository(db)
+        self.learning = LearningRepository(db)
 
     async def sync_connection(self, connection: OAuthConnection, sync_log: SyncLog | None = None) -> SyncLog:
         # `connection.platform` must already be eager-loaded by the caller
@@ -81,6 +83,7 @@ class SyncService:
 
         items_synced = 0
         seen_course_ids: set[str] = set()
+        synced_assignment_ids = []
 
         for item in results:
             course = await self.courses.upsert(
@@ -93,7 +96,7 @@ class SyncService:
 
             seen_assignment_ids: set[str] = set()
             for remote_assignment in item.assignments:
-                await self.assignments.upsert(
+                assignment, _created = await self.assignments.upsert(
                     course_id=course.id,
                     external_assignment_id=remote_assignment.external_id,
                     title=remote_assignment.title,
@@ -103,6 +106,7 @@ class SyncService:
                     computed_status=remote_assignment.computed_status,
                     source_url=remote_assignment.source_url,
                 )
+                synced_assignment_ids.append(assignment.id)
                 seen_assignment_ids.add(remote_assignment.external_id)
                 items_synced += 1
 
@@ -113,6 +117,11 @@ class SyncService:
         # list unexpectedly (permissions, transient inconsistency, or account transition).
         if seen_course_ids:
             await self.courses.soft_delete_missing(connection.user_id, connection.platform_id, seen_course_ids)
+
+        if synced_assignment_ids:
+            await self.learning.create_new_assignment_notifications(
+                connection.user_id, synced_assignment_ids
+            )
 
         if connection.status != "connected":
             connection.status = "connected"
