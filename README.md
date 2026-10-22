@@ -13,7 +13,7 @@ and provide centralized assignment, course, notification, and synchronization ma
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Starg
 
 ต้องการติดตั้งและรันโปรเจกต์?
 
