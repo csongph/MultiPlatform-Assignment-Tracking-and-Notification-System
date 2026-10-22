@@ -6,11 +6,13 @@
 import {
   getAssignments,
   getNotifications,
+  getNotificationRules,
   markNotificationRead,
   markAllNotificationsRead,
 } from './api.js';
-import { requireAuth, getSignedInUser, logout } from './auth.js';
+import { requireAuth } from './auth.js';
 import { showToast } from './ui.js';
+import { initNavigation } from './navigation.js';
 
 const TYPE_LABEL = {
   new: 'งานใหม่',
@@ -25,13 +27,15 @@ const TYPE_ICON = {
 };
 
 let allNotifications = [];
+let notificationRules = [];
 let assignmentsById = new Map();
 let activeFilter = 'all';
+let searchTerm = '';
+let refreshTimer = null;
 
 async function init() {
   if (!requireAuth()) return;
-
-  document.getElementById('logout-button')?.addEventListener('click', logout);
+  initNavigation();
 
   document.querySelectorAll('.notification-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -45,17 +49,107 @@ async function init() {
   });
 
   document.getElementById('mark-all-btn')?.addEventListener('click', handleMarkAllRead);
+  window.addEventListener('kmaps-search', (event) => {
+    searchTerm = (event.detail?.query || '').trim().toLowerCase();
+    renderList();
+  });
+  window.addEventListener('kmaps:sync-complete', async () => {
+    await loadStats();
+    await Promise.all([loadNotifications(), loadNotificationRules()]);
+  });
+  window.addEventListener('focus', refreshNotificationData);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshNotificationData();
+  });
 
+  await loadStats();
+  await Promise.all([loadNotifications(), loadNotificationRules()]);
+  refreshTimer = window.setInterval(() => {
+    if (!document.hidden) loadNotifications();
+  }, 60_000);
+  window.addEventListener('pagehide', () => window.clearInterval(refreshTimer), { once: true });
+}
+
+async function refreshNotificationData() {
+  await loadStats();
+  await Promise.all([loadNotifications(), loadNotificationRules()]);
+}
+
+async function loadNotificationRules() {
+  const listEl = document.getElementById('notification-rules-list');
   try {
-    const user = await getSignedInUser();
-    if (user?.display_name || user?.full_name) {
-      document.getElementById('user-name').textContent = user.display_name || user.full_name;
-    }
+    const rules = await getNotificationRules();
+    notificationRules = Array.isArray(rules) ? rules : [];
+    renderNotificationRules();
   } catch (err) {
-    console.warn('Could not load user profile', err);
+    console.error('Failed to load notification rules:', err);
+    listEl.innerHTML = '<div class="notification-error">โหลดรายการแจ้งเตือนที่ตั้งไว้ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</div>';
+  }
+}
+
+function renderNotificationRules() {
+  const listEl = document.getElementById('notification-rules-list');
+  const enabledCount = notificationRules.filter((rule) => rule.is_enabled).length;
+  const countEl = document.getElementById('notification-rules-count');
+  if (countEl) countEl.textContent = `${enabledCount} รายการเปิดใช้งาน`;
+
+  const visible = searchTerm
+    ? notificationRules.filter((rule) => {
+        const assignment = assignmentsById.get(rule.assignment_id);
+        const target = assignment
+          ? `${assignment.title} ${assignment.course_name || ''}`
+          : 'ทุกงาน';
+        return target.toLowerCase().includes(searchTerm);
+      })
+    : notificationRules;
+
+  if (!visible.length) {
+    listEl.innerHTML = `<div class="notification-empty">${notificationRules.length
+      ? 'ไม่พบรายการที่ตรงกับคำค้นหา'
+      : 'คุณยังไม่ได้ตั้งค่าการแจ้งเตือนล่วงหน้า'}<p>เปิดรายการงานแล้วเลือก “ตั้งแจ้งเตือนล่วงหน้า” เพื่อสร้างรายการเตือน</p><a href="assignments.html">ไปตั้งการแจ้งเตือน</a></div>`;
+    return;
   }
 
-  await Promise.all([loadStats(), loadNotifications()]);
+  listEl.innerHTML = visible.map(renderNotificationRule).join('');
+}
+
+function renderNotificationRule(rule) {
+  const assignment = rule.assignment_id ? assignmentsById.get(rule.assignment_id) : null;
+  const title = assignment?.title || (rule.assignment_id ? 'ไม่พบข้อมูลงาน' : 'การแจ้งเตือนทั่วไป');
+  const course = assignment?.course_name || (rule.assignment_id ? '' : 'ใช้กับงานที่ไม่ได้ตั้งค่าเฉพาะ');
+  const unitLabels = { minute: 'นาที', hour: 'ชั่วโมง', day: 'วัน' };
+  const leadTime = `${rule.lead_time_value} ${unitLabels[rule.lead_time_unit] || rule.lead_time_unit}`;
+  const dueText = rule.assignment_id && !assignment
+    ? 'ไม่พบข้อมูลงานที่ผูกกับการเตือนนี้'
+    : assignment?.due_at
+      ? `ครบกำหนด ${formatDate(assignment.due_at)}`
+      : rule.assignment_id
+        ? 'งานนี้ไม่มีวันกำหนดส่ง จึงยังคำนวณเวลาเตือนไม่ได้'
+        : 'เตือนก่อนวันกำหนดส่งของแต่ละงาน';
+  const enabled = Boolean(rule.is_enabled);
+
+  return `
+    <article class="notification-item configured-reminder-item ${enabled ? '' : 'is-disabled'}">
+      <div class="notification-icon type-due_soon"><i class="fa-solid fa-clock"></i></div>
+      <div class="notification-body">
+        <div class="notification-title">${escapeHtml(title)}</div>
+        <div class="notification-meta">
+          <span>${escapeHtml(course)}</span>
+          <span>เตือนล่วงหน้า ${escapeHtml(leadTime)}</span>
+          <span>${escapeHtml(dueText)}</span>
+        </div>
+      </div>
+      <div class="notification-side">
+        <span class="notification-badge ${enabled ? 'rule-enabled' : 'rule-disabled'}">${enabled ? 'เปิดใช้งาน' : 'ปิดแล้ว'}</span>
+        ${rule.assignment_id ? '<a class="configured-reminder-edit" href="assignments.html">แก้ไข</a>' : ''}
+      </div>
+    </article>`;
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'ไม่ระบุวันที่';
+  return date.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 async function loadStats() {
@@ -65,7 +159,9 @@ async function loadStats() {
 
     const total = assignments.length;
     const submitted = assignments.filter((a) => (a.computed_status ?? a.status) === 'submitted').length;
-    const pending = assignments.filter((a) => (a.computed_status ?? a.status) === 'not_submitted').length;
+    const pending = assignments.filter((a) => ['not_submitted', 'overdue'].includes(
+      String(a.computed_status ?? a.status ?? '').toLowerCase(),
+    )).length;
     const rate = total > 0 ? ((submitted / total) * 100).toFixed(2) : '0.00';
 
     document.getElementById('stat-total').textContent = total;
@@ -94,28 +190,39 @@ async function loadNotifications() {
 
 function renderList() {
   const listEl = document.getElementById('notification-list');
+  renderNotificationRules();
   const unreadCount = allNotifications.filter((n) => n.status !== 'read').length;
 
   document.getElementById('tab-count-all').textContent = allNotifications.length;
   document.getElementById('tab-count-unread').textContent = unreadCount;
 
   const badge = document.getElementById('sidebar-unread-badge');
-  badge.textContent = unreadCount;
-  badge.classList.toggle('visible', unreadCount > 0);
+  if (badge) {
+    badge.textContent = unreadCount;
+    badge.classList.toggle('visible', unreadCount > 0);
+  }
 
   const markAllBtn = document.getElementById('mark-all-btn');
   if (markAllBtn) markAllBtn.disabled = unreadCount === 0;
 
-  const visible = activeFilter === 'unread'
+  const filtered = activeFilter === 'unread'
     ? allNotifications.filter((n) => n.status !== 'read')
     : allNotifications;
+  const visible = searchTerm
+    ? filtered.filter((notification) => {
+        const assignment = assignmentsById.get(notification.assignment_id);
+        return `${notification.title || ''} ${notification.course || ''} ${assignment?.title || ''} ${assignment?.course || ''}`.toLowerCase().includes(searchTerm);
+      })
+    : filtered;
 
   if (visible.length === 0) {
     listEl.innerHTML = `
       <div class="notification-empty">
         ${activeFilter === 'unread'
           ? 'ไม่มีการแจ้งเตือนที่ยังไม่อ่าน'
-          : 'ไม่มีแจ้งเตือนใหม่ในขณะนี้ คุณติดตามงานทุกงานแล้ว'}
+          : `ยังไม่มีการแจ้งเตือนในกล่องข้อความ
+             <p>ระบบจะแสดงงานใหม่หลังซิงก์ และแจ้งเตือนใกล้กำหนดตามเวลาที่ตั้งไว้</p>
+             <a href="assignments.html">ไปดูรายการงานและตั้งเตือน</a>`}
       </div>`;
     return;
   }

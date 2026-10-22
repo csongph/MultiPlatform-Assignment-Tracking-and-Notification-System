@@ -54,120 +54,22 @@
   <link rel="stylesheet" href="../css/dashboard.css" />
 </head>
 
-<body class="bg-[#f0f2f6] text-slate-800 font-prompt min-h-screen p-3 md:p-6 lg:p-8 flex justify-center items-start">
+<body class="app-page">
 
-  <div class="w-full max-w-[1400px] flex flex-col md:flex-row gap-5 lg:gap-6 items-stretch">
+  <div class="app-viewport-layout">
 
     <!-- Sidebar -->
     <div
       id="sidebar-container"
-      class="shrink-0 w-full md:w-[220px] lg:w-[240px]"
+      class="app-sidebar-container"
     ></div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col gap-5 lg:gap-6 min-w-0" role="main">
+    <div class="app-main-container">
+      <main class="app-content" role="main">
 
-      <header class="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-4 w-full">
-
-        <div class="relative w-full sm:flex-1 max-w-[560px]">
-          <input
-            type="text"
-            id="search-course-input"
-            class="md3-search-pill w-full py-2.5 pl-5 pr-11 text-sm bg-white text-slate-800 placeholder-slate-400 focus:outline-none font-prompt"
-            placeholder="ค้นหารายวิชา"
-            aria-label="ค้นหารายวิชา"
-          />
-
-          <button
-            type="button"
-            id="search-course-btn"
-            class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
-            aria-label="ค้นหา"
-          >
-            <svg
-              class="w-5 h-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-          </button>
-        </div>
-
-        <div class="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-
-          <div
-            class="md3-chip-lime flex items-center gap-2.5 py-1.5 px-3.5 shadow-sm"
-            title="ข้อมูลผู้ใช้งาน"
-          >
-            <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center overflow-hidden border border-lime-600/20 shrink-0">
-              <svg
-                class="w-7 h-7 text-amber-700"
-                viewBox="0 0 36 36"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path fill="#FFCC4D" d="M18 3c-4.4 0-8 3.6-8 8v5c0 4.4 3.6 8 8 8s8-3.6 8-8v-5c0-4.4-3.6-8-8-8z"/>
-                <path fill="#DD2E44" d="M11 6c1 2 4 4 7 4s6-2 7-4c-2-3-5-4-7-4s-5 1-7 4z"/>
-                <circle cx="14" cy="14" r="1.5" fill="#292F33"/>
-                <circle cx="22" cy="14" r="1.5" fill="#292F33"/>
-                <path fill="#55ACEE" d="M18 24c-6 0-11 4-11 9v3h22v-3c0-5-5-9-11-9z"/>
-              </svg>
-            </div>
-
-            <div class="flex flex-col text-left leading-tight">
-              <span
-                id="user-display-name"
-                class="font-bold text-xs sm:text-sm text-slate-900 tracking-tight"
-              >กำลังโหลด...</span>
-              <span
-                id="user-role-badge"
-                class="text-[11px] font-medium text-slate-700"
-              >นักเรียน</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            id="sync-now-button"
-            class="md3-chip-lime px-3.5 py-2 flex items-center gap-2 shadow-sm cursor-pointer focus:outline-none text-xs font-bold text-slate-900 transition-transform active:scale-95"
-            title="ซิงก์งานจากทุกแพลตฟอร์มทันที"
-            aria-label="ซิงก์งานตอนนี้"
-          >
-            <span id="sync-icon" class="inline-block text-sm">🔄</span>
-            <span id="sync-text">ซิงก์ตอนนี้</span>
-          </button>
-
-          <button
-            type="button"
-            id="logout-button"
-            class="md3-chip-lime w-10 h-10 flex items-center justify-center p-2 shadow-sm cursor-pointer focus:outline-none"
-            title="ออกจากระบบ"
-            aria-label="ออกจากระบบ"
-          >
-            <svg
-              class="w-5 h-5 text-slate-900"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-          </button>
-        </div>
-      </header>
+      <!-- Topbar -->
+      <div id="kmaps-topbar-container"></div>
 
       <!-- Overview -->
       <div id="view-overview" class="view-fade-in flex flex-col gap-5 lg:gap-6">
@@ -182,12 +84,6 @@
           </div>
 
           <div class="header-actions">
-            <a
-              class="btn btn-secondary app-link-button"
-              href="onboarding.html"
-            >
-              จัดการการเชื่อมต่อ
-            </a>
           </div>
         </header>
 
@@ -478,14 +374,11 @@
         </section>
       </div>
 
-    </main>
+      </main>
+    </div>
   </div>
 
-  <!-- Runtime Config -->
-  <script>
-    window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
-  </script>
-
+  <script src="../config.js"></script>
   <script type="module" src="../js/dashboard.js"></script>
 </body>
 </html>

@@ -89,6 +89,7 @@ class NotificationOut(BaseModel):
 
 class NotificationRuleCreate(BaseModel):
     type: str = Field(default="due_soon", pattern="^(due_soon)$")
+    assignment_id: uuid.UUID | None = None
     lead_time_value: int = Field(ge=1, le=30)
     lead_time_unit: Literal["day", "hour", "minute"]
     sequence_order: int = Field(ge=1, le=10)
@@ -105,6 +106,7 @@ class NotificationRuleUpdate(BaseModel):
 class NotificationRuleOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
+    assignment_id: uuid.UUID | None = None
     type: str
     lead_time_value: int
     lead_time_unit: Literal["day", "hour", "minute"]

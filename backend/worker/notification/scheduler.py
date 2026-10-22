@@ -10,7 +10,11 @@ from worker.celery_app import celery_app
 
 async def _schedule_due_notifications() -> int:
     async with AsyncSessionLocal() as db:
-        return len(await LearningRepository(db).create_due_notifications(datetime.now(timezone.utc)))
+        repository = LearningRepository(db)
+        now = datetime.now(timezone.utc)
+        due_soon = await repository.create_due_notifications(now)
+        overdue = await repository.create_overdue_notifications(now)
+        return len(due_soon) + len(overdue)
 
 
 @celery_app.task(name="worker.notification.scheduler.schedule_due_notifications_task")

@@ -8,15 +8,13 @@ import {
   getDashboardSummary,
   getOnboardingStatus,
   getCurrentUser,
-  queueSync,
-  getSyncJob,
   updateAssignmentStatus,
   createAssignment,
   deleteAssignment,
   FEATURES,
 } from './api.js';
 
-import { requireAuth, getSignedInUser, logout } from './auth.js';
+import { requireAuth, getSignedInUser } from './auth.js';
 
 import {
   setUserProfile,
@@ -28,18 +26,13 @@ import {
   escapeHtml,
 } from './ui.js';
 
-import {
-  initSidebar,
-  setActiveNavItem,
-  updateSidebarAdminStatus,
-} from './sidebar.js';
+import { initNavigation } from './navigation.js';
 
 // Dashboard state
 let allAssignments = [];
 let connectionsState = {};
 let currentSortOrder = 'default';
 let currentSearchTerm = '';
-let isSyncing = false;
 
 const COMPLETED_STATUSES = ['completed', 'submitted', 'done'];
 
@@ -54,32 +47,16 @@ async function init() {
     window.location.hash.replace('#', '') ||
     'overview';
 
-  if (initialTab === 'assignments') {
-    window.location.replace('assignments.html');
-    return;
-  }
-
-  await initSidebar({
-    container: 'sidebar-container',
-    active: initialTab,
-    onNavigate: (tabId) => {
-      if (tabId === 'assignments') {
-        window.location.href = 'assignments.html';
-        return;
-      }
-
-      switchViewTab(tabId);
-    },
-  });
+  initNavigation();
 
   setupNavigationEvents(initialTab);
   setupHeaderEvents();
   setupFilterAndSortEvents();
-  setupSyncButton();
   setupCustomTaskForm();
 
   await loadUserData();
   await loadDashboardData();
+  window.addEventListener('kmaps:sync-complete', loadDashboardData);
 }
 
 function switchViewTab(tabId) {
@@ -96,8 +73,6 @@ function switchViewTab(tabId) {
       view.classList.toggle('hidden', id !== tabId);
     }
   });
-
-  setActiveNavItem(tabId);
 
   if (tabId === 'calendar') {
     renderCalendarTimeline();
@@ -121,8 +96,6 @@ function setupNavigationEvents(initialTab = 'overview') {
 }
 
 function setupHeaderEvents() {
-  document.getElementById('logout-button')?.addEventListener('click', logout);
-
   const searchInput = document.getElementById('search-course-input');
 
   searchInput?.addEventListener('input', (event) => {
@@ -173,89 +146,6 @@ function setupFilterAndSortEvents() {
     ?.addEventListener('change', renderAssignmentsFeed);
 }
 
-function setupSyncButton() {
-  document
-    .getElementById('sync-now-button')
-    ?.addEventListener('click', async () => {
-      if (isSyncing) return;
-      await triggerManualSync();
-    });
-}
-
-async function triggerManualSync() {
-  const syncButton = document.getElementById('sync-now-button');
-  const syncIcon = document.getElementById('sync-icon');
-  const syncText = document.getElementById('sync-text');
-
-  isSyncing = true;
-
-  if (syncButton) syncButton.disabled = true;
-  if (syncIcon) syncIcon.classList.add('spin-animate');
-  if (syncText) syncText.textContent = 'กำลังซิงก์...';
-
-  try {
-    const platforms = [
-      ...(connectionsState.google ? ['google_classroom'] : []),
-      ...(connectionsState.microsoft ? ['microsoft_teams'] : []),
-    ];
-    if (!platforms.length) {
-      await finishSync(false, 'ยังไม่มีแพลตฟอร์มที่เชื่อมต่อ กรุณาเชื่อมต่อก่อนซิงก์');
-      return;
-    }
-    showToast('กำลังซิงก์ข้อมูลงานจากแพลตฟอร์ม...', 'info');
-    const jobs = await Promise.all(platforms.map((platform) => queueSync(platform)));
-    const jobIds = jobs.map((job) => job?.job_id).filter(Boolean);
-    if (jobIds.length !== platforms.length) throw new Error('ระบบไม่สามารถเริ่มงานซิงก์ได้ครบทุกแพลตฟอร์ม');
-
-    const deadline = Date.now() + 60000;
-    let statuses = [];
-    do {
-      statuses = await Promise.all(jobIds.map((jobId) => getSyncJob(jobId)));
-      if (statuses.every((item) => ['success', 'succeeded', 'completed', 'failed', 'error'].includes((item.status || '').toLowerCase()))) break;
-      if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 2500));
-    } while (Date.now() < deadline);
-
-    const failed = statuses.find((item) => ['failed', 'error'].includes((item.status || '').toLowerCase()));
-    if (failed) {
-      const detail = failed.error_detail?.error || failed.error_detail?.reason;
-      await finishSync(false, detail || 'การซิงก์ล้มเหลว กรุณาตรวจสอบสิทธิ์การเชื่อมต่อแล้วลองใหม่');
-    } else if (statuses.some((item) => item.status === 'success' && item.error_detail?.info)) {
-      const emptyProvider = statuses.find((item) => item.status === 'success' && item.error_detail?.info);
-      const providerName = emptyProvider.platform === 'microsoft_teams' ? 'Microsoft Teams' : 'Google Classroom';
-      await finishSync(false, `${providerName}: ${emptyProvider.error_detail.info}`);
-    } else if (Date.now() >= deadline && !statuses.every((item) => ['success', 'succeeded', 'completed'].includes((item.status || '').toLowerCase()))) {
-      await finishSync(true, 'การซิงก์ยังทำงานอยู่เบื้องหลัง');
-    } else {
-      const totalItems = statuses.reduce((total, item) => total + (item.items_synced || 0), 0);
-      await finishSync(true, `ซิงก์สำเร็จ! อัปเดตงาน ${totalItems} รายการ`);
-    }
-  } catch (error) {
-    await finishSync(
-      false,
-      error.message || 'ไม่สามารถเริ่มการซิงก์ได้',
-    );
-  }
-}
-
-async function finishSync(isSuccess, message) {
-  isSyncing = false;
-
-  const syncButton = document.getElementById('sync-now-button');
-  const syncIcon = document.getElementById('sync-icon');
-  const syncText = document.getElementById('sync-text');
-
-  if (syncButton) syncButton.disabled = false;
-  syncIcon?.classList.remove('spin-animate');
-
-  if (syncText) syncText.textContent = 'ซิงก์ตอนนี้';
-
-  showToast(message, isSuccess ? 'success' : 'error');
-
-  if (isSuccess) {
-    await loadDashboardData();
-  }
-}
-
 async function loadUserData() {
   try {
     let user;
@@ -293,7 +183,6 @@ async function loadUserData() {
     }
 
     if (user.role === 'admin') {
-      updateSidebarAdminStatus(true);
       addAdminConsoleLink();
     }
   } catch (error) {
@@ -355,7 +244,8 @@ async function loadDashboardData() {
     getDashboardSummary(),
   ]);
 
-  if (assignmentsResult.status === 'fulfilled') {
+  const assignmentsLoaded = assignmentsResult.status === 'fulfilled';
+  if (assignmentsLoaded) {
     const result = assignmentsResult.value;
 
     allAssignments = Array.isArray(result?.assignments)
@@ -378,7 +268,7 @@ async function loadDashboardData() {
     console.warn('Failed to load dashboard summary:', summaryResult.reason);
   }
 
-  updateMetrics(summary);
+  updateMetrics(summary, assignmentsLoaded);
   renderCourseProgress();
   renderAssignmentsFeed();
   renderCalendarTimeline();
@@ -395,16 +285,40 @@ function normalizeConnections(connections) {
   };
 }
 
-function updateMetrics(summary = null) {
+function updateMetrics(summary = null, assignmentsLoaded = true) {
   const totalElement = document.getElementById('metric-total-tasks');
   const dueTodayElement = document.getElementById('metric-due-today');
   const submittedElement = document.getElementById('metric-submitted-tasks');
+  const dueSoonElement = document.getElementById('metric-due-soon');
+  const inProgressElement = document.getElementById('metric-in-progress');
+  const completedElement = document.getElementById('metric-completed');
 
-  const completedCount = allAssignments.filter((assignment) =>
-    COMPLETED_STATUSES.includes(
-      (assignment.computed_status || assignment.status || '').toLowerCase(),
-    ),
-  ).length;
+  const isCompleted = (assignment) => COMPLETED_STATUSES.includes(
+    String(assignment.computed_status || assignment.status || '').toLowerCase(),
+  );
+  const completedCount = allAssignments.filter(isCompleted).length;
+
+  if (assignmentsLoaded) {
+    const now = new Date();
+    const nextWeek = new Date(now);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const dueSoonCount = allAssignments.filter((assignment) => {
+      if (isCompleted(assignment)) return false;
+      const rawDueDate = assignment.dueDate || assignment.due_at || assignment.due;
+      if (!rawDueDate) return false;
+      const dueDate = new Date(rawDueDate);
+      return !Number.isNaN(dueDate.getTime()) && dueDate >= now && dueDate <= nextWeek;
+    }).length;
+    const inProgressCount = allAssignments.filter((assignment) => !isCompleted(assignment)).length;
+
+    if (dueSoonElement) dueSoonElement.textContent = String(dueSoonCount);
+    if (inProgressElement) inProgressElement.textContent = String(inProgressCount);
+    if (completedElement) completedElement.textContent = String(completedCount);
+  } else {
+    [dueSoonElement, inProgressElement, completedElement].forEach((element) => {
+      if (element) element.textContent = '—';
+    });
+  }
 
   if (totalElement) {
     totalElement.textContent =

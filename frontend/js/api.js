@@ -15,13 +15,11 @@ export const FEATURES = {
   customTasks: false,
 };
 
-const API_BASE_URL = (
-  typeof window !== 'undefined' &&
-  window.KMAPS_API_BASE &&
-  window.KMAPS_API_BASE.startsWith('http')
-)
-  ? window.KMAPS_API_BASE
-  : 'http://localhost:8000/api/v1';
+const API_BASE_URL = typeof window !== 'undefined' && window.KMAPS_API_BASE
+  ? window.KMAPS_API_BASE.replace(/\/$/, '')
+  : typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? 'http://localhost:8000/api/v1'
+    : '/api/v1';
 
 let refreshPromise = null;
 
@@ -29,7 +27,7 @@ async function refreshAuthSession() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+    refreshPromise = fetchWithTimeout(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
@@ -56,6 +54,23 @@ class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
+  }
+}
+
+const API_REQUEST_TIMEOUT_MS = 30000;
+
+async function fetchWithTimeout(url, config) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...config, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new ApiError('เซิร์ฟเวอร์ใช้เวลาตอบสนองนานเกินไป กรุณาตรวจสอบ backend แล้วลองใหม่', 408);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -95,8 +110,9 @@ export async function request(endpoint, options = {}) {
   let response;
 
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-  } catch {
+    response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, config);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError(
       'Unable to connect to the server. Please check that the backend is running.',
       0,
@@ -106,8 +122,9 @@ export async function request(endpoint, options = {}) {
   if (auth && response.status === 401 && await refreshAuthSession()) {
     config.headers.Authorization = `Bearer ${getAccessToken()}`;
     try {
-      response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-    } catch {
+      response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, config);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
       throw new ApiError(
         'Unable to connect to the server. Please check that the backend is running.',
         0,
@@ -186,6 +203,7 @@ function getDefaultErrorMessage(status) {
     409: 'Email already exists.',
     422: 'Validation error. Please check your input.',
     500: 'Server error. Please try again later.',
+    501: 'เซิร์ฟเวอร์ที่ตอบกลับไม่รองรับ API นี้ ตรวจสอบ API URL แล้วลองใหม่',
   };
 
   return messages[status] || 'An unexpected error occurred.';
@@ -206,6 +224,27 @@ export async function loginUser({ email, password }) {
   return request('/auth/login', {
     method: 'POST',
     body: { email, password },
+  });
+}
+
+export async function requestPasswordRecovery(email) {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    body: { email },
+  });
+}
+
+export async function verifyPasswordRecoveryCode(email, otp) {
+  return request('/auth/verify-otp', {
+    method: 'POST',
+    body: { email, otp },
+  });
+}
+
+export async function resetPassword(email, otp, new_password) {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: { email, otp, new_password },
   });
 }
 
@@ -340,6 +379,26 @@ export async function getAssignments() {
   return {
     assignments: list.map(normalizeAssignment),
   };
+}
+
+export async function getNotificationRules() {
+  return request('/notification-rules', { auth: true });
+}
+
+export async function createNotificationRule(payload) {
+  return request('/notification-rules', { method: 'POST', auth: true, body: payload });
+}
+
+export async function updateNotificationRule(ruleId, payload) {
+  return request(`/notification-rules/${encodeURIComponent(ruleId)}`, {
+    method: 'PATCH', auth: true, body: payload,
+  });
+}
+
+export async function deleteNotificationRule(ruleId) {
+  return request(`/notification-rules/${encodeURIComponent(ruleId)}`, {
+    method: 'DELETE', auth: true,
+  });
 }
 
 export async function updatePersonalAssignmentStatus(assignmentId, { submitted, personal_note }) {

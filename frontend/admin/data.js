@@ -9,7 +9,7 @@
 
 const TYPE_LABEL = { admin: "ผู้ดูแลระบบ", student: "นักเรียน" };
 const STATUS_LABEL = { active: "Active", pending: "Pending", suspended: "Suspended", inactive: "Inactive" };
-const API_BASE = (window.KMAPS_API_BASE || "http://localhost:8000/api/v1").replace(/\/$/, "");
+const API_BASE = (window.KMAPS_API_BASE || "/api/v1").replace(/\/$/, "");
 let refreshRequest = null;
 
 async function refreshAccessToken() {

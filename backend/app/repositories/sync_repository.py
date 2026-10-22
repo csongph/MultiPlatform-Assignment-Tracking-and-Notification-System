@@ -80,8 +80,9 @@ class AssignmentRepository:
         source_status: str,
         computed_status: str,
         source_url: str | None,
-    ) -> Assignment:
+    ) -> tuple[Assignment, bool]:
         assignment = await self.get(course_id, external_assignment_id)
+        created = assignment is None
         now = datetime.now(timezone.utc)
         if assignment is None:
             assignment = Assignment(
@@ -106,7 +107,7 @@ class AssignmentRepository:
             assignment.is_deleted = False
             assignment.last_synced_at = now
         await self.db.flush()
-        return assignment
+        return assignment, created
 
     async def soft_delete_missing(self, course_id: uuid.UUID, seen_external_ids: set[str]) -> None:
         result = await self.db.execute(

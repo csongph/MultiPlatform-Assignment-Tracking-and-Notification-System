@@ -82,6 +82,8 @@ if (-not $RedisLine) {
     Stop-WithMessage 'REDIS_URL ใน backend\.env ไม่มีค่า'
 }
 $RedisUrl = ($RedisLine -split '=', 2)[1].Trim().Trim('"').Trim("'")
+$ForwardedLine = Get-Content -LiteralPath $EnvFile | Where-Object { $_ -match '^\s*FORWARDED_ALLOW_IPS\s*=' } | Select-Object -First 1
+$ForwardedAllowIps = if ($ForwardedLine) { ($ForwardedLine -split '=', 2)[1].Trim().Trim('"').Trim("'") } else { '127.0.0.1' }
 try {
     $RedisUri = [Uri]$RedisUrl
     $RedisHost = $RedisUri.DnsSafeHost
@@ -161,7 +163,7 @@ function Start-BackendConsole([string]$Title, [string]$PythonArgs) {
         -WorkingDirectory $BackendDir
 }
 
-Start-BackendConsole 'KMAPS API - port 8000' '-m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000'
+Start-BackendConsole 'KMAPS API - port 8000' "-m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '$ForwardedAllowIps'"
 Start-Sleep -Seconds 2
 Start-BackendConsole 'KMAPS Celery Worker' '-m celery -A worker.celery_app worker --pool=solo --loglevel=INFO'
 Start-BackendConsole 'KMAPS Celery Beat' '-m celery -A worker.celery_app beat --loglevel=INFO'

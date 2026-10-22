@@ -5,20 +5,10 @@
   font-family: 'Prompt', sans-serif;
 }
 
-body {
-  background-color: #eef0f3;
-  display: flex;
-  min-height: 100vh;
-  color: #333;
-}
+body { color: #333; }
 
 a {
   text-decoration: none;
-}
-
-.app-layout {
-  display: flex;
-  width: 100%;
 }
 
 /* ================= SIDEBAR ================= */
@@ -263,6 +253,13 @@ a {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+.stat-card-total { background: #fff159; }
+.stat-card-submitted { background: #00e65b; }
+.stat-card-pending { background: #ff173d; color: #ffffff; }
+.stat-card-pending .stat-title,
+.stat-card-pending .stat-value { color: #ffffff; }
+.stat-card-rate { background: #ede9fe; }
+
 .stat-title {
   font-size: 12px;
   color: #222;
@@ -484,6 +481,15 @@ a {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
+.notification-empty p { margin-top: .45rem; color: #667085; }
+.notification-empty a {
+  display: inline-block;
+  margin-top: .75rem;
+  color: #382252;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .notification-loading,
 .notification-error {
   text-align: center;
@@ -494,6 +500,64 @@ a {
 
 .notification-error {
   color: #dc2626;
+}
+
+.configured-reminders-heading,
+.configured-reminders-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.configured-reminders-heading {
+  margin-bottom: 18px;
+}
+
+.configured-reminders-heading h2 {
+  color: #1f2430;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.configured-reminders-heading p,
+.configured-reminders-count {
+  color: #667085;
+  font-size: 12px;
+}
+
+.configured-reminders-link,
+.configured-reminder-edit {
+  color: #382252;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.notification-badge.rule-enabled {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.notification-badge.rule-disabled {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.configured-reminder-item.is-disabled {
+  opacity: .72;
+}
+
+@media (max-width: 600px) {
+  .configured-reminders-heading,
+  .configured-reminders-actions {
+    align-items: flex-start;
+  }
+
+  .configured-reminders-heading {
+    flex-direction: column;
+  }
 }
 
 /* Scrollbar polish */

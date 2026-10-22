@@ -59,16 +59,6 @@ async function init() {
     showToast(flashError, 'warning');
   }
 
-  // Handle password reset link.
-  document.querySelector('.forgot-link')?.addEventListener('click', (event) => {
-    event.preventDefault();
-
-    showToast(
-      'Password reset will be available once the reset endpoint is configured.',
-      'info',
-    );
-  });
-
   // Clear validation errors when the user edits a field.
   form.addEventListener('input', (event) => {
     const field = event.target.name;

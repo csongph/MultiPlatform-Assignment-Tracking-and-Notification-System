@@ -3,93 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>09_การแจ้งเตือน - KMAPS</title>
+  <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png">
+  <title>การแจ้งเตือน - LMS KMAPS</title>
   <!-- Google Fonts: Prompt -->
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- External Custom CSS -->
   <link rel="stylesheet" href="../css/notification.css">
+  <link rel="stylesheet" href="../css/auth.css">
+  <link rel="stylesheet" href="../css/navigation.css">
 </head>
-<body>
+<body class="app-page">
     
-    <div class="app-layout">
-
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-      <div class="logo-box">
-        <div class="logo-icon">
-          <i class="fa-solid fa-graduation-cap"></i>
-          <span class="logo-text">LMS</span>
-        </div>
-      </div>
-
-      <ul class="menu-list">
-        <li class="menu-item">
-          <a href="dashboard.html"><i class="fa-solid fa-border-all"></i> ภาพรวม</a>
-        </li>
-        <li class="menu-item">
-          <a href="#"><i class="fa-solid fa-book-open"></i> รายวิชา</a>
-        </li>
-        <li class="menu-item">
-          <a href="#"><i class="fa-regular fa-square-check"></i> งานที่ได้รับมอบหมาย</a>
-        </li>
-        <li class="menu-item active">
-          <a href="notification.html">
-            <i class="fa-regular fa-bell"></i> การแจ้งเตือน
-            <span class="menu-badge" id="sidebar-unread-badge">0</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="dashboard.html?view=calendar"><i class="fa-regular fa-calendar-days"></i> ปฏิทิน</a>
-        </li>
-      </ul>
-    </aside>
-
-    <!-- MAIN CONTENT AREA -->
-    <main class="main-content">
-
-      <!-- TOP HEADER -->
-      <header class="top-header">
-        <div class="search-container">
-          <input type="text" class="search-input" placeholder="ค้นหารายวิชา">
-          <i class="fa-solid fa-magnifying-glass search-icon"></i>
-        </div>
-
-        <div class="header-right">
-          <div class="user-pill">
-            <div class="avatar">
-              <img id="user-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Kunagron" alt="Avatar">
-            </div>
-            <div class="user-details">
-              <span class="user-name" id="user-name">K.Kunagron</span>
-              <span class="user-role">นักเรียน</span>
-            </div>
-          </div>
-
-          <button class="logout-btn" id="logout-button" title="ออกจากระบบ">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          </button>
-        </div>
-      </header>
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <main class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <div class="app-content">
+        <header class="app-header"><div><p class="app-eyebrow">KMAPS</p><h1>การแจ้งเตือน</h1></div></header>
 
       <!-- STATS CARDS -->
       <section class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card stat-card-total">
           <span class="stat-title">งานทั้งหมด</span>
           <span class="stat-value" id="stat-total">0</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card-submitted">
           <span class="stat-title">ส่งแล้ว</span>
           <span class="stat-value" id="stat-submitted">0</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card-pending">
           <span class="stat-title">รอดำเนินการ</span>
           <span class="stat-value" id="stat-pending">0</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card-rate">
           <span class="stat-title">อัตราการส่งงาน</span>
           <span class="stat-value" id="stat-rate">0%</span>
+        </div>
+      </section>
+
+      <section class="notification-card configured-reminders-card" aria-labelledby="configured-reminders-heading">
+        <div class="configured-reminders-heading">
+          <div>
+            <h2 id="configured-reminders-heading">รายการแจ้งเตือนที่ตั้งไว้</h2>
+            <p>แสดงกฎเตือนที่คุณสร้าง แม้ยังไม่ถึงเวลาส่งแจ้งเตือน</p>
+          </div>
+          <div class="configured-reminders-actions">
+            <span id="notification-rules-count" class="configured-reminders-count">กำลังโหลด...</span>
+            <a class="configured-reminders-link" href="assignments.html">จัดการการเตือน</a>
+          </div>
+        </div>
+        <div id="notification-rules-list" class="notification-list" aria-live="polite">
+          <div class="notification-loading">กำลังโหลดรายการที่ตั้งไว้...</div>
         </div>
       </section>
 
@@ -117,13 +83,11 @@
 
       </section>
 
+      </div>
     </main>
-
   </div>
 
-  <script>
-    window.KMAPS_API_BASE = 'http://localhost:8000/api/v1';
-  </script>
+  <script src="../config.js"></script>
   <script type="module" src="../js/notification.js"></script>
 </body>
 </html>

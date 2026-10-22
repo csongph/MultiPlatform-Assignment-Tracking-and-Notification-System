@@ -5,29 +5,6 @@
   font-family: 'Prompt', sans-serif;
 }
 
-body {
-  background-color: #f0f0f2;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  padding: 20px;
-}
-
-/* Main Container Frame */
-.app-container {
-  display: flex;
-  width: 100%;
-  max-width: 1280px;
-  height: 850px;
-  background-color: #ffffff;
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-  padding: 16px;
-  gap: 20px;
-}
-
 /* --- Sidebar --- */
 .sidebar {
   width: 260px;
@@ -289,6 +266,101 @@ body {
   grid-template-columns: repeat(7, 1fr);
   gap: 12px 10px;
   text-align: center;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.calendar-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.calendar-legend-dot {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.calendar-legend-dot.due { background: #ffcc00; }
+.calendar-legend-dot.reminder { background: #ede9fe; color: #5b21b6; }
+.calendar-legend-dot.submitted { background: #00e659; color: #14532d; }
+
+.calendar-day-cell {
+  min-width: 0;
+  padding: 4px 4px 16px;
+}
+
+.calendar-day-count,
+.calendar-reminder-count {
+  position: absolute;
+  top: 2px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 18%);
+}
+
+.calendar-day-count { right: 2px; color: #334155; }
+.calendar-reminder-count { left: 2px; color: #5b21b6; }
+
+.calendar-modal-section-title {
+  margin: 12px 0 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.calendar-reminder-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid #ddd6fe;
+  border-left: 4px solid #7c3aed;
+  border-radius: 10px;
+  background: #f5f3ff;
+  color: #312e81;
+  font-size: 13px;
+}
+
+.calendar-reminder-item span,
+.calendar-reminder-item time { color: #475569; font-size: 12px; }
+
+.calendar-status {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
+  text-align: center;
+}
+
+.calendar-status.is-error {
+  background: #fff1f2;
+  color: #be123c;
 }
 
 .day-cell {

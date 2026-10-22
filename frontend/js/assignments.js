@@ -1,5 +1,4 @@
-import { isAuthenticated, getUserProfile } from './storage.js';
-import { initSidebar } from './sidebar.js';
+import { initNavigation } from './navigation.js';
 
 let authModulesPromise = null;
 function loadAuthModules() {
@@ -18,8 +17,10 @@ const SOON_HOURS = 48;
 
 const state = {
   items: [],
+  reminders: new Map(),
   tab: 'all', // all | pending | overdue | submitted
   course: 'all',
+  courseId: null,
   platform: 'all',
   sort: 'due', // due | title
   search: '',
@@ -64,7 +65,11 @@ function formatDue(date) {
 }
 
 function unitLabel(unit) {
-  return { minutes: 'นาที', hours: 'ชั่วโมง', days: 'วัน' }[unit] || unit;
+  return {
+    minute: 'นาที', minutes: 'นาที',
+    hour: 'ชั่วโมง', hours: 'ชั่วโมง',
+    day: 'วัน', days: 'วัน',
+  }[unit] || unit;
 }
 
 /** Normalize provider assignment fields into the page model. */
@@ -81,6 +86,7 @@ function normalize(raw) {
 
   return {
     id: String(raw.id),
+    courseId: String(raw.course_id ?? ''),
     platform: (raw.platform === 'google_classroom' ? 'google' : raw.platform === 'microsoft_teams' ? 'microsoft' : raw.platform || 'custom').toLowerCase(),
     course: raw.course_name || raw.course || 'ไม่ระบุวิชา',
     courseCode: raw.courseCode || '',
@@ -105,13 +111,22 @@ async function loadData() {
     return false;
   }
   if (!modules.auth.requireAuth()) return false;
-  const response = await modules.api.getAssignments();
+  const [response, rules] = await Promise.all([
+    modules.api.getAssignments(),
+    modules.api.getNotificationRules(),
+  ]);
   state.items = (response?.assignments || []).map(normalize);
+  state.reminders = new Map(
+    (Array.isArray(rules) ? rules : [])
+      .filter((rule) => rule.assignment_id)
+      .map((rule) => [String(rule.assignment_id), rule]),
+  );
   return true;
 }
 /* ---------------------------------------------------------------- filter */
 
 function matchesNonTabFilters(item) {
+  if (state.courseId && item.courseId !== state.courseId) return false;
   if (state.course !== 'all' && item.course !== state.course) return false;
   if (state.platform !== 'all' && item.platform !== state.platform) return false;
   if (state.search) {
@@ -233,8 +248,8 @@ function renderCourseChips() {
 function renderCard(item) {
   const meta = PLATFORM_META[item.platform] || PLATFORM_META.custom;
   const st = STATUS_META[item.status];
-  const reminders = {};
-  const rem = false;
+  const rule = state.reminders.get(item.id);
+  const rem = rule?.is_enabled ? rule : null;
   const isOpen = state.openId === item.id;
 
   const todoHtml = item.todo.length
@@ -265,7 +280,7 @@ function renderCard(item) {
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-sm text-slate-900"><strong>วิชา</strong> ${escapeHtml(item.course)}</span>
           <span class="asg-badge ${st.cls}">${st.text}</span>
-          ${rem ? `<span class="text-[11px] text-slate-500">🔔 ก่อน ${rem.value} ${unitLabel(rem.unit)}</span>` : ''}
+          ${rem ? `<span class="text-[11px] text-slate-500">🔔 ก่อน ${rem.lead_time_value} ${unitLabel(rem.lead_time_unit)}</span>` : ''}
         </div>
         <p class="text-sm font-medium text-slate-800 mt-1">${escapeHtml(item.title)}</p>
         <p class="text-xs text-slate-500 mt-1">📅 ${escapeHtml(formatDue(item.dueDate))}</p>
@@ -278,7 +293,7 @@ function renderCard(item) {
       ${todoHtml}
       ${reqHtml}
       <div class="flex flex-wrap items-center justify-center gap-3 mt-6">
-        <button type="button" class="asg-btn" data-remind="${escapeHtml(item.id)}">🔔 ${rem ? 'แก้ไขแจ้งเตือน' : 'แจ้งเตือน'}</button>
+        <button type="button" class="asg-btn" data-remind="${escapeHtml(item.id)}">🔔 ${rule ? 'แก้ไขแจ้งเตือน' : 'แจ้งเตือน'}</button>
         <button type="button" class="asg-btn asg-btn-primary" data-open-url="${escapeHtml(item.id)}" ${item.url ? '' : 'disabled'}>${submitLabel}</button>
       </div>
       ${rem ? '' : '<p class="text-[11px] text-slate-400 text-center mt-2">ผู้เรียนยังไม่ได้ตั้งค่าการแจ้งเตือน</p>'}
@@ -315,16 +330,26 @@ function renderAll() {
 function resetFilters() {
   state.tab = 'all';
   state.course = 'all';
+  state.courseId = null;
   state.platform = 'all';
   state.search = '';
-  $('search-input').value = '';
+  if ($('search-input')) $('search-input').value = '';
   $('filter-platform').value = 'all';
+  window.history.replaceState({}, '', window.location.pathname);
   renderAll();
 }
 
 function bindEvents() {
-  $('search-input').addEventListener('input', (e) => {
+  $('search-input')?.addEventListener('input', (e) => {
     state.search = e.target.value.trim().toLowerCase();
+    renderTabs();
+    renderList();
+  });
+
+  window.addEventListener('kmaps-search', (event) => {
+    const query = (event.detail?.query || '').trim().toLowerCase();
+    state.search = query;
+    if ($('search-input')) $('search-input').value = query;
     renderTabs();
     renderList();
   });
@@ -351,6 +376,7 @@ function bindEvents() {
     const chip = e.target.closest('[data-course]');
     if (!chip) return;
     state.course = chip.dataset.course;
+    state.courseId = null;
     renderAll();
   });
 
@@ -375,15 +401,6 @@ function bindEvents() {
     }
   });
 
-  $('logout-button').addEventListener('click', async () => {
-    const mods = await loadAuthModules();
-    if (mods && isAuthenticated()) {
-      mods.auth.logout();
-    } else {
-      window.location.href = 'login.html';
-    }
-  });
-
   bindReminderModal();
 }
 
@@ -394,12 +411,13 @@ function openReminderModal(id) {
   if (!item) return;
   state.reminderTargetId = id;
 
-  const rem = null;
+  const rem = state.reminders.get(id);
   $('reminder-task-title').textContent = item.title;
-  $('reminder-value').value = rem?.value ?? 1;
-  $('reminder-unit').value = rem?.unit ?? 'days';
-  $('reminder-remove').classList.toggle('hidden', !rem);
+  $('reminder-value').value = rem?.lead_time_value ?? 1;
+  $('reminder-unit').value = ({ minute: 'minutes', hour: 'hours', day: 'days' })[rem?.lead_time_unit] ?? 'days';
+  $('reminder-remove').classList.toggle('hidden', !rem?.is_enabled);
   $('reminder-error').classList.add('hidden');
+  $('reminder-error').textContent = '';
   $('reminder-modal').classList.add('is-open');
   $('reminder-value').focus();
 }
@@ -418,23 +436,75 @@ function bindReminderModal() {
     if (e.key === 'Escape') closeReminderModal();
   });
 
-  $('reminder-save').addEventListener('click', () => {
-    $('reminder-error').textContent = 'การตั้งค่าเตือนเฉพาะงานยังไม่รองรับใน backend';
-    $('reminder-error').classList.remove('hidden');
+  $('reminder-save').addEventListener('click', async () => {
+    const saveButton = $('reminder-save');
+    const value = Number($('reminder-value').value);
+    const unit = ({ minutes: 'minute', hours: 'hour', days: 'day' })[$('reminder-unit').value];
+    if (!Number.isInteger(value) || value < 1 || value > 30 || !unit) {
+      $('reminder-error').textContent = 'กรุณากรอกจำนวนเต็มตั้งแต่ 1 ถึง 30';
+      $('reminder-error').classList.remove('hidden');
+      return;
+    }
+    const modules = await loadAuthModules();
+    if (!modules) return;
+    saveButton.disabled = true;
+    try {
+      const existing = state.reminders.get(state.reminderTargetId);
+      const payload = { lead_time_value: value, lead_time_unit: unit, is_enabled: true };
+      const saved = existing
+        ? await modules.api.updateNotificationRule(existing.id, payload)
+        : await modules.api.createNotificationRule({
+            ...payload, type: 'due_soon', assignment_id: state.reminderTargetId, sequence_order: 1,
+          });
+      state.reminders.set(String(saved.assignment_id), saved);
+      closeReminderModal();
+      renderList();
+    } catch (error) {
+      $('reminder-error').textContent = error?.message || 'บันทึกการแจ้งเตือนไม่สำเร็จ กรุณาลองอีกครั้ง';
+      $('reminder-error').classList.remove('hidden');
+    } finally {
+      saveButton.disabled = false;
+    }
   });
 
-  $('reminder-remove').addEventListener('click', closeReminderModal);
+  $('reminder-remove').addEventListener('click', async () => {
+    const rule = state.reminders.get(state.reminderTargetId);
+    if (!rule) return closeReminderModal();
+    const removeButton = $('reminder-remove');
+    removeButton.disabled = true;
+    try {
+      const modules = await loadAuthModules();
+      if (!modules) return;
+      const saved = await modules.api.updateNotificationRule(rule.id, { is_enabled: false });
+      state.reminders.set(String(saved.assignment_id), saved);
+      closeReminderModal();
+      renderList();
+    } catch (error) {
+      $('reminder-error').textContent = error?.message || 'ปิดการแจ้งเตือนไม่สำเร็จ กรุณาลองอีกครั้ง';
+      $('reminder-error').classList.remove('hidden');
+    } finally {
+      removeButton.disabled = false;
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ init */
 
-function renderProfile() {
-  const user = getUserProfile();
-  $('user-display-name').textContent = user?.full_name || user?.name || user?.email || 'K.Kunagron';
-  $('user-role-badge').textContent = user?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักเรียน';
-}
-
 async function init() {
+  const params = new URLSearchParams(window.location.search);
+  state.courseId = params.get('course_id') || null;
+  state.course = params.get('course') || 'all';
+  const modules = await loadAuthModules();
+  if (!modules) {
+    $('task-list').textContent = 'ไม่สามารถโหลด API ของระบบได้';
+    return;
+  }
+  if (!modules.auth.requireAuth()) return;
+
+  // Mount the shared shell before loading page data so navigation remains
+  // available when the assignments API is temporarily unavailable.
+  initNavigation('assignments');
+
   let ok = false;
   try {
     ok = await loadData();
@@ -445,18 +515,18 @@ async function init() {
   }
   if (!ok) return;
 
-  await initSidebar({
-    container: 'sidebar-container',
-    active: 'assignments',
-    // Stay on this page for "assignments"; every other item uses the sidebar's default navigation.
-    onNavigate: (navId) => (navId === 'assignments' ? true : false),
-  });
-
-  renderProfile();
   const developerBanner = $('dev-banner');
   if (developerBanner) developerBanner.classList.add('hidden');
   bindEvents();
   renderAll();
+  window.addEventListener('kmaps:sync-complete', async () => {
+    try {
+      await loadData();
+      renderAll();
+    } catch (error) {
+      $('task-list').textContent = error.message || 'โหลดรายการงานไม่สำเร็จ';
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);

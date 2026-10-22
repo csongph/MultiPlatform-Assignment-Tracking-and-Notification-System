@@ -243,6 +243,14 @@ export class CourseCardComponent {
    */
   static render(course) {
     const isGoogle = course.platform === 'google';
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const courseId = String(course.id ?? '');
+    const href = `assignments.html?course_id=${encodeURIComponent(courseId)}&course=${encodeURIComponent(String(course.title ?? ''))}`;
     
     // ไอคอนและสีของแพลตฟอร์มซ้ายบนของการ์ด
     const platformIconHtml = isGoogle
@@ -271,7 +279,7 @@ export class CourseCardComponent {
       : '';
 
     return `
-      <article class="course-card" data-course-id="${course.id}" data-platform="${course.platform}">
+      <a class="course-card" href="${escapeHtml(href)}" data-course-id="${escapeHtml(courseId)}" data-platform="${escapeHtml(course.platform)}" aria-label="เปิดรายการงานของรายวิชา ${escapeHtml(course.title)}">
         <!-- แถบส่วนบน: โลโก้แพลตฟอร์ม + Badge สีแดง -->
         <div class="course-card-header">
           ${platformIconHtml}
@@ -280,11 +288,11 @@ export class CourseCardComponent {
 
         <!-- รายละเอียดวิชา -->
         <div class="course-card-body">
-          <h3 class="course-card-title">${course.title}</h3>
-          <p class="course-card-code">${course.code}</p>
-          <p class="course-card-instructor">${course.instructor}</p>
+          <h3 class="course-card-title">${escapeHtml(course.title)}</h3>
+          <p class="course-card-code">${escapeHtml(course.code)}</p>
+          <p class="course-card-instructor">${escapeHtml(course.instructor)}</p>
         </div>
-      </article>
+      </a>
     `;
   }
 }
@@ -307,6 +315,30 @@ export class CoursePageManager {
     // 1. เรียกใช้ Navigation System เดิมของระบบ
     initNavigation('courses');
 
+    await this.loadCourses();
+    // 3. เริ่มต้น Component ตัวกรองแพลตฟอร์ม
+    this.platformFilterComponent = new PlatformFilterComponent({
+      containerId: 'platform-filter-bar',
+      onFilterChange: (platforms) => this.handleFilterChange(platforms),
+    });
+    this.platformFilterComponent.render();
+
+    window.addEventListener('kmaps-search', (e) => {
+      this.searchQuery = e.detail?.query || '';
+      this.applyFiltersAndRender();
+    });
+    window.addEventListener('kmaps:sync-complete', async () => {
+      try {
+        await this.loadCourses();
+        this.statSummaryComponent.render(this.courses);
+        this.applyFiltersAndRender();
+      } catch { /* loadCourses renders the API error in the course list. */ }
+    });
+    this.statSummaryComponent.render(this.courses);
+    this.applyFiltersAndRender();
+  }
+
+  async loadCourses() {
     try {
       const [remoteCourses, assignmentsResponse] = await Promise.all([getCourses(), getAssignments()]);
       const assignments = assignmentsResponse.assignments || [];
@@ -329,23 +361,6 @@ export class CoursePageManager {
       if (grid) grid.textContent = error.message || 'ไม่สามารถโหลดรายวิชาจากระบบได้';
       throw error;
     }
-    // 3. เริ่มต้น Component ตัวกรองแพลตฟอร์ม
-    this.platformFilterComponent = new PlatformFilterComponent({
-      containerId: 'platform-filter-bar',
-      onFilterChange: (platforms) => this.handleFilterChange(platforms),
-    });
-
-    this.platformFilterComponent.render();
-
-    // 4. ผูก Custom Event สำหรับรับคำค้นหาจาก Topbar
-    window.addEventListener('kmaps-search', (e) => {
-      this.searchQuery = e.detail?.query || '';
-      this.applyFiltersAndRender();
-    });
-
-    // 5. Render หน้าจอครั้งแรก
-    this.statSummaryComponent.render(this.courses);
-    this.applyFiltersAndRender();
   }
 
   /**

@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,8 +128,12 @@ class LearningService:
     async def create_notification_rule(
         self, user_id: uuid.UUID, payload: NotificationRuleCreate
     ) -> NotificationRule:
+        if payload.assignment_id is not None:
+            assignment = await self.learning.get_assignment(user_id, payload.assignment_id)
+            if assignment is None or assignment.is_deleted:
+                raise NotFoundError("Assignment not found")
         try:
-            return await self.learning.create_notification_rule(
+            rule = await self.learning.create_notification_rule(
                 user_id=user_id,
                 type_=payload.type,
                 lead_time_value=payload.lead_time_value,
@@ -137,7 +141,11 @@ class LearningService:
                 lead_time_minutes=self._lead_time_minutes(payload.lead_time_value, payload.lead_time_unit),
                 sequence_order=payload.sequence_order,
                 is_enabled=payload.is_enabled,
+                assignment_id=payload.assignment_id,
             )
+            if rule.assignment_id is not None:
+                await self.learning.clear_pending_assignment_reminders(user_id, rule.assignment_id)
+            return rule
         except IntegrityError as exc:
             raise ValueError("A notification rule with this type and sequence order already exists") from exc
 
@@ -158,7 +166,10 @@ class LearningService:
                 value = payload.lead_time_value if payload.lead_time_value is not None else rule.lead_time_value
                 unit = payload.lead_time_unit if payload.lead_time_unit is not None else rule.lead_time_unit
                 values["lead_time_minutes"] = self._lead_time_minutes(value, unit)
-            return await self.learning.update_notification_rule(rule, **values)
+            updated = await self.learning.update_notification_rule(rule, **values)
+            if updated.assignment_id is not None:
+                await self.learning.clear_pending_assignment_reminders(user_id, updated.assignment_id)
+            return updated
         except IntegrityError as exc:
             raise ValueError("A notification rule with this type and sequence order already exists") from exc
 
@@ -166,11 +177,20 @@ class LearningService:
         rule = await self.learning.get_notification_rule(user_id, rule_id)
         if rule is None:
             raise NotFoundError("Notification rule not found")
+        assignment_id = rule.assignment_id
         await self.learning.delete_notification_rule(rule)
+        if assignment_id is not None:
+            await self.learning.clear_pending_assignment_reminders(user_id, assignment_id)
 
     async def list_notifications(
         self, user_id: uuid.UUID, status: str | None
     ) -> list[Notification]:
+        # Materialize reminders that are already due when the inbox is opened.
+        # Celery Beat still handles periodic delivery, but this keeps in-app
+        # reminders available after a worker/beat restart or temporary outage.
+        now = datetime.now(timezone.utc)
+        await self.learning.create_due_notifications(now, user_id=user_id)
+        await self.learning.create_overdue_notifications(now, user_id=user_id)
         return await self.learning.list_notifications(user_id, status)
 
     async def mark_notification_read(

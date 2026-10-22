@@ -14,7 +14,7 @@ import {
   getHealth,
 } from './api.js';
 
-import { getSignedInUser, logout, requireAuth } from './auth.js';
+import { getSignedInUser, requireAuth } from './auth.js';
 import { showToast } from './ui.js';
 import { initNavigation } from './navigation.js';
 
@@ -43,8 +43,6 @@ async function init() {
   if (subtitle) {
     subtitle.textContent = `Signed in as administrator (${user.email || ''})`;
   }
-
-  document.getElementById('logout-button')?.addEventListener('click', logout);
 
   setupTabs();
   setupUsersPanel();

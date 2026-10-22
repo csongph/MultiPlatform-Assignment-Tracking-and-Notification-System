@@ -12,13 +12,23 @@ app = FastAPI(title="MultiPlatform Assignment Tracking API", version="1.0.0")
 
 install_log_buffer()
 
-origins = [
-    settings.FRONTEND_ORIGIN,
+explicit_origins = [
+    origin.strip()
+    for origin in settings.FRONTEND_ORIGINS.split(",")
+    if origin.strip()
+]
+local_origins = {
     "http://localhost:5500",
     "http://127.0.0.1:5500",
     "http://localhost:5501",
     "http://127.0.0.1:5501",
-]
+}
+configured_origins = explicit_origins or [settings.FRONTEND_ORIGIN]
+if settings.FRONTEND_ORIGIN not in local_origins:
+    configured_origins.append(settings.FRONTEND_ORIGIN)
+elif not explicit_origins:
+    configured_origins.extend(local_origins)
+origins = list(dict.fromkeys(configured_origins))
 
 app.include_router(api_router, prefix="/api/v1")
 

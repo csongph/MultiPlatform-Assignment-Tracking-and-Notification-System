@@ -45,12 +45,10 @@ async def test_google_fetcher_loads_coursework_and_student_submission():
 
 @pytest.mark.asyncio
 async def test_google_fetcher_follows_course_pagination():
-    page_two = f"{CLASSROOM_API_BASE}/courses?pageToken=next"
-
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/courses" and not request.url.params.get("pageToken"):
             return httpx.Response(200, json={"courses": [{"id": "one", "name": "One"}], "nextPageToken": "next"})
-        if str(request.url) == page_two:
+        if request.url.path == "/v1/courses" and request.url.params.get("pageToken") == "next":
             return httpx.Response(200, json={"courses": [{"id": "two", "name": "Two"}]})
         if request.url.path.endswith("/courseWork"):
             return httpx.Response(200, json={"courseWork": []})

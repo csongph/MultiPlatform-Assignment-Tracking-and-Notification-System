@@ -1,4 +1,6 @@
 from functools import lru_cache
+from urllib.parse import urlsplit, urlunsplit
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 
@@ -27,6 +29,7 @@ class Settings(BaseSettings):
 
     # Where the browser is sent back to after onboarding finishes (your frontend app)
     FRONTEND_ORIGIN: str = "http://localhost:5500"
+    FRONTEND_ORIGINS: str = ""
     FRONTEND_ONBOARDING_SUCCESS_PATH: str = "/pages/onboarding.html"
     FRONTEND_ONBOARDING_ERROR_PATH: str = "/pages/onboarding.html"
 
@@ -34,14 +37,17 @@ class Settings(BaseSettings):
     NOTIFICATION_POLL_INTERVAL_SECONDS: int = 60
     NOTIFICATION_MAX_RETRIES: int = 3
 
-    # Dedicated KMAPS sender account, authorized once with the Gmail API's
-    # gmail.send scope.  This is deliberately separate from student OAuth.
-    GMAIL_SENDER_CLIENT_ID: str = ""
-    GMAIL_SENDER_CLIENT_SECRET: str = ""
-    GMAIL_SENDER_REFRESH_TOKEN: str = ""
-    GMAIL_SENDER_FROM_EMAIL: str = ""
-    GMAIL_SENDER_FROM_NAME: str = "KMAPS Notifications"
-    GMAIL_SENDER_REDIRECT_URI: str = "http://localhost:8085"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "KMAPS"
+    SMTP_USE_TLS: bool = True
+    PASSWORD_RESET_COOLDOWN_SECONDS: int = 60
+    PASSWORD_RESET_OTP_TTL_MINUTES: int = 10
+    PASSWORD_RESET_MAX_OTP_ATTEMPTS: int = 5
+    FORWARDED_ALLOW_IPS: str = "127.0.0.1"
     TOKEN_REFRESH_LEAD_MINUTES: int = 15
     CACHE_TTL_SECONDS: int = 300
 
@@ -51,6 +57,18 @@ class Settings(BaseSettings):
         if len(value) < 32 or value.lower().startswith(("replace-", "your-", "change-")):
             raise ValueError("Security secrets must be configured with unique values of at least 32 characters")
         return value
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def normalize_local_redis_host(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.hostname != "localhost":
+            return value
+
+        credentials = parsed.netloc.rsplit("@", 1)
+        auth = f"{credentials[0]}@" if len(credentials) == 2 else ""
+        port = f":{parsed.port}" if parsed.port is not None else ""
+        return urlunsplit(parsed._replace(netloc=f"{auth}127.0.0.1{port}"))
 
 
 @lru_cache
