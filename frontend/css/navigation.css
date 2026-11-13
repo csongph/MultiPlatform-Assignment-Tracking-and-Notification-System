@@ -7,7 +7,7 @@
   /* โทนสีม่วงเข้มสำหรับ Sidebar */
   --sidebar-bg-start: #1e1338;
   --sidebar-bg-end: #2a1b4e;
-  --sidebar-width: 250px;
+  --sidebar-width: 310px;
 
   /* โทนสีเขียวมะนาว (Neon/Lime Green) สำหรับ Active Pill & Topbar Badges */
   --color-lime-active: #b6f520;
@@ -60,16 +60,16 @@
    Sidebar Component (แถบเมนูด้านซ้าย แบบลอยและมนโค้ง)
    -------------------------------------------------------------------------- */
 .kmaps-sidebar {
-  background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-end) 100%);
-  border-radius: 1.5rem;
+  background: linear-gradient(180deg, #201333 0%, #352149 100%);
+  border-radius: 0;
   height: 100vh;
   min-height: 100vh;
   position: sticky;
   top: 0;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 1rem 1rem;
-  box-shadow: 0 10px 30px rgba(15, 10, 30, 0.35);
+  padding: clamp(1.5rem, 5vh, 3rem) 1rem clamp(1rem, 3vh, 1.75rem);
+  box-shadow: none;
   color: #ffffff;
   overflow-y: auto;
   transition: all 0.3s ease;
@@ -79,12 +79,18 @@
 /* โลโก้ LMS / KMAPS ด้านบนของ Sidebar */
 .sidebar-brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 1.5rem;
+  flex: 0 0 auto;
+  height: 5rem;
+  margin: 0 0 clamp(1.75rem, 6vh, 3.5rem);
+}
+
+.sidebar-logo {
+  display: block;
+  width: 4.25rem;
+  height: 4.25rem;
+  object-fit: contain;
 }
 
 .brand-badge {
@@ -112,11 +118,11 @@
 .sidebar-menu {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: clamp(1rem, 5vh, 2.75rem);
   list-style: none;
   padding: 0;
   margin: 0;
-  flex: 1;
+  flex: 0 0 auto;
 }
 
 .sidebar-menu-item {
@@ -126,12 +132,13 @@
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
-  padding: 0.75rem 1rem;
+  gap: clamp(.5rem, 1.2vw, 1rem);
+  min-height: 3.75rem;
+  padding: 0.5rem .75rem;
   border-radius: 9999px; /* รูปทรง Pill แบบในรูปภาพ */
   color: var(--sidebar-text-muted);
   text-decoration: none;
-  font-size: 0.9375rem;
+  font-size: .9rem;
   font-weight: 600;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -142,9 +149,9 @@
 .sidebar-label { overflow: hidden; text-overflow: ellipsis; }
 
 .sidebar-footer {
-  border-top: 1px solid rgba(255,255,255,.14);
-  padding-top: 1rem;
-  margin-top: auto;
+  border-top: 0;
+  padding-top: 0;
+  margin-top: clamp(1.5rem, 6vh, 3.25rem);
 }
 
 .sidebar-connect-link { font-size: .875rem; }
@@ -161,15 +168,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
   flex-shrink: 0;
 }
 
 .sidebar-icon svg {
-  width: 1.35rem;
-  height: 1.35rem;
-  stroke-width: 2.2;
+  width: 2.15rem;
+  height: 2.15rem;
+  stroke-width: 2.3;
 }
 
 /* สเตตัส Active (เมนูที่ถูกเลือกอยู่ - สีเขียวมะนาวเด่นชัด) */
@@ -182,6 +189,10 @@
 
 .sidebar-link.active .sidebar-icon svg {
   stroke: var(--color-lime-text);
+}
+
+.sidebar-link.active .sidebar-icon svg path {
+  stroke: currentColor;
 }
 
 /* --------------------------------------------------------------------------
@@ -379,7 +390,7 @@
     transform: translateX(-105%);
     transition: transform 0.28s ease;
     padding: 0;
-    width: min(280px, calc(100vw - 3rem));
+    width: min(310px, calc(100vw - 3rem));
     pointer-events: none;
   }
 
@@ -391,9 +402,10 @@
   .app-sidebar-container.open::before {
     content: "";
     position: fixed;
-    inset: 0;
-    z-index: -1;
+    inset: 0 0 0 min(310px, calc(100vw - 3rem));
+    z-index: 60;
     background: rgba(15, 23, 42, 0.48);
+    cursor: pointer;
   }
 
   .kmaps-sidebar {
@@ -402,6 +414,7 @@
     border-radius: 0;
     top: 0;
     pointer-events: auto;
+    padding: clamp(1.5rem, 5vh, 3rem) 1rem clamp(1rem, 3vh, 1.75rem);
   }
 
   .app-main-container {
@@ -423,6 +436,25 @@
     width: 100%;
     max-width: 100%;
   }
+}
+
+@media (max-width: 380px) {
+  .app-sidebar-container { width: min(280px, calc(100vw - 2rem)); }
+  .app-sidebar-container.open::before { inset-inline-start: min(280px, calc(100vw - 2rem)); }
+  .kmaps-sidebar { padding-inline: 1rem; }
+  .sidebar-menu { gap: clamp(.75rem, 4vh, 1.75rem); }
+  .sidebar-footer { margin-top: clamp(1rem, 4vh, 2rem); }
+  .sidebar-link { gap: .65rem; font-size: .8rem; padding-inline: .6rem; }
+  .sidebar-icon { width: 2.25rem; height: 2.25rem; }
+  .sidebar-icon svg { width: 2rem; height: 2rem; }
+}
+
+@media (min-width: 1025px) and (max-width: 1280px) {
+  :root { --sidebar-width: 250px; }
+  .kmaps-sidebar { padding-inline: .875rem; }
+  .sidebar-link { gap: .55rem; padding-inline: .5rem; font-size: .82rem; }
+  .sidebar-icon { width: 2.5rem; height: 2.5rem; }
+  .sidebar-icon svg { width: 2.25rem; height: 2.25rem; }
 }
 
 @media (max-width: 640px) {

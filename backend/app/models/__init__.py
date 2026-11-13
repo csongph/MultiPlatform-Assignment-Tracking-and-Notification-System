@@ -2,6 +2,7 @@ from app.models.base import Base
 from app.models.auth import PasswordRecoveryToken, Role, User, UserRole
 from app.models.core import (
     Assignment,
+    Announcement,
     Course,
     Notification,
     NotificationRule,
@@ -22,6 +23,7 @@ __all__ = [
     "OAuthConnection",
     "Course",
     "Assignment",
+    "Announcement",
     "UserAssignmentStatus",
     "NotificationRule",
     "NotificationSettings",

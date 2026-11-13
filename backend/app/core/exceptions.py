@@ -30,3 +30,7 @@ class OAuthProviderError(AppError):
     """Raised when Google/Microsoft returns an error during the OAuth exchange."""
 
     status_code = 502
+
+
+class OAuthReauthorizationRequired(OAuthProviderError):
+    """Raised when a provider permanently rejects a stored refresh token."""

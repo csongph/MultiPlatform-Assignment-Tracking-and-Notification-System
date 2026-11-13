@@ -1,5 +1,6 @@
 import uuid
 import secrets
+import logging
 
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,8 @@ from app.models.core import OAuthConnection
 from app.repositories.admin_repository import AuditLogRepository
 from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
 from app.repositories.user_repository import UserRepository
+
+logger = logging.getLogger(__name__)
 
 
 class OAuthOnboardingService:
@@ -53,7 +56,11 @@ class OAuthOnboardingService:
         except UnauthorizedError:
             raise
         except Exception as exc:
-            raise ServiceUnavailableError("OAuth state verification service is unavailable") from exc
+            logger.exception("OAuth state replay protection could not reach Redis")
+            raise ServiceUnavailableError(
+                "OAuth state verification is unavailable because Redis cannot be reached. "
+                "Check REDIS_URL and confirm the Redis server is running, then retry the connection."
+            ) from exc
 
         platform = await self.platforms.get_by_name(platform_name)
         if platform is None:

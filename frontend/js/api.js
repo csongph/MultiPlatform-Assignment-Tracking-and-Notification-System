@@ -59,9 +59,9 @@ class ApiError extends Error {
 
 const API_REQUEST_TIMEOUT_MS = 30000;
 
-async function fetchWithTimeout(url, config) {
+async function fetchWithTimeout(url, config, timeoutMs = API_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...config, signal: controller.signal });
   } catch (error) {
@@ -84,6 +84,7 @@ export async function request(endpoint, options = {}) {
     body,
     auth = false,
     headers = {},
+    timeoutMs = API_REQUEST_TIMEOUT_MS,
   } = options;
 
   const config = {
@@ -110,7 +111,7 @@ export async function request(endpoint, options = {}) {
   let response;
 
   try {
-    response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, config);
+    response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, config, timeoutMs);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(
@@ -122,7 +123,7 @@ export async function request(endpoint, options = {}) {
   if (auth && response.status === 401 && await refreshAuthSession()) {
     config.headers.Authorization = `Bearer ${getAccessToken()}`;
     try {
-      response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, config);
+      response = await fetchWithTimeout(`${API_BASE_URL}${endpoint}`, config, timeoutMs);
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(
@@ -411,6 +412,11 @@ export async function getNotifications() {
   return request('/notifications', { auth: true });
 }
 
+export async function getAnnouncements(platform = null, { timeoutMs = 12000 } = {}) {
+  const query = platform ? `?platform=${encodeURIComponent(platform)}` : '';
+  return request(`/announcements${query}`, { auth: true, timeoutMs });
+}
+
 export async function markNotificationRead(notificationId) {
   return request(`/notifications/${encodeURIComponent(notificationId)}/mark-read`, {
     method: 'POST', auth: true,
@@ -421,11 +427,12 @@ export async function markAllNotificationsRead() {
   return request('/notifications/mark-all-read', { method: 'POST', auth: true });
 }
 
-export async function queueSync(platform = 'google_classroom') {
+export async function queueSync(platform = 'google_classroom', { timeoutMs = API_REQUEST_TIMEOUT_MS } = {}) {
   return request('/sync', {
     method: 'POST',
     auth: true,
     body: { platform },
+    timeoutMs,
   });
 }
 

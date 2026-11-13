@@ -73,6 +73,7 @@ class OnboardingConnections(BaseModel):
 class OnboardingStatusResponse(BaseModel):
     has_connection: bool
     connections: OnboardingConnections
+    microsoft_demo_available: bool = False
 
 
 class OnboardingUpdateRequest(BaseModel):

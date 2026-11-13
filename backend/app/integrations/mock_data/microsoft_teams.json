@@ -1,0 +1,75 @@
+{
+  "_description": "ตัวอย่างข้อมูลจำลอง Microsoft Graph Education สำหรับทดสอบงานและประกาศจากผู้สอนใน Microsoft Teams",
+  "classes": {
+    "value": [
+      { "id": "3f8a1c52-7b4e-4d19-9a62-5e0c8d1b7a31", "displayName": "การเขียนโปรแกรมเบื้องต้น (COM101)" },
+      { "id": "a92d6e07-1c35-48fb-b3d4-72e9f40a5c18", "displayName": "การวิเคราะห์ระบบสารสนเทศ (IS204)" },
+      { "id": "c5b7340e-98a2-4f6d-8e1b-0d3a67f92b54", "displayName": "ฐานข้อมูลและการออกแบบ (DB301)" }
+    ]
+  },
+  "assignments": {
+    "value": [
+      {
+        "id": "e1a40b93-5d27-4c8f-a6b1-3f92d7c04e85",
+        "classId": "3f8a1c52-7b4e-4d19-9a62-5e0c8d1b7a31",
+        "displayName": "แบบฝึกหัดที่ 1: ตัวแปรและชนิดข้อมูล",
+        "status": "published",
+        "dueDateTime": "2026-11-20T16:00:00Z",
+        "instructions": { "content": "เขียนโปรแกรมตัวอย่างและอธิบายชนิดข้อมูลที่ใช้" },
+        "webUrl": "https://teams.microsoft.com/",
+        "submissions": [{ "id": "b7c21d5a-3e90-4a48-9f16-8d04e2a7c63b", "status": "working" }]
+      },
+      {
+        "id": "74d9f2c1-0a6b-4e53-b8d7-1c5e93a02f46",
+        "classId": "3f8a1c52-7b4e-4d19-9a62-5e0c8d1b7a31",
+        "displayName": "ใบงาน: การควบคุมเงื่อนไข",
+        "status": "published",
+        "dueDateTime": "2026-11-10T16:00:00Z",
+        "instructions": { "content": "ทำโจทย์เงื่อนไขให้ครบทุกข้อ" },
+        "webUrl": "https://teams.microsoft.com/",
+        "submissions": []
+      },
+      {
+        "id": "2b6e8a30-d4f1-47c9-a053-9e7b1d82c5f0",
+        "classId": "a92d6e07-1c35-48fb-b3d4-72e9f40a5c18",
+        "displayName": "ส่งแผนภาพ Use Case",
+        "status": "published",
+        "dueDateTime": "2026-11-25T09:00:00Z",
+        "instructions": { "content": "แนบแผนภาพและสรุปผู้ใช้งานของระบบ" },
+        "webUrl": "https://teams.microsoft.com/",
+        "submissions": [{ "id": "f03a97d2-6c18-4b5e-8a41-d2e75b09c3a6", "status": "submitted" }]
+      },
+      {
+        "id": "9c3f5e18-a7d2-4b60-91e4-6a08d3b7f2c9",
+        "classId": "a92d6e07-1c35-48fb-b3d4-72e9f40a5c18",
+        "displayName": "รายงานการสัมภาษณ์ผู้ใช้งานระบบ",
+        "status": "published",
+        "dueDateTime": "2026-12-02T16:59:00Z",
+        "instructions": { "content": "สัมภาษณ์ผู้ใช้อย่างน้อย 3 คน และสรุปความต้องการเป็นเอกสาร 1-2 หน้า" },
+        "webUrl": "https://teams.microsoft.com/",
+        "submissions": [{ "id": "5d81c4e7-92b3-4f0a-a6d8-0b3e7f15a294", "status": "working" }]
+      },
+      {
+        "id": "d8e07b46-3f95-4a2c-b1d0-47c6a9e53810",
+        "classId": "c5b7340e-98a2-4f6d-8e1b-0d3a67f92b54",
+        "displayName": "ออกแบบ ER Diagram ระบบร้านค้าออนไลน์",
+        "status": "published",
+        "dueDateTime": "2026-11-18T12:00:00Z",
+        "instructions": { "content": "วาด ER Diagram พร้อมระบุ Primary Key, Foreign Key และความสัมพันธ์ของตาราง" },
+        "webUrl": "https://teams.microsoft.com/",
+        "submissions": [{ "id": "1a74e9b3-c5d0-48f2-9e67-b3f802d1a4c7", "status": "returned" }]
+      }
+    ]
+  },
+  "announcements": {
+    "value": [
+      { "classId": "3f8a1c52-7b4e-4d19-9a62-5e0c8d1b7a31", "teacherIds": ["demo-teacher-com101"], "messages": [
+        { "id": "demo-announcement-com101-1", "subject": "แจ้งกำหนดการเรียนสัปดาห์นี้", "from": { "user": { "id": "demo-teacher-com101" } }, "body": { "content": "สัปดาห์นี้เรียนเรื่องตัวแปรและชนิดข้อมูล เตรียมแบบฝึกหัดมาทบทวนในชั้นเรียน" }, "createdDateTime": "2026-11-12T09:00:00Z", "webUrl": "https://teams.microsoft.com/" },
+        { "id": "demo-student-post-com101", "subject": "ส่งงานแล้ว", "from": { "user": { "id": "demo-student-com101" } }, "body": { "content": "ไฟล์งานอยู่ในงานที่ได้รับมอบหมาย" }, "createdDateTime": "2026-11-12T10:00:00Z", "webUrl": "https://teams.microsoft.com/" }
+      ] },
+      { "classId": "a92d6e07-1c35-48fb-b3d4-72e9f40a5c18", "teacherIds": ["demo-teacher-is204"], "messages": [
+        { "id": "demo-announcement-is204-1", "subject": "แจ้งเตรียมเอกสารนำเสนอ", "from": { "user": { "id": "demo-teacher-is204" } }, "body": { "content": "ให้นักศึกษาตรวจสอบหัวข้อและนำเอกสารประกอบการนำเสนอครั้งถัดไป" }, "createdDateTime": "2026-11-11T07:30:00Z", "webUrl": "https://teams.microsoft.com/" }
+      ] }
+    ]
+  }
+}

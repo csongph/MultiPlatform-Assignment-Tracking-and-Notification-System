@@ -95,6 +95,24 @@ class Assignment(Base):
     user_statuses: Mapped[list["UserAssignmentStatus"]] = relationship(back_populates="assignment")
 
 
+class Announcement(Base):
+    __tablename__ = "announcements"
+    __table_args__ = (UniqueConstraint("course_id", "external_announcement_id", name="uq_announcement_course_external"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("courses.id"), nullable=False)
+    external_announcement_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author_role: Mapped[str] = mapped_column(String(20), default="unknown", nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    course: Mapped["Course"] = relationship()
+
+
 class UserAssignmentStatus(Base):
     __tablename__ = "user_assignment_status"
     __table_args__ = (

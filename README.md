@@ -91,8 +91,10 @@ and provide centralized assignment, course, notification, and synchronization ma
 * Sync logs
 * Redis infrastructure
 * Celery infrastructure
+* Google Classroom assignment updates via Cloud Pub/Sub push events
+* Microsoft Teams event-triggered synchronization through a secured webhook receiver
 
-> Full automatic synchronization from Google Classroom and Microsoft Teams is still under development.
+> Google Classroom push requires a public HTTPS webhook, Cloud Pub/Sub configuration, and a fresh OAuth grant for the push-notification scope. Microsoft Graph does not currently expose Education assignments as a change-notification resource, so Teams events must be forwarded by a configured event bridge to `/api/v1/webhooks/microsoft-teams`. The periodic Teams fallback has been removed.
 
 ---
 
@@ -209,7 +211,7 @@ MultiPlatform-Assignment-Tracking-and-Notification-System/
 * [ ] Automatic course synchronization
 * [ ] Automatic assignment synchronization
 * [ ] Background synchronization
-* [ ] Automatic OAuth token refresh
+* [x] Automatic OAuth access-token refresh (Google Classroom and Microsoft Teams)
 * [ ] Complete notification delivery
 * [ ] Production deployment
 * [ ] Production OAuth configuration

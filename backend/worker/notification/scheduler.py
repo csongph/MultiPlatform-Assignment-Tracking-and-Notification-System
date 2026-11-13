@@ -1,11 +1,11 @@
 """Periodic evaluation of due-soon notification rules."""
 
-import asyncio
 from datetime import datetime, timezone
 
-from app.core.database import AsyncSessionLocal
 from app.repositories.learning_repository import LearningRepository
 from worker.celery_app import celery_app
+from worker.async_runner import run_async
+from worker.database import AsyncSessionLocal
 
 
 async def _schedule_due_notifications() -> int:
@@ -19,7 +19,7 @@ async def _schedule_due_notifications() -> int:
 
 @celery_app.task(name="worker.notification.scheduler.schedule_due_notifications_task")
 def schedule_due_notifications_task() -> dict:
-    created = asyncio.run(_schedule_due_notifications())
+    created = run_async(_schedule_due_notifications())
     # Dispatch separately so that the scheduling pass stays idempotent and
     # future email/push providers do not slow down rule evaluation.
     # Always dispatch: this also retries pending Gmail deliveries from a

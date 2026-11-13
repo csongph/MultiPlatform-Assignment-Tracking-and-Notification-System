@@ -87,6 +87,18 @@ class NotificationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AnnouncementOut(BaseModel):
+    id: uuid.UUID
+    course_id: uuid.UUID
+    course_name: str
+    platform: str
+    title: str
+    content: str | None
+    published_at: datetime | None
+    source_url: str | None
+    last_synced_at: datetime
+
+
 class NotificationRuleCreate(BaseModel):
     type: str = Field(default="due_soon", pattern="^(due_soon)$")
     assignment_id: uuid.UUID | None = None

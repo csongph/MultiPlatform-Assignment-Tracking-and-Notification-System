@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import OAuthConnection, Platform, User
 from app.schemas.auth import OnboardingStatusResponse
@@ -27,7 +28,15 @@ async def _get_connections(db: AsyncSession, user_id: uuid.UUID) -> dict:
 @router.get("/onboarding-status", response_model=OnboardingStatusResponse)
 async def get_onboarding_status(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     connections = await _get_connections(db, user.id)
-    return {"has_connection": any(connections.values()), "connections": connections}
+    demo_available = (
+        settings.MICROSOFT_TEAMS_USE_MOCK_DATA
+        and settings.APP_ENV.strip().lower() != "production"
+    )
+    return {
+        "has_connection": any(connections.values()) or demo_available,
+        "connections": connections,
+        "microsoft_demo_available": demo_available,
+    }
 
 
 @router.post("/onboarding-status", response_model=OnboardingStatusResponse)

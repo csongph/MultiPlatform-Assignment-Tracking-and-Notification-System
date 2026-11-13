@@ -5,12 +5,14 @@ from urllib.parse import urlencode
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import OAuthProviderError
+from app.core.exceptions import OAuthProviderError, OAuthReauthorizationRequired
 from app.integrations.base_adapter import BaseOAuthAdapter, TokenBundle
 from app.integrations.base_fetcher import (
     BaseAssignmentFetcher,
     RemoteAssignment,
+    RemoteAnnouncement,
     RemoteCourse,
+    RemoteCourseWithAnnouncements,
     RemoteCourseWithAssignments,
     TokenExpiredError,
 )
@@ -18,11 +20,14 @@ from app.integrations.base_fetcher import (
 AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 CLASSROOM_API_BASE = "https://classroom.googleapis.com/v1"
+CLASSROOM_REGISTRATIONS_URL = f"{CLASSROOM_API_BASE}/registrations"
 
 SCOPES = [
     "https://www.googleapis.com/auth/classroom.courses.readonly",
-    "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+    "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
     "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly",
+    "https://www.googleapis.com/auth/classroom.push-notifications",
+    "https://www.googleapis.com/auth/classroom.announcements.readonly",
 ]
 
 
@@ -72,6 +77,14 @@ class GoogleClassroomAdapter(BaseOAuthAdapter):
             raise OAuthProviderError("Failed to communicate with Google token endpoint") from exc
 
         if response.status_code != 200:
+            try:
+                provider_error = response.json().get("error")
+            except (ValueError, AttributeError):
+                provider_error = None
+            if provider_error in {"invalid_grant", "interaction_required"}:
+                raise OAuthReauthorizationRequired(
+                    "Google refresh token was revoked or requires new consent"
+                )
             raise OAuthProviderError(
                 f"Google token endpoint returned {response.status_code}"
             )
@@ -126,6 +139,47 @@ class GoogleClassroomFetcher(BaseAssignmentFetcher):
                 return RemoteCourseWithAssignments(course=course, assignments=assignments)
 
             return await asyncio.gather(*(load_course(course) for course in courses))
+
+    async def fetch_announcements(self, access_token: str) -> list[RemoteCourseWithAnnouncements]:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with httpx.AsyncClient(timeout=25, headers=headers) as client:
+            courses = await self._list_courses(client)
+            async def load(course: dict) -> RemoteCourseWithAnnouncements:
+                items: list[RemoteAnnouncement] = []
+                token = None
+                while True:
+                    params = {"pageSize": 100}
+                    if token:
+                        params["pageToken"] = token
+                    response = await self._get_with_retry(
+                        client, f"{CLASSROOM_API_BASE}/courses/{course['id']}/announcements", params
+                    )
+                    payload = response.json()
+                    for row in payload.get("announcements", []):
+                        # Draft announcements are not student-facing notifications.
+                        if row.get("state") != "PUBLISHED" or not row.get("id"):
+                            continue
+                        items.append(RemoteAnnouncement(
+                            external_id=row["id"],
+                            title=row.get("title") or "ประกาศจากผู้สอน",
+                            content=row.get("text"),
+                            published_at=self._parse_timestamp(row.get("updateTime") or row.get("creationTime")),
+                            source_url=row.get("alternateLink"),
+                        ))
+                    token = payload.get("nextPageToken")
+                    if not token:
+                        break
+                return RemoteCourseWithAnnouncements(str(course["id"]), items)
+            return await asyncio.gather(*(load(course) for course in courses))
+
+    @staticmethod
+    def _parse_timestamp(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            return None
 
     async def _get_with_retry(self, client: httpx.AsyncClient, url: str, params: dict | None = None) -> httpx.Response:
         for attempt in range(self.max_retries + 1):

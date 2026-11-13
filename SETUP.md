@@ -283,7 +283,21 @@ http://localhost:5500
 
 # 10. Run Complete System
 
-ต้องเปิด 2 Terminal
+### เริ่มระบบทั้งหมดด้วยสคริปต์ (Windows PowerShell)
+
+หลังตั้งค่า `backend\.env`, ติดตั้ง dependencies และเปิด Redis แล้ว รันคำสั่งนี้จากโฟลเดอร์โปรเจกต์ สคริปต์จะรัน migration, API, Celery worker, Celery Beat และ frontend จากนั้นเปิดหน้าเข้าสู่ระบบในเบราว์เซอร์ให้อัตโนมัติ:
+
+```powershell
+.\backend\start-backend.ps1
+```
+
+เมื่อ API, Celery worker และ Celery Beat ทำงาน ระบบจะตรวจ token ของ Google Classroom และ Microsoft Teams ทุก 5 นาที และต่ออายุล่วงหน้า 15 นาทีอัตโนมัติ หากผู้ให้บริการเพิกถอน refresh token หรือบังคับให้ยืนยันตัวตนใหม่ ต้องเชื่อมต่อแพลตฟอร์มอีกครั้ง
+
+เมื่อใช้ Redis ใน WSL สคริปต์จะเปิดตัวช่วยแบบซ่อนเพื่อคง WSL distro ไว้ระหว่างรันระบบ ป้องกัน Redis หยุดเมื่อ WSL ว่าง หากต้องการปิด WSL/Redis หลังหยุดระบบ ให้รัน `wsl --shutdown`
+
+### หรือเริ่มแยกด้วยตนเอง
+
+วิธีนี้ต้องเปิดหลาย Terminal
 
 ## Terminal 1 — Backend
 
@@ -415,6 +429,46 @@ GOOGLE_OAUTH_CLIENT_ID=your-client-id
 GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
 GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/oauth/google_classroom/callback
 ```
+
+ใน Google Cloud Console ของโปรเจกต์เดียวกับ `GOOGLE_OAUTH_CLIENT_ID` ให้เปิดใช้ **Google Classroom API** แล้วไปที่ **Google Auth Platform → Data Access → Add or Remove Scopes** วาง scope นี้ในช่อง **Manually add scopes** แล้วกด **Add to Table → Update → Save**:
+
+```text
+https://www.googleapis.com/auth/classroom.announcements.readonly
+```
+
+ถ้า scope ไม่อยู่ในรายการที่แสดง ให้เพิ่มด้วยช่อง **Manually add scopes** ตามขั้นตอนข้างต้น โค้ดร้องขอ scope นี้แล้ว แต่บัญชีที่เชื่อมไว้ก่อนเพิ่ม scope ต้องเชื่อม Google Classroom ใหม่และกดยอมรับสิทธิ์ จึงจะอ่านประกาศได้
+
+## ทดสอบ Classroom webhook โดยยังไม่ตั้งค่า Google Cloud
+
+ตั้ง `APP_ENV=development` ใน backend แล้วเรียก `POST /api/v1/webhooks/google-classroom` จากเครื่องเดียวกันได้โดยไม่ต้องมี Pub/Sub topic หรือ OIDC service account หากเรียกผ่านเครื่องอื่นหรือ Docker ให้ตั้ง `GOOGLE_CLASSROOM_WEBHOOK_SECRET` เป็น secret สุ่มยาว แล้วส่งค่าใน header `X-KMAPS-Webhook-Secret` ตัวอย่าง body แบบตรง:
+
+```json
+{
+  "eventId": "local-demo-001",
+  "courseId": "<course-id-that-is-already-synced>",
+  "collection": "courses.courseWork"
+}
+```
+
+ระบบจะตอบ `202` และเข้าคิวซิงก์ connection ที่มี course นี้อยู่แล้ว ถ้าไม่มี course/บัญชี Google ที่เชื่อมไว้ จะรับ event แต่ไม่มีงานซิงก์เข้าคิว โหมด local นี้ทดสอบการรับและจัดคิว event ได้ แต่การดึงรายละเอียดจริงยังต้องมี Google Classroom OAuth connection และสิทธิ์ API
+
+## ตั้งค่า Classroom event push สำหรับ Google Cloud
+
+ต้องมี API backend ที่เข้าถึงได้จากอินเทอร์เน็ตผ่าน HTTPS และเปิดใช้ Cloud Pub/Sub ใน Google Cloud project เดียวกับ Classroom API:
+
+1. สร้าง Pub/Sub topic แล้วให้ `classroom-notifications@system.gserviceaccount.com` มีสิทธิ์ `Pub/Sub Publisher` บน topic
+2. สร้าง push subscription ของ topic ชี้ไปที่ `https://<api-host>/api/v1/webhooks/google-classroom`
+3. เปิด authenticated push แบบ OIDC แล้วตั้ง service account และ audience ให้ตรงกับ `GOOGLE_PUBSUB_PUSH_SERVICE_ACCOUNT` และ `GOOGLE_PUBSUB_PUSH_AUDIENCE`; ให้ Pub/Sub service agent (`service-<PROJECT_NUMBER>@gcp-sa-pubsub.iam.gserviceaccount.com`) มี role `roles/iam.serviceAccountTokenCreator` บน push service account
+4. ตั้งค่า `GOOGLE_CLASSROOM_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_PUSH_SERVICE_ACCOUNT` และ `GOOGLE_PUBSUB_PUSH_AUDIENCE` ใน backend
+5. ให้ผู้ใช้เชื่อม Google Classroom ใหม่และอนุมัติ scope เพิ่มสำหรับ push notifications
+
+งาน Google Classroom จะเข้าคิวซิงก์ทันทีเมื่อได้รับ Pub/Sub event และระบบจะต่ออายุ feed registration ทุก 6 วัน ส่วน Microsoft Teams ให้ตั้ง event bridge ที่ตรวจจับเหตุการณ์งานแล้วเรียก `POST https://<api-host>/api/v1/webhooks/microsoft-teams` พร้อม header `X-Kmaps-Webhook-Secret` และ JSON เช่น `{"eventId":"unique-id","connectionId":"<oauth-connection-uuid>"}` ตั้งค่า secret เดียวกันใน `MICROSOFT_TEAMS_WEBHOOK_SECRET` ระบบจะเข้าคิวซิงก์ connection นั้นทันทีและปิด Teams periodic fallback แล้ว
+
+ข้อจำกัด: Microsoft Graph ยังไม่มี change notification สำหรับ Education assignments/submissions โดยตรง จึงต้องมี event bridge ภายนอกเป็นผู้ส่ง event มายัง endpoint นี้ การเพิ่ม endpoint ไม่ได้สร้าง native Graph subscription ให้โดยอัตโนมัติ
+
+## สาธิตข้อมูลงาน Microsoft Teams จาก JSON
+
+ในเครื่องพัฒนา เปิด `APP_ENV=development` และ `MICROSOFT_TEAMS_USE_MOCK_DATA=true` ใน `backend/.env` แล้ว restart backend จากนั้นสั่ง Sync Microsoft Teams ในหน้าเว็บได้เลย ระบบจะสร้าง demo connection ให้ผู้ใช้โดยอัตโนมัติและนำ fixture จาก `backend/app/integrations/mock_data/microsoft_teams.json` เข้า DB โดยตรง ไม่ต้องพึ่ง Redis/Celery หรือเชื่อม Microsoft OAuth
 
 รายละเอียดเพิ่มเติม:
 
@@ -626,13 +680,17 @@ DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/postgres?ssl=require
 
 ## Redis Connection Error
 
-ตรวจสอบ:
+OAuth ใช้ Redis เก็บ nonce เพื่อป้องกันการนำ callback มาใช้ซ้ำ ถ้า Redis ไม่พร้อม จะเชื่อมบัญชีใหม่ไม่สำเร็จ ให้ตรวจสอบค่าและสถานะ service:
 
 ```env
 REDIS_URL=redis://YOUR_REDIS_HOST:6379/0
 ```
 
 หากทีมมี Redis Server ให้ใช้ URL ที่ทีมกำหนด
+
+สำหรับ Redis ใน WSL ให้เปิด WSL แล้วรัน `sudo service redis-server start` เมื่อเห็น `Password:` ให้ใส่รหัสผ่านของผู้ใช้ Linux ใน WSL (ตัวอักษรจะไม่แสดงขณะพิมพ์) จากนั้นตรวจว่าพอร์ตตาม `REDIS_URL` เปิดรับการเชื่อมต่อ แล้วลองเชื่อมแพลตฟอร์มใหม่ สคริปต์ `backend\start-backend.ps1` จะตรวจ Redis ก่อนเปิด API อยู่แล้ว หากหน้าเว็บยังเปิดได้แต่ OAuth แจ้ง Redis แปลว่า Redis อาจหยุดหลังจากเริ่ม API หรือ backend ที่กำลังทำงานถูกเปิดด้วยวิธีอื่น
+
+การทดสอบ `Test-NetConnection` ตรวจได้เพียง TCP เท่านั้น ให้ยืนยันว่า Redis ตอบคำสั่งจริงด้วย `wsl -e sh -lc "redis-cli -h 127.0.0.1 -p 6379 ping"` ซึ่งควรตอบ `PONG` สคริปต์เริ่มระบบจะตรวจ `PING` ด้วยค่า `REDIS_URL` ที่ backend โหลดจริงโดยใช้ `backend/scripts/check_redis.py` หากตรวจไม่ผ่านจะหยุดก่อนเปิด API และแสดงสาเหตุ เช่น URL/รหัสผ่านไม่ตรงหรือปลายทางไม่ใช่ Redis
 
 ---
 

@@ -63,10 +63,37 @@ async def start_authorization(
     """
     try:
         ensure_supported_platform(platform)
+        # Check the same Redis service used to consume the one-time OAuth
+        # state nonce before sending the user to the provider's consent page.
+        # This avoids a full consent round-trip that can only fail on callback.
+        import redis.asyncio as redis_asyncio
+
+        from app.core.config import settings
+
+        redis = redis_asyncio.from_url(
+            settings.REDIS_URL,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        try:
+            await redis.ping()
+        finally:
+            await redis.aclose()
+
         service = OAuthOnboardingService(db)
         url = service.build_authorization_url(current_user.id, platform)
     except AppError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    except Exception as exc:
+        logger.exception("OAuth cannot start because the configured Redis service failed PING")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OAuth cannot start: Redis PING failed "
+                f"({type(exc).__name__}: {exc}). "
+                "Confirm the backend's REDIS_URL points to the reachable Redis server and retry."
+            ),
+        ) from exc
 
     return AuthorizeUrlResponse(authorization_url=url)
 
@@ -159,7 +186,7 @@ async def oauth_callback(
 
     # Kick off an immediate sync so the user sees their assignments the
     # moment they land back on the dashboard, instead of waiting for the
-    # next periodic Celery beat run (every SYNC_INTERVAL_MINUTES).
+    # next platform event (Google Classroom) or Microsoft fallback run.
     # `handle_callback` doesn't eager-load `.platform`, so re-fetch through
     # the repository rather than touching the lazy relationship directly
     # (that would raise MissingGreenlet on the async engine).

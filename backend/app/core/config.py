@@ -18,14 +18,23 @@ class Settings(BaseSettings):
 
     TOKEN_ENCRYPTION_KEY: str
 
+    APP_ENV: str = "production"
+
     GOOGLE_OAUTH_CLIENT_ID: str = ""
     GOOGLE_OAUTH_CLIENT_SECRET: str = ""
     GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/oauth/google_classroom/callback"
+    GOOGLE_CLASSROOM_PUBSUB_TOPIC: str = ""
+    GOOGLE_PUBSUB_PUSH_AUDIENCE: str = ""
+    GOOGLE_PUBSUB_PUSH_SERVICE_ACCOUNT: str = ""
+    GOOGLE_CLASSROOM_WEBHOOK_SECRET: str = ""
 
     MICROSOFT_OAUTH_CLIENT_ID: str = ""
     MICROSOFT_OAUTH_CLIENT_SECRET: str = ""
     MICROSOFT_OAUTH_TENANT: str = "organizations"
     MICROSOFT_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/oauth/microsoft_teams/callback"
+    MICROSOFT_TEAMS_USE_MOCK_DATA: bool = False
+    MICROSOFT_TEAMS_MOCK_DATA_PATH: str = "app/integrations/mock_data/microsoft_teams.json"
+    MICROSOFT_TEAMS_WEBHOOK_SECRET: str = ""
 
     # Where the browser is sent back to after onboarding finishes (your frontend app)
     FRONTEND_ORIGIN: str = "http://localhost:5500"
@@ -33,7 +42,6 @@ class Settings(BaseSettings):
     FRONTEND_ONBOARDING_SUCCESS_PATH: str = "/pages/onboarding.html"
     FRONTEND_ONBOARDING_ERROR_PATH: str = "/pages/onboarding.html"
 
-    SYNC_INTERVAL_MINUTES: int = 10
     NOTIFICATION_POLL_INTERVAL_SECONDS: int = 60
     NOTIFICATION_MAX_RETRIES: int = 3
 

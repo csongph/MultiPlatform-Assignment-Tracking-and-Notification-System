@@ -115,7 +115,9 @@ async function loadData() {
     modules.api.getAssignments(),
     modules.api.getNotificationRules(),
   ]);
-  state.items = (response?.assignments || []).map(normalize);
+  state.items = (response?.assignments || [])
+    .filter((item) => ['google_classroom', 'google', 'microsoft_teams', 'microsoft'].includes(String(item.platform || '').toLowerCase()))
+    .map(normalize);
   state.reminders = new Map(
     (Array.isArray(rules) ? rules : [])
       .filter((rule) => rule.assignment_id)
@@ -218,31 +220,93 @@ function renderTabs() {
   });
 }
 
+const PLATFORM_FILTERS = [
+  { id: 'all', label: 'ทุกแพลตฟอร์ม', cls: 'all' },
+  { id: 'google', label: 'Google Classroom', cls: 'google' },
+  { id: 'microsoft', label: 'Microsoft Teams', cls: 'microsoft' },
+];
+
+function renderPlatformTabs() {
+  const tabs = PLATFORM_FILTERS.map((platform) => {
+    const count = platform.id === 'all'
+      ? state.items.length
+      : state.items.filter((item) => item.platform === platform.id).length;
+    const meta = PLATFORM_META[platform.id];
+    const icon = meta ? `<span class="asg-source-icon ${meta.cls}">${meta.icon}</span>` : '';
+    return `
+      <button type="button" class="asg-platform-tab asg-platform-tab-${platform.cls} ${state.platform === platform.id ? 'is-active' : ''}"
+        data-platform="${platform.id}" role="tab" aria-selected="${state.platform === platform.id}">
+        ${icon}<span class="asg-platform-tab-label">${platform.label}</span>
+        <span class="asg-platform-tab-count">${count}</span>
+      </button>`;
+  });
+  $('platform-tabs').innerHTML = tabs.join('');
+}
+
 function renderCourseChips() {
-  const map = new Map();
-  state.items.forEach((i) => {
-    if (!map.has(i.course)) map.set(i.course, { name: i.course, code: i.courseCode, pending: 0, total: 0 });
-    const c = map.get(i.course);
-    c.total++;
-    if (!i.submitted) c.pending++;
+  const items = state.items.filter((item) => state.platform === 'all' || item.platform === state.platform);
+  const courses = new Map();
+  items.forEach((item) => {
+    const key = item.courseId || `${item.platform}:${item.course}`;
+    if (!courses.has(key)) {
+      courses.set(key, {
+        id: item.courseId,
+        name: item.course,
+        code: item.courseCode,
+        platform: item.platform,
+        pending: 0,
+        total: 0,
+      });
+    }
+    const course = courses.get(key);
+    course.total++;
+    if (!item.submitted) course.pending++;
   });
 
-  const chips = [
-    `<button type="button" class="asg-course-chip ${state.course === 'all' ? 'is-active' : ''}" data-course="all">
-       <div class="font-semibold text-slate-800">ทุกวิชา</div>
-       <div class="text-slate-500">${state.items.length} งาน</div>
-     </button>`,
-    ...[...map.values()].map(
-      (c) => `
-      <button type="button" class="asg-course-chip ${state.course === c.name ? 'is-active' : ''}" data-course="${escapeHtml(c.name)}">
-        <div class="font-semibold text-slate-800 max-w-[220px] truncate">${escapeHtml(c.name)}</div>
-        <div class="text-slate-500">${c.code ? escapeHtml(c.code) + ' · ' : ''}${
-        c.pending > 0 ? `ค้าง ${c.pending} งาน` : 'ส่งครบแล้ว'
-      }</div>
-      </button>`
-    ),
-  ];
-  $('course-chips').innerHTML = chips.join('');
+  const chips = [...courses.values()].map((course) => {
+    const active = course.id
+      ? state.courseId === course.id
+      : !state.courseId && state.course === course.name;
+    const source = state.platform === 'all'
+      ? `${PLATFORM_META[course.platform]?.label || 'แพลตฟอร์ม'} · `
+      : '';
+    return `
+      <button type="button" class="asg-course-chip ${active ? 'is-active' : ''}"
+        data-course-id="${escapeHtml(course.id || '')}" data-course-name="${escapeHtml(course.name)}">
+        <span class="asg-course-chip-name">${escapeHtml(course.name)}</span>
+        <span class="asg-course-chip-meta">${source}${course.code ? `${escapeHtml(course.code)} · ` : ''}${course.pending ? `ค้าง ${course.pending} งาน` : 'ส่งครบแล้ว'}</span>
+      </button>`;
+  }).join('');
+
+  const selectedMeta = state.platform === 'all' ? null : PLATFORM_META[state.platform];
+  const heading = state.platform === 'all'
+    ? 'ทุกวิชา'
+    : selectedMeta?.label || 'รายวิชา';
+  const icon = selectedMeta
+    ? `<span class="asg-source-icon ${selectedMeta.cls}">${selectedMeta.icon}</span>`
+    : '';
+  const groupClass = state.platform === 'all'
+    ? 'asg-course-group-all'
+    : `asg-course-group-${selectedMeta?.cls || ''}`;
+
+  $('course-chips').innerHTML = `
+    <section class="asg-course-group ${groupClass}" aria-label="${heading}">
+      <header class="asg-course-group-header">
+        ${icon}
+        <div class="min-w-0">
+          <h2>${heading}</h2>
+          <p>${courses.size} วิชา <span aria-hidden="true">·</span> ${items.length} งาน</p>
+        </div>
+      </header>
+      <div class="asg-course-list">
+        <button type="button" class="asg-course-chip asg-course-chip-all ${!state.courseId && state.course === 'all' ? 'is-active' : ''}"
+          data-course="all">
+          <span class="asg-course-chip-name">ทุกวิชา</span>
+          <span class="asg-course-chip-meta">${items.length} งาน</span>
+        </button>
+        ${chips || '<p class="asg-course-empty">ยังไม่มีรายวิชาในแพลตฟอร์มนี้</p>'}
+      </div>
+    </section>`;
 }
 
 function renderCard(item) {
@@ -321,6 +385,7 @@ function renderList() {
 function renderAll() {
   renderStats();
   renderTabs();
+  renderPlatformTabs();
   renderCourseChips();
   renderList();
 }
@@ -334,7 +399,6 @@ function resetFilters() {
   state.platform = 'all';
   state.search = '';
   if ($('search-input')) $('search-input').value = '';
-  $('filter-platform').value = 'all';
   window.history.replaceState({}, '', window.location.pathname);
   renderAll();
 }
@@ -354,8 +418,12 @@ function bindEvents() {
     renderList();
   });
 
-  $('filter-platform').addEventListener('change', (e) => {
-    state.platform = e.target.value;
+  $('platform-tabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-platform]');
+    if (!tab) return;
+    state.platform = tab.dataset.platform;
+    state.course = 'all';
+    state.courseId = null;
     renderAll();
   });
 
@@ -374,9 +442,14 @@ function bindEvents() {
 
   $('course-chips').addEventListener('click', (e) => {
     const chip = e.target.closest('[data-course]');
-    if (!chip) return;
-    state.course = chip.dataset.course;
-    state.courseId = null;
+    const courseChip = e.target.closest('[data-course-id]');
+    if (chip) {
+      state.course = 'all';
+      state.courseId = null;
+    } else if (courseChip) {
+      state.course = courseChip.dataset.courseName;
+      state.courseId = courseChip.dataset.courseId || null;
+    } else return;
     renderAll();
   });
 

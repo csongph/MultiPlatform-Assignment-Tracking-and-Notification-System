@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.core import (
+    Announcement,
     Assignment,
     Course,
     Notification,
@@ -22,6 +23,17 @@ class LearningRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def list_announcements(self, user_id: uuid.UUID, platform: str | None = None) -> list[Announcement]:
+        statement = (select(Announcement).join(Course)
+            .options(selectinload(Announcement.course).selectinload(Course.platform))
+            .where(Course.user_id == user_id, Course.is_deleted.is_(False),
+                   Announcement.is_deleted.is_(False), Announcement.author_role == "teacher")
+            .order_by(Announcement.published_at.desc().nullslast(), Announcement.last_synced_at.desc()))
+        if platform:
+            statement = statement.where(Course.platform.has(name=platform))
+        result = await self.db.execute(statement)
+        return list(result.scalars().all())
+
     async def dashboard_counts(self, user_id: uuid.UUID) -> tuple[int, int, int, int, list[str]]:
         now = datetime.now(timezone.utc)
         due_soon_until = now + timedelta(hours=24)
@@ -32,13 +44,18 @@ class LearningRepository:
         total_assignments = await self._count(
             select(func.count(Assignment.id))
             .join(Course)
-            .where(Course.user_id == user_id, Assignment.is_deleted.is_(False))
+            .where(
+                Course.user_id == user_id,
+                Course.is_deleted.is_(False),
+                Assignment.is_deleted.is_(False),
+            )
         )
         due_soon = await self._count(
             select(func.count(Assignment.id))
             .join(Course)
             .where(
                 Course.user_id == user_id,
+                Course.is_deleted.is_(False),
                 Assignment.is_deleted.is_(False),
                 Assignment.due_at.is_not(None),
                 Assignment.due_at >= now,
@@ -50,6 +67,7 @@ class LearningRepository:
             .join(Course)
             .where(
                 Course.user_id == user_id,
+                Course.is_deleted.is_(False),
                 Assignment.is_deleted.is_(False),
                 Assignment.computed_status == "overdue",
             )
@@ -102,7 +120,10 @@ class LearningRepository:
         if due_before:
             statement = statement.where(Assignment.due_at <= due_before)
         if not include_deleted:
-            statement = statement.where(Assignment.is_deleted.is_(False))
+            statement = statement.where(
+                Assignment.is_deleted.is_(False),
+                Course.is_deleted.is_(False),
+            )
 
         result = await self.db.execute(statement)
         return list(result.scalars().all())
@@ -112,7 +133,12 @@ class LearningRepository:
             select(Assignment)
             .join(Course)
             .options(selectinload(Assignment.course).selectinload(Course.platform))
-            .where(Course.user_id == user_id, Assignment.id == assignment_id)
+            .where(
+                Course.user_id == user_id,
+                Course.is_deleted.is_(False),
+                Assignment.is_deleted.is_(False),
+                Assignment.id == assignment_id,
+            )
         )
         return result.scalar_one_or_none()
 

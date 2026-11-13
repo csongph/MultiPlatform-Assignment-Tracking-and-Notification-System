@@ -1,19 +1,23 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 import html
 import logging
+from pathlib import Path
 import re
 from urllib.parse import urlencode
 
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import OAuthProviderError
+from app.core.exceptions import OAuthProviderError, OAuthReauthorizationRequired
 from app.integrations.base_adapter import BaseOAuthAdapter, TokenBundle
 from app.integrations.base_fetcher import (
     BaseAssignmentFetcher,
     RemoteAssignment,
+    RemoteAnnouncement,
     RemoteCourse,
+    RemoteCourseWithAnnouncements,
     RemoteCourseWithAssignments,
     TokenExpiredError,
 )
@@ -26,6 +30,7 @@ SCOPES = [
     "offline_access",
     "https://graph.microsoft.com/EduAssignments.ReadBasic",
     "https://graph.microsoft.com/EduRoster.ReadBasic",
+    "https://graph.microsoft.com/ChannelMessage.Read.All",
 ]
 
 
@@ -89,6 +94,14 @@ class MicrosoftTeamsAdapter(BaseOAuthAdapter):
             ) from exc
 
         if response.status_code != 200:
+            try:
+                provider_error = response.json().get("error")
+            except (ValueError, AttributeError):
+                provider_error = None
+            if provider_error in {"invalid_grant", "interaction_required"}:
+                raise OAuthReauthorizationRequired(
+                    "Microsoft refresh token was revoked or requires new consent"
+                )
             raise OAuthProviderError(
                 f"Microsoft token endpoint returned {response.status_code}"
             )
@@ -140,6 +153,11 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
         self.max_retries = max_retries
 
     async def fetch_assignments(self, access_token: str) -> list[RemoteCourseWithAssignments]:
+        if settings.MICROSOFT_TEAMS_USE_MOCK_DATA:
+            if settings.APP_ENV.strip().lower() == "production":
+                raise OAuthProviderError("Microsoft Teams mock data is disabled in production")
+            return await self._fetch_mock_assignments()
+
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
@@ -179,6 +197,127 @@ class MicrosoftTeamsFetcher(BaseAssignmentFetcher):
 
             loaded = await asyncio.gather(*(load_class(cls) for cls in classes))
             return [item for item in loaded if item is not None]
+
+    async def fetch_announcements(self, access_token: str) -> list[RemoteCourseWithAnnouncements]:
+        """Read channel posts for education classes; requires ChannelMessage.Read.All consent."""
+        if settings.MICROSOFT_TEAMS_USE_MOCK_DATA:
+            path = Path(settings.MICROSOFT_TEAMS_MOCK_DATA_PATH)
+            if not path.is_absolute():
+                path = Path(__file__).resolve().parents[2] / path
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            courses = payload.get("announcements", {}).get("value", [])
+            return [RemoteCourseWithAnnouncements(
+                str(course.get("classId")),
+                [RemoteAnnouncement(
+                    external_id=str(item["id"]),
+                    title=item["subject"],
+                    content=self._clean_html((item.get("body") or {}).get("content", "")) or None,
+                    published_at=self._parse_iso_datetime(item.get("createdDateTime")),
+                    source_url=item.get("webUrl"),
+                    author_role="teacher",
+                ) for item in course.get("messages", [])
+                    if item.get("id") and item.get("subject")
+                    and ((item.get("from") or {}).get("user") or {}).get("id") in course.get("teacherIds", [])]
+            ) for course in courses if course.get("classId")]
+
+        headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+        results: list[RemoteCourseWithAnnouncements] = []
+        async with httpx.AsyncClient(timeout=25, headers=headers) as client:
+            classes = await self._list_classes(client)
+            for cls in classes:
+                class_id = cls.get("id")
+                if not class_id:
+                    continue
+                messages: list[RemoteAnnouncement] = []
+                try:
+                    teachers = await self._fetch_paged_items(
+                        client, f"{GRAPH_API_BASE}/education/classes/{class_id}/teachers"
+                    )
+                    teacher_ids = {
+                        str(teacher.get("id") or teacher.get("userId"))
+                        for teacher in teachers if teacher.get("id") or teacher.get("userId")
+                    }
+                    channels = await self._fetch_paged_items(client, f"{GRAPH_API_BASE}/teams/{class_id}/channels")
+                    for channel in channels:
+                        channel_id = channel.get("id")
+                        if not channel_id:
+                            continue
+                        rows = await self._fetch_paged_items(
+                            client, f"{GRAPH_API_BASE}/teams/{class_id}/channels/{channel_id}/messages",
+                            params={"$top": "50"},
+                        )
+                        for row in rows:
+                            if not row.get("id") or row.get("deletedDateTime"):
+                                continue
+                            author_id = str(((row.get("from") or {}).get("user") or {}).get("id") or "")
+                            subject = (row.get("subject") or "").strip()
+                            # A Teams announcement is a titled channel post authored by a class teacher.
+                            # Regular chat, student posts, and work/coursework are intentionally excluded.
+                            if author_id not in teacher_ids or not subject:
+                                continue
+                            body = row.get("body") or {}
+                            messages.append(RemoteAnnouncement(
+                                external_id=f"{channel_id}:{row['id']}",
+                                title=subject,
+                                content=self._clean_html(body.get("content", "")) or None,
+                                published_at=self._parse_iso_datetime(row.get("createdDateTime")),
+                                source_url=row.get("webUrl"),
+                                author_role="teacher",
+                            ))
+                except OAuthProviderError:
+                    # Bubble up so sync can preserve existing announcements instead of soft-deleting them.
+                    raise
+                results.append(RemoteCourseWithAnnouncements(class_id, messages))
+        return results
+
+    async def _fetch_mock_assignments(self) -> list[RemoteCourseWithAssignments]:
+        """Load a Graph-shaped fixture for local demos without Microsoft credentials."""
+        path = Path(settings.MICROSOFT_TEAMS_MOCK_DATA_PATH)
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[2] / path
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise OAuthProviderError(f"Could not load Microsoft Teams mock data: {path}") from exc
+
+        if not isinstance(payload, dict):
+            raise OAuthProviderError("Microsoft Teams mock data must be a JSON object")
+        classes = payload.get("classes", {}).get("value", [])
+        assignments = payload.get("assignments", {}).get("value", [])
+        if not isinstance(classes, list) or not isinstance(assignments, list):
+            raise OAuthProviderError("Microsoft Teams mock data must contain classes.value and assignments.value arrays")
+
+        grouped: dict[str, list[dict]] = {}
+        for item in assignments:
+            if isinstance(item, dict) and item.get("classId"):
+                grouped.setdefault(item["classId"], []).append(item)
+
+        now = datetime.now(timezone.utc)
+        results = []
+        for raw_class in classes:
+            if not isinstance(raw_class, dict) or not raw_class.get("id"):
+                continue
+            course = RemoteCourse(raw_class["id"], raw_class.get("displayName") or "Untitled Class")
+            remote_assignments = []
+            for raw in grouped.get(course.external_id, []):
+                if not raw.get("id") or raw.get("status") in ("draft", "deactivated"):
+                    continue
+                due_at = self._parse_iso_datetime(raw.get("dueDateTime"))
+                submissions = self._expanded_submissions(raw) or []
+                submitted = bool(submissions and (submissions[0].get("status") or "").lower() in ("submitted", "returned"))
+                instructions = raw.get("instructions")
+                description = self._clean_html(instructions["content"]) if isinstance(instructions, dict) and instructions.get("content") else None
+                remote_assignments.append(RemoteAssignment(
+                    external_id=raw["id"],
+                    title=raw.get("displayName") or "Untitled assignment",
+                    description=description,
+                    due_at=due_at,
+                    source_status=raw.get("status", "unknown"),
+                    computed_status="submitted" if submitted else "overdue" if due_at and due_at < now else "not_submitted",
+                    source_url=raw.get("webUrl"),
+                ))
+            results.append(RemoteCourseWithAssignments(course, remote_assignments))
+        return results
 
     async def _get_with_retry(
         self,

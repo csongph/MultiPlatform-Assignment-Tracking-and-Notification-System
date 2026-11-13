@@ -82,8 +82,11 @@
       <section class="md3-surface-panel p-5 sm:p-8 flex flex-col gap-5" aria-label="รายการงาน">
         <h1 class="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">งานที่ได้รับมอบหมาย</h1>
 
-        <!-- Course filter chips -->
-        <div id="course-chips" class="flex gap-3 overflow-x-auto pb-1" aria-label="กรองตามรายวิชา"></div>
+        <!-- Platform source filter -->
+        <div id="platform-tabs" class="asg-platform-tabs" role="tablist" aria-label="แยกงานตามแพลตฟอร์ม"></div>
+
+        <!-- Courses grouped by their source platform -->
+        <div id="course-chips" class="asg-course-groups" aria-label="กรองตามรายวิชา"></div>
 
         <!-- Toolbar -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -94,12 +97,6 @@
             <button type="button" class="asg-tab" data-tab="submitted">ส่งแล้ว<span class="asg-count">0</span></button>
           </div>
           <div class="flex flex-wrap gap-2">
-            <select id="filter-platform" class="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-full font-prompt focus:outline-none" aria-label="แพลตฟอร์ม">
-              <option value="all">ทุกแพลตฟอร์ม</option>
-              <option value="google">Google Classroom</option>
-              <option value="microsoft">Microsoft Teams</option>
-              <option value="custom">งานที่เพิ่มเอง</option>
-            </select>
             <select id="sort-by" class="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-full font-prompt focus:outline-none" aria-label="จัดเรียงตาม">
               <option value="due">เรียง: กำหนดส่งใกล้สุด</option>
               <option value="title">เรียง: ชื่องาน ก-ฮ / A-Z</option>

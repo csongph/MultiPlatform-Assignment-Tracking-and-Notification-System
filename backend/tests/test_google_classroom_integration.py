@@ -69,7 +69,9 @@ async def test_google_fetcher_surfaces_expired_token():
             await GoogleClassroomFetcher().fetch_assignments("expired-token")
 
 
-def test_google_classroom_scope_is_read_only():
+def test_google_classroom_scopes_include_push_and_read_only_access():
     from app.integrations.google_classroom_adapter import SCOPES
 
-    assert all(scope.endswith(".readonly") for scope in SCOPES)
+    assert "https://www.googleapis.com/auth/classroom.push-notifications" in SCOPES
+    assert "https://www.googleapis.com/auth/classroom.coursework.students.readonly" in SCOPES
+    assert all(scope.endswith(".readonly") or scope.endswith("push-notifications") for scope in SCOPES)

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.core import Assignment, Course
+from app.models.core import Announcement, Assignment, Course
 from app.models.logs import SyncLog
 
 
@@ -51,9 +51,20 @@ class CourseRepository:
                 Course.is_deleted.is_(False),
             )
         )
+        missing_course_ids = []
         for course in result.scalars().all():
             if course.external_course_id not in seen_external_ids:
                 course.is_deleted = True
+                missing_course_ids.append(course.id)
+        if missing_course_ids:
+            await self.db.execute(
+                update(Assignment)
+                .where(
+                    Assignment.course_id.in_(missing_course_ids),
+                    Assignment.is_deleted.is_(False),
+                )
+                .values(is_deleted=True)
+            )
         await self.db.flush()
 
 
@@ -119,6 +130,43 @@ class AssignmentRepository:
         for assignment in result.scalars().all():
             if assignment.external_assignment_id not in seen_external_ids:
                 assignment.is_deleted = True
+        await self.db.flush()
+
+
+class AnnouncementRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def upsert(self, course_id: uuid.UUID, item) -> Announcement:
+        result = await self.db.execute(select(Announcement).where(
+            Announcement.course_id == course_id,
+            Announcement.external_announcement_id == item.external_id,
+        ))
+        row = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if row is None:
+            row = Announcement(course_id=course_id, external_announcement_id=item.external_id,
+                title=item.title, content=item.content, published_at=item.published_at,
+                source_url=item.source_url, author_role=item.author_role, last_synced_at=now)
+            self.db.add(row)
+        else:
+            row.title = item.title
+            row.content = item.content
+            row.published_at = item.published_at
+            row.source_url = item.source_url
+            row.author_role = item.author_role
+            row.is_deleted = False
+            row.last_synced_at = now
+        await self.db.flush()
+        return row
+
+    async def soft_delete_missing(self, course_id: uuid.UUID, seen_ids: set[str]) -> None:
+        result = await self.db.execute(select(Announcement).where(
+            Announcement.course_id == course_id, Announcement.is_deleted.is_(False)
+        ))
+        for item in result.scalars().all():
+            if item.external_announcement_id not in seen_ids:
+                item.is_deleted = True
         await self.db.flush()
 
 

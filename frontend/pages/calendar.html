@@ -33,8 +33,7 @@
     <main class="app-main-container">
       <div id="kmaps-topbar-container"></div>
       <div class="app-content">
-    
-      <header class="app-header"><div><p class="app-eyebrow">KMAPS</p><h1>ปฏิทิน</h1></div></header>
+        <header class="app-header"><div><p class="app-eyebrow">KMAPS</p><h1>ปฏิทินและการแจ้งเตือน</h1></div></header>
       <!-- Dashboard Stats Cards -->
       <section class="summary-cards grid grid-cols-3 gap-4">
         <div class="card bg-[#ffff52] text-[#1a1a1a] rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
@@ -52,7 +51,7 @@
       </section>
 
       <!-- Calendar Section -->
-      <section class="calendar-wrapper flex-1 bg-[#e5e5e8] rounded-[20px] p-5 flex flex-col items-center gap-4 overflow-y-auto">
+      <section class="calendar-wrapper bg-[#e5e5e8] rounded-[20px] p-5 flex flex-col items-center gap-4">
         <div class="calendar-header-controls flex gap-2.5">
           <select id="monthSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer">
             <option value="0">มกราคม</option><option value="1">กุมภาพันธ์</option><option value="2">มีนาคม</option>
@@ -64,12 +63,6 @@
           <select id="yearSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer" aria-label="เลือกปี">
             <option value="">กำลังโหลดปี...</option>
           </select>
-        </div>
-
-        <div class="calendar-legend" aria-label="คำอธิบายสัญลักษณ์ปฏิทิน">
-          <span><i class="calendar-legend-dot due" aria-hidden="true"></i> วันครบกำหนด</span>
-          <span><i class="calendar-legend-dot reminder" aria-hidden="true">🔔</i> วันแจ้งเตือนล่วงหน้า</span>
-          <span><i class="calendar-legend-dot submitted" aria-hidden="true">✓</i> ส่งแล้ว</span>
         </div>
 
         <div class="calendar-card bg-white rounded-[20px] w-full max-w-[650px] p-6 shadow-sm">
@@ -89,6 +82,26 @@
           <div class="days-grid grid grid-cols-7 gap-y-3 gap-x-2.5 text-center" id="daysGrid">
             <!-- Rendered dynamically by JS -->
           </div>
+        </div>
+      </section>
+
+      <section class="platform-alerts-section" id="platform-notifications" aria-labelledby="platform-alerts-heading">
+        <div class="platform-alerts-header">
+          <div class="platform-alerts-heading">
+            <div class="platform-alerts-heading-icon"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i></div>
+            <div>
+              <p class="app-eyebrow">CLASSROOM &amp; TEAMS</p>
+              <h2 id="platform-alerts-heading">ประกาศและการแจ้งเตือน</h2>
+              <p>ข้อความแจ้งจากอาจารย์ในรายวิชาที่เชื่อมต่อ</p>
+            </div>
+          </div>
+          <div class="platform-alerts-actions">
+            <span id="platform-alert-count" class="platform-alert-count">กำลังโหลด</span>
+            <button id="refresh-platform-alerts" class="platform-alert-refresh" type="button" aria-label="โหลดประกาศอีกครั้ง" title="โหลดประกาศอีกครั้ง"><i class="fa-solid fa-rotate" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div id="announcement-list" class="platform-alerts-list" aria-live="polite">
+          <div class="platform-alert-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
         </div>
       </section>
       </div>

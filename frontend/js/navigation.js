@@ -26,11 +26,8 @@ export class SidebarComponent {
     this.activeTab = activeTab;
     this.menuItems = [
       { key: 'overview', label: 'ภาพรวม', icon: this.getOverviewIcon(), href: 'dashboard.html?view=overview' },
-      { key: 'courses', label: 'รายวิชา', icon: this.getCoursesIcon(), href: 'courses.html' },
-      { key: 'assignments', label: 'รายการงาน', icon: this.getSubmissionsIcon(), href: 'assignments.html' },
-      { key: 'submissions', label: 'การส่งงาน', icon: this.getSubmissionsIcon(), href: 'dashboard.html?view=assignments' },
-      { key: 'notifications', label: 'การแจ้งเตือน', icon: this.getNotificationsIcon(), href: 'notification.html' },
-      { key: 'calendar', label: 'ปฏิทิน', icon: this.getCalendarIcon(), href: 'calendar.html' },
+      { key: 'assignments', label: 'งานที่ได้รับมอบหมาย', icon: this.getSubmissionsIcon(), href: 'assignments.html' },
+      { key: 'calendar', label: 'ปฏิทินและการแจ้งเตือน', icon: this.getCalendarIcon(), href: 'calendar.html' },
     ];
   }
 
@@ -48,7 +45,7 @@ export class SidebarComponent {
 
   getSubmissionsIcon() {
     return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
     </svg>`;
   }
 
@@ -101,12 +98,7 @@ export class SidebarComponent {
     return `
       <aside class="kmaps-sidebar" aria-label="Main Navigation">
         <div class="sidebar-brand">
-          <div class="brand-badge">
-            ${this.getCoursesIcon()}
-          </div>
-          <span style="font-size:1.1rem;font-weight:800;letter-spacing:.05em;color:#fff;">
-            LMS KMAPS
-          </span>
+          <img src="${basePath}../assets/image/logoweb-256.png" alt="LMS KMAPS" class="sidebar-logo">
         </div>
 
         <ul class="sidebar-menu">
@@ -336,7 +328,8 @@ export class NavigationManager {
       });
 
       sidebarContainer.addEventListener('click', (event) => {
-        if (event.target === sidebarContainer) {
+        const clickedBackdrop = event.target === sidebarContainer && event.clientX >= sidebarContainer.clientWidth;
+        if (clickedBackdrop || event.target.closest('[data-nav-key]')) {
           sidebarContainer.classList.remove('open');
           mobileToggle.setAttribute('aria-expanded', 'false');
         }
@@ -353,12 +346,6 @@ export class NavigationManager {
 
     document.getElementById('sync-now-button')?.addEventListener('click', () => this.syncNow());
 
-    sidebarContainer?.querySelectorAll('[data-nav-key]').forEach((link) => {
-      link.addEventListener('click', () => {
-        sidebarContainer.classList.remove('open');
-          mobileToggle?.setAttribute('aria-expanded', 'false');
-      });
-    });
   }
 
   dispatchSearchEvent(query) {
@@ -377,18 +364,28 @@ export class NavigationManager {
     button.disabled = true;
     if (icon) icon.classList.add('spin-animate');
     if (label) label.textContent = 'กำลังซิงก์...';
+    let syncPhase = 'กำลังอ่านสถานะการเชื่อมต่อ';
     try {
-      const connections = (await getOnboardingStatus())?.connections || {};
-      const platforms = [
-        ...((connections.google ?? connections.google_classroom) ? ['google_classroom'] : []),
-        ...((connections.microsoft ?? connections.microsoft_teams) ? ['microsoft_teams'] : []),
-      ];
+      const onboardingStatus = await getOnboardingStatus();
+      const availableConnections = onboardingStatus?.connections || {};
+      const demoMode = Boolean(onboardingStatus?.microsoft_demo_available);
+      const platforms = demoMode
+        ? ['microsoft_teams']
+        : [
+            ...((availableConnections.google ?? availableConnections.google_classroom) ? ['google_classroom'] : []),
+            ...((availableConnections.microsoft ?? availableConnections.microsoft_teams) ? ['microsoft_teams'] : []),
+          ];
       if (!platforms.length) throw new Error('ยังไม่มีแพลตฟอร์มที่เชื่อมต่อ กรุณาเชื่อมต่อก่อนซิงก์');
-      const jobs = await Promise.all(platforms.map((platform) => queueSync(platform)));
+      syncPhase = demoMode ? 'กำลังนำเข้าข้อมูล Teams mock JSON' : 'กำลังส่งงานซิงก์เข้าคิว';
+      const jobs = await Promise.all(platforms.map((platform) => queueSync(
+        platform,
+        demoMode ? { timeoutMs: 120000 } : undefined,
+      )));
       const ids = jobs.map((job) => job?.job_id).filter(Boolean);
       if (ids.length !== platforms.length) throw new Error('ระบบไม่สามารถเริ่มงานซิงก์ได้ครบทุกแพลตฟอร์ม');
       const deadline = Date.now() + 60000;
       let statuses;
+      syncPhase = 'กำลังรอผลซิงก์';
       do {
         statuses = await Promise.all(ids.map((id) => getSyncJob(id)));
         if (statuses.every((job) => ['success', 'succeeded', 'completed', 'failed', 'error'].includes(String(job.status).toLowerCase()))) break;
@@ -396,16 +393,26 @@ export class NavigationManager {
       } while (Date.now() < deadline);
       const failed = statuses.find((job) => ['failed', 'error'].includes(String(job.status).toLowerCase()));
       if (failed) throw new Error(failed.error_detail?.error || failed.error_detail?.reason || 'การซิงก์ล้มเหลว กรุณาตรวจสอบสิทธิ์แล้วลองใหม่');
+      const announcementIssue = statuses.find((job) => job.error_detail?.announcement_sync_error);
       const emptyProvider = statuses.find((job) => job.status === 'success' && job.error_detail?.info);
-      if (emptyProvider) {
+      if (emptyProvider && !announcementIssue) {
         const providerName = emptyProvider.platform === 'microsoft_teams' ? 'Microsoft Teams' : 'Google Classroom';
         throw new Error(`${providerName}: ${emptyProvider.error_detail.info}`);
       }
       const total = statuses.reduce((sum, job) => sum + (job.items_synced || 0), 0);
-      showToast(Date.now() >= deadline ? 'การซิงก์ยังทำงานอยู่เบื้องหลัง' : `ซิงก์สำเร็จ! อัปเดตงาน ${total} รายการ`, 'success');
+      if (announcementIssue) {
+        const providerName = announcementIssue.platform === 'google_classroom' ? 'Google Classroom' : 'Microsoft Teams';
+        const detail = announcementIssue.error_detail.announcement_sync_error;
+        const reconnectHint = announcementIssue.platform === 'google_classroom'
+          ? ' กรุณาเชื่อมต่อ Google Classroom ใหม่เพื่ออนุญาตสิทธิ์อ่านประกาศ'
+          : ' กรุณาตรวจสอบสิทธิ์อ่านโพสต์ของ Microsoft Teams';
+        showToast(`ซิงก์งานแล้ว แต่ดึงประกาศจาก ${providerName} ไม่สำเร็จ: ${detail}.${reconnectHint}`, 'error');
+      } else {
+        showToast(Date.now() >= deadline ? 'การซิงก์ยังทำงานอยู่เบื้องหลัง' : `ซิงก์สำเร็จ! อัปเดตงาน ${total} รายการ`, 'success');
+      }
       window.dispatchEvent(new CustomEvent('kmaps:sync-complete'));
     } catch (error) {
-      showToast(error.message || 'ไม่สามารถเริ่มการซิงก์ได้', 'error');
+      showToast(`${syncPhase}: ${error.message || 'ไม่สามารถเริ่มการซิงก์ได้'}`, 'error');
     } finally {
       button.disabled = false;
       icon?.classList.remove('spin-animate');
@@ -419,11 +426,12 @@ function getActiveNavKey() {
   const view = new URLSearchParams(window.location.search).get('view');
   if (path.endsWith('/courses.html')) return 'courses';
   if (path.endsWith('/assignments.html')) return 'assignments';
-  if (path.endsWith('/notification.html')) return 'notifications';
+  if (path.endsWith('/notification.html')) return 'calendar';
+  if (path.endsWith('/announcements.html')) return 'calendar';
   if (path.endsWith('/calendar.html')) return 'calendar';
   if (path.endsWith('/onboarding.html')) return 'connect';
   if (path.endsWith('/admin.html')) return 'admin';
-  if (path.endsWith('/dashboard.html')) return view === 'assignments' ? 'submissions' : view === 'calendar' ? 'calendar' : view === 'notifications' ? 'notifications' : 'overview';
+  if (path.endsWith('/dashboard.html')) return view === 'assignments' ? 'submissions' : ['calendar', 'notifications'].includes(view) ? 'calendar' : 'overview';
   return null;
 }
 

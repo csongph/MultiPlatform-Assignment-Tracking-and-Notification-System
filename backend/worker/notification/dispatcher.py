@@ -1,13 +1,13 @@
 """Deliver notification rows using the owner's current preferences."""
 
-import asyncio
 from datetime import datetime, timezone
 
-from app.core.database import AsyncSessionLocal
 from app.core.config import settings
 from app.services.email_service import EmailDeliveryError, send_due_soon_email
 from app.repositories.learning_repository import LearningRepository
 from worker.celery_app import celery_app
+from worker.async_runner import run_async
+from worker.database import AsyncSessionLocal
 
 
 async def _dispatch_pending_notifications() -> int:
@@ -51,4 +51,4 @@ async def _dispatch_pending_notifications() -> int:
 
 @celery_app.task(name="worker.notification.dispatcher.dispatch_pending_notifications_task")
 def dispatch_pending_notifications_task() -> dict:
-    return {"delivered": asyncio.run(_dispatch_pending_notifications())}
+    return {"delivered": run_async(_dispatch_pending_notifications())}

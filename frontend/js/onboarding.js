@@ -70,8 +70,8 @@ async function init() {
       google_denied: 'ยกเลิกการเข้าสู่ระบบ Google แล้ว',
       google_failed: 'เชื่อมต่อ Google Classroom ไม่สำเร็จ กรุณาลองใหม่',
       google_admin_consent_required: 'Google Classroom ต้องการสิทธิ์เพิ่มเติม กรุณาตรวจสอบการตั้งค่า OAuth และสิทธิ์ Classroom API',
-      google_service_unavailable: 'ระบบตรวจสอบเซสชันเชื่อมต่อใช้งานไม่ได้ กรุณาตรวจ Redis แล้วเริ่มเชื่อมต่อใหม่',
-      microsoft_service_unavailable: 'ระบบตรวจสอบเซสชันเชื่อมต่อใช้งานไม่ได้ กรุณาตรวจ Redis แล้วเริ่มเชื่อมต่อใหม่',
+      google_service_unavailable: 'ยืนยันขั้นตอน OAuth ไม่ได้ เพราะ backend เชื่อมต่อ Redis ไม่สำเร็จ ตรวจ REDIS_URL และให้ Redis ทำงานก่อน แล้วกดเชื่อม Google ใหม่อีกครั้ง',
+      microsoft_service_unavailable: 'ยืนยันขั้นตอน OAuth ไม่ได้ เพราะ backend เชื่อมต่อ Redis ไม่สำเร็จ ตรวจ REDIS_URL และให้ Redis ทำงานก่อน แล้วกดเชื่อม Microsoft ใหม่อีกครั้ง',
       microsoft_denied: 'ยกเลิกการเข้าสู่ระบบ Microsoft แล้ว',
       microsoft_failed: 'เชื่อมต่อ Microsoft Teams ไม่สำเร็จ กรุณาลองใหม่',
       microsoft_admin_consent_required:
@@ -162,7 +162,9 @@ async function toggleProvider(button) {
     console.error(`[Onboarding] ${provider} action failed:`, error);
 
     showToast(
-      error?.message ||
+      error?.message?.includes('Redis PING failed')
+        ? `backend ตรวจ Redis ตาม REDIS_URL ไม่ผ่าน รายละเอียด: ${error.message}`
+        : error?.message ||
         `ไม่สามารถดำเนินการกับ ${providerLabels[provider]} ได้ กรุณาลองใหม่`,
       'error',
     );

@@ -6,10 +6,11 @@ from app.core.exceptions import NotFoundError
 from app.core.security import decrypt_token, encrypt_token
 from app.integrations import get_adapter, get_fetcher
 from app.integrations.base_fetcher import BaseAssignmentFetcher, TokenExpiredError
+from app.services.google_classroom_push_service import GoogleClassroomPushService
 from app.models.core import OAuthConnection
 from app.models.logs import SyncLog
 from app.repositories.learning_repository import LearningRepository
-from app.repositories.sync_repository import AssignmentRepository, CourseRepository, SyncLogRepository
+from app.repositories.sync_repository import AnnouncementRepository, AssignmentRepository, CourseRepository, SyncLogRepository
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class SyncService:
         self.db = db
         self.courses = CourseRepository(db)
         self.assignments = AssignmentRepository(db)
+        self.announcements = AnnouncementRepository(db)
         self.sync_logs = SyncLogRepository(db)
         self.learning = LearningRepository(db)
 
@@ -113,6 +115,24 @@ class SyncService:
             if seen_assignment_ids:
                 await self.assignments.soft_delete_missing(course.id, seen_assignment_ids)
 
+        announcement_sync_error = None
+        try:
+            announcement_groups = await self._fetch_announcements_with_refresh(connection, fetcher)
+            for group in announcement_groups:
+                course = await self.courses.get(
+                    connection.user_id, connection.platform_id, group.course_external_id
+                )
+                if course is None or course.is_deleted:
+                    continue
+                seen_announcement_ids: set[str] = set()
+                for announcement in group.announcements:
+                    await self.announcements.upsert(course.id, announcement)
+                    seen_announcement_ids.add(announcement.external_id)
+                await self.announcements.soft_delete_missing(course.id, seen_announcement_ids)
+        except Exception as exc:  # announcement permissions must not block assignment ingestion
+            announcement_sync_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("Announcement sync failed: platform=%s error=%s", connection.platform.name, announcement_sync_error)
+
         # Do not archive previously synced data if the provider returned an empty course
         # list unexpectedly (permissions, transient inconsistency, or account transition).
         if seen_course_ids:
@@ -127,9 +147,26 @@ class SyncService:
             connection.status = "connected"
         await self.db.commit()
 
-        diagnostic = None
+        diagnostic = {"announcement_sync_error": announcement_sync_error} if announcement_sync_error else None
+        if connection.platform.name == "google_classroom":
+            try:
+                await GoogleClassroomPushService(self.db).ensure_registrations(
+                    connection, list(seen_course_ids)
+                )
+            except Exception as exc:  # assignment sync remains successful if push registration is unavailable
+                logger.warning(
+                    "Google Classroom push registration failed: connection_id=%s error=%s",
+                    connection.id,
+                    exc,
+                )
+                diagnostic = {
+                    **(diagnostic or {}),
+                    "push_registration_error": f"{type(exc).__name__}: {exc}",
+                }
+
         if items_synced == 0:
             diagnostic = {
+                **(diagnostic or {}),
                 "info": (
                     f"Provider returned {len(seen_course_ids)} courses but no active assignments."
                 )
@@ -180,3 +217,25 @@ class SyncService:
             await self.db.commit()
 
             return await self._fetch_with_refresh(connection, fetcher, _retried=True)
+
+    async def _fetch_announcements_with_refresh(
+        self,
+        connection: OAuthConnection,
+        fetcher: BaseAssignmentFetcher,
+        _retried: bool = False,
+    ):
+        access_token = decrypt_token(connection.access_token_enc)
+        try:
+            return await fetcher.fetch_announcements(access_token)
+        except TokenExpiredError:
+            if _retried or not connection.refresh_token_enc:
+                raise
+            adapter = get_adapter(connection.platform.name)
+            refresh_token = decrypt_token(connection.refresh_token_enc)
+            bundle = await adapter.refresh_access_token(refresh_token)
+            connection.access_token_enc = encrypt_token(bundle.access_token)
+            if bundle.refresh_token:
+                connection.refresh_token_enc = encrypt_token(bundle.refresh_token)
+            connection.token_expires_at = bundle.expires_at
+            await self.db.commit()
+            return await self._fetch_announcements_with_refresh(connection, fetcher, _retried=True)

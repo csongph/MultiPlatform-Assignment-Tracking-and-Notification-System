@@ -1,4 +1,4 @@
-import { getAssignments, getNotificationRules, updatePersonalAssignmentStatus } from './api.js';
+import { getAnnouncements, getAssignments, getNotificationRules, updatePersonalAssignmentStatus } from './api.js';
 import { requireAuth } from './auth.js';
 import { initNavigation } from './navigation.js';
 import { showToast } from './ui.js';
@@ -8,6 +8,7 @@ let notificationRules = [];
 let selectedAssignmentId = null;
 let searchTerm = '';
 let reminderLoadError = '';
+let platformAlertsLoading = false;
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -55,6 +56,103 @@ function getReminderEvents() {
 
 function matchesSearch(item) {
   return !searchTerm || `${item.title || ''} ${item.course_name || ''}`.toLowerCase().includes(searchTerm);
+}
+
+function formatAnnouncementDate(value) {
+  if (!value) return 'ไม่ระบุวันที่';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'ไม่ระบุวันที่'
+    : date.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function platformLogo(platform) {
+  if (platform === 'microsoft_teams') {
+    return `<svg class="platform-alert-logo" viewBox="0 0 48 48" role="img" aria-label="Microsoft Teams">
+      <rect x="25" y="7" width="17" height="14" rx="4" fill="#7B83EB"/>
+      <circle cx="35" cy="11" r="2" fill="#fff"/><path d="M31.5 17c.6-2 1.8-3 3.5-3s2.9 1 3.5 3" fill="#fff"/>
+      <rect x="7" y="13" width="27" height="27" rx="6" fill="#5059C9"/>
+      <path d="M16 20h13v3h-4.8v13h-3.5V23H16z" fill="#fff"/>
+      <rect x="3" y="19" width="12" height="15" rx="4" fill="#7B83EB"/>
+      <circle cx="9" cy="22.5" r="2" fill="#fff"/><path d="M5.5 30c.5-3 1.7-4.5 3.5-4.5s3 1.5 3.5 4.5" fill="#fff"/>
+    </svg>`;
+  }
+  return `<svg class="platform-alert-logo" viewBox="0 0 48 48" role="img" aria-label="Google Classroom">
+    <rect x="5" y="7" width="38" height="34" rx="5" fill="#0F9D58"/>
+    <path d="M10 12h28v22H10z" fill="#fff"/>
+    <path d="M12 14h24v18H12z" fill="#34A853"/>
+    <circle cx="20" cy="20" r="3" fill="#fff"/><circle cx="28" cy="20" r="3" fill="#fff"/>
+    <path d="M15.5 29c.4-3.1 2-4.7 4.5-4.7s4.1 1.6 4.5 4.7m-1 0c.4-3.1 2-4.7 4.5-4.7s4.1 1.6 4.5 4.7" fill="#fff"/>
+    <path d="M5 36h38v4H5z" fill="#F9AB00"/>
+  </svg>`;
+}
+
+async function loadPlatformNotifications() {
+  const list = $('announcement-list');
+  const count = $('platform-alert-count');
+  const refresh = $('refresh-platform-alerts');
+  if (platformAlertsLoading) return;
+  platformAlertsLoading = true;
+  refresh.disabled = true;
+  refresh.classList.add('is-loading');
+  count.textContent = 'กำลังโหลด';
+  list.innerHTML = '<div class="platform-alert-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
+  try {
+    const announcements = await getAnnouncements();
+    count.textContent = `${announcements.length} รายการ`;
+    if (!announcements.length) {
+      list.innerHTML = '<div class="platform-alerts-state"><i class="fa-regular fa-bell-slash" aria-hidden="true"></i><strong>ยังไม่พบประกาศจากแพลตฟอร์ม</strong><span>กด “ซิงก์ตอนนี้” เพื่อดึงประกาศล่าสุด หาก Google Classroom ยังไม่แสดง ให้เชื่อมต่อบัญชี Google ใหม่เพื่ออนุญาตสิทธิ์อ่านประกาศ</span></div>';
+      return;
+    }
+    list.innerHTML = announcements.map((item, index) => {
+      const platform = item.platform === 'microsoft_teams' ? 'Microsoft Teams' : 'Google Classroom';
+      const sourceUrl = safeExternalUrl(item.source_url);
+      const isTeams = item.platform === 'microsoft_teams';
+      const logo = platformLogo(item.platform);
+      const detailsId = `platform-alert-details-${index}`;
+      const content = String(item.content || '').trim();
+      const preview = content.length > 150 ? `${content.slice(0, 150).trimEnd()}…` : content;
+      const detailsContent = content
+        ? `<p class="platform-alert-content">${escapeHtml(content)}</p>`
+        : '<p class="platform-alert-content platform-alert-no-content">ประกาศนี้ไม่มีรายละเอียดเพิ่มเติม</p>';
+      const sourceLink = sourceUrl
+        ? `<a class="platform-alert-open-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">เปิดประกาศใน ${escapeHtml(platform)} <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`
+        : '';
+      return `<article class="platform-alert-item">
+        <button type="button" class="platform-alert-trigger" data-platform-alert-toggle aria-expanded="false" aria-controls="${detailsId}">
+          <span class="platform-alert-icon ${isTeams ? 'is-teams' : 'is-classroom'}">${logo}</span>
+          <span class="platform-alert-main">
+            <span class="platform-alert-title">${escapeHtml(item.title)}</span>
+            ${preview ? `<span class="platform-alert-preview">${escapeHtml(preview)}</span>` : ''}
+            <span class="platform-alert-meta"><span class="platform-alert-platform">${escapeHtml(platform)}</span><span class="platform-alert-course">${escapeHtml(item.course_name)}</span></span>
+          </span>
+          <time class="platform-alert-time">${escapeHtml(formatAnnouncementDate(item.published_at))}</time>
+          <span class="platform-alert-chevron"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+        </button>
+        <div class="platform-alert-details" id="${detailsId}" hidden>
+          ${detailsContent}
+          ${sourceLink ? `<div class="platform-alert-actions">${sourceLink}</div>` : ''}
+        </div>
+      </article>`;
+    }).join('');
+  } catch (error) {
+    console.error('Failed to load platform announcements:', error);
+    count.textContent = 'โหลดไม่สำเร็จ';
+    list.innerHTML = `<div class="platform-alerts-state"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><strong>ยังโหลดประกาศไม่ได้</strong><span>${escapeHtml(error.message || 'ตรวจสอบการเชื่อมต่อแล้วลองใหม่อีกครั้ง')}</span></div>`;
+  } finally {
+    platformAlertsLoading = false;
+    refresh.disabled = false;
+    refresh.classList.remove('is-loading');
+  }
 }
 
 async function loadCalendarData() {
@@ -155,11 +253,11 @@ function renderCalendar() {
     const dayReminders = remindersByDay.get(day) || [];
     const submitted = dayItems.length > 0 && dayItems.every(isSubmitted);
     const overdue = dayItems.some(isOverdue);
-    const colors = submitted ? 'bg-[#00e659] text-[#1a1a1a]' : overdue ? 'bg-[#ff1e1e] text-white' : dayItems.length ? 'bg-[#ffcc00] text-black' : 'text-gray-800';
+    const colors = submitted ? 'highlight-green' : overdue ? 'highlight-red' : dayItems.length ? 'highlight-yellow' : '';
     const dueBadge = dayItems.length ? `<span class="calendar-day-count" aria-hidden="true">${dayItems.length}</span>` : '';
-    const reminderBadge = dayReminders.length ? `<span class="calendar-reminder-count" aria-hidden="true">🔔${dayReminders.length > 1 ? ` ${dayReminders.length}` : ''}</span>` : '';
+    const reminderBadge = dayReminders.length ? '<span class="bell-icon" aria-hidden="true">🔔</span>' : '';
     const description = `${dayItems.length} งานครบกำหนด${dayReminders.length ? `, ${dayReminders.length} รายการเตือนล่วงหน้า` : ''}`;
-    cells.push(`<button type="button" data-day="${day}" class="calendar-day-cell h-[60px] flex items-center justify-center text-[15px] font-medium rounded-lg relative hover:bg-gray-100 transition-all ${colors}" aria-label="${day}, ${description}">${day}${dueBadge}${reminderBadge}</button>`);
+    cells.push(`<button type="button" data-day="${day}" class="day-cell calendar-day-cell ${colors}" aria-label="${day}, ${description}">${day}${dueBadge}${reminderBadge}</button>`);
   }
   $('daysGrid').innerHTML = cells.join('');
 }
@@ -260,7 +358,7 @@ async function init() {
   renderCalendar();
   setCalendarStatus('กำลังโหลดงานและการแจ้งเตือนล่วงหน้า...');
   try {
-    await loadCalendarData();
+    await Promise.all([loadCalendarData(), loadPlatformNotifications()]);
     renderYearOptions(now.getFullYear());
     renderStats();
     renderCalendar();
@@ -271,9 +369,19 @@ async function init() {
 
   $('monthSelect').addEventListener('change', () => { renderCalendar(); updateCalendarStatus(); });
   $('yearSelect').addEventListener('change', () => { renderCalendar(); updateCalendarStatus(); });
+  $('refresh-platform-alerts').addEventListener('click', loadPlatformNotifications);
+  $('announcement-list').addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-platform-alert-toggle]');
+    if (!trigger) return;
+    const details = document.getElementById(trigger.getAttribute('aria-controls'));
+    if (!details) return;
+    const expanded = trigger.getAttribute('aria-expanded') === 'true';
+    trigger.setAttribute('aria-expanded', String(!expanded));
+    details.hidden = expanded;
+  });
   window.addEventListener('kmaps:sync-complete', async () => {
     try {
-      await loadCalendarData();
+      await Promise.all([loadCalendarData(), loadPlatformNotifications()]);
       renderYearOptions();
       renderStats();
       renderCalendar();
@@ -282,6 +390,7 @@ async function init() {
       setCalendarStatus(error.message || 'โหลดรายการงานไม่สำเร็จ', true);
     }
   });
+  window.addEventListener('focus', loadPlatformNotifications);
   window.addEventListener('kmaps-search', (event) => {
     searchTerm = (event.detail?.query || '').trim().toLowerCase();
     renderCalendar();

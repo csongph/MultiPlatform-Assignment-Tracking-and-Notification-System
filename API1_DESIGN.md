@@ -53,6 +53,9 @@ http://localhost:8000/redoc
 | `GOOGLE_OAUTH_CLIENT_ID` | Yes | From Google Cloud Console | OAuth client ID |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Yes | From Google Cloud Console | OAuth client secret |
 | `GOOGLE_OAUTH_REDIRECT_URI` | Yes | `http://localhost:8000/api/v1/oauth/google_classroom/callback` | OAuth callback URL |
+| `GOOGLE_CLASSROOM_PUBSUB_TOPIC` | For Classroom push | `projects/PROJECT_ID/topics/kmaps-classroom-events` | Pub/Sub topic Classroom publishes event messages to |
+| `GOOGLE_PUBSUB_PUSH_AUDIENCE` | For authenticated push delivery | `https://api.example.com/api/v1/webhooks/google-classroom` | Exact audience configured on the Pub/Sub push subscription |
+| `GOOGLE_PUBSUB_PUSH_SERVICE_ACCOUNT` | For authenticated push delivery | `pubsub-push@PROJECT_ID.iam.gserviceaccount.com` | Service account email used by Pub/Sub OIDC push authentication |
 
 Required Google API configuration:
 
@@ -101,9 +104,19 @@ Microsoft OAuth endpoints:
 
 | Key | Required | Example | Purpose |
 |---|---|---|---|
-| `SYNC_INTERVAL_MINUTES` | No | `10` | Automatic synchronization interval |
+| `MICROSOFT_TEAMS_WEBHOOK_SECRET` | Yes for Teams event bridge | Secret value | Shared secret for event bridge requests to `/api/v1/webhooks/microsoft-teams` |
 | `NOTIFICATION_POLL_INTERVAL_SECONDS` | No | `60` | Notification polling interval |
 | `TOKEN_REFRESH_LEAD_MINUTES` | No | `15` | Refresh tokens before access-token expiry |
 | `CACHE_TTL_SECONDS` | No | `300` | Cache time-to-live |
 
 > **Important:** The examples above document the expected configuration. Verify each variable's actual default and whether it is required against the backend settings and environment-loading code before deployment.
+
+### Event-driven Classroom updates
+
+Google Classroom change feeds publish to Cloud Pub/Sub. Configure a topic, grant `classroom-notifications@system.gserviceaccount.com` the Pub/Sub Publisher role on that topic, and create a Pub/Sub push subscription targeting `POST /api/v1/webhooks/google-classroom`. Configure authenticated push with the service account in `GOOGLE_PUBSUB_PUSH_SERVICE_ACCOUNT` and set its audience to the exact `GOOGLE_PUBSUB_PUSH_AUDIENCE` value. Grant the Pub/Sub service agent (`service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com`) `roles/iam.serviceAccountTokenCreator` on the push service account. The API must be publicly reachable over HTTPS. See [Pub/Sub push authentication](https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions).
+
+For local development, `APP_ENV=development` allows direct JSON events without Google Cloud credentials, restricted to loopback unless `GOOGLE_CLASSROOM_WEBHOOK_SECRET` is configured and sent as `X-KMAPS-Webhook-Secret`. Production defaults to requiring OIDC authentication. Local event ingress can enqueue a refresh only for a course already associated with a connected account; it does not replace OAuth or the Classroom API needed to retrieve current assignment details.
+
+The Google OAuth grant now also requests `classroom.push-notifications` and `classroom.coursework.students.readonly`. Existing users must reconnect Google Classroom and approve the updated read-only scopes before event registrations can be created. Registrations are renewed every six days because Classroom registrations expire after one week. Initial import and user-requested manual sync remain available.
+
+Classroom changes enqueue an immediate refresh through Google Cloud Pub/Sub. Teams changes enqueue an immediate refresh through `POST /api/v1/webhooks/microsoft-teams`, authenticated with `X-Kmaps-Webhook-Secret`; request JSON must include `connectionId` and may include `eventId` for delivery deduplication. Microsoft Graph's supported change-notification resources do not include Education assignments, so a Teams event bridge (for example, an automation you control that observes assignment events) must call this endpoint. The app no longer schedules periodic Teams pulls. This endpoint is an event receiver; it does not create a native Graph Education subscription.

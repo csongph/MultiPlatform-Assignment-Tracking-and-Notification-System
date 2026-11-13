@@ -9,6 +9,7 @@ from app.core.exceptions import AppError
 from app.models.auth import User
 from app.schemas.learning import (
     AssignmentOut,
+    AnnouncementOut,
     CourseOut,
     DashboardSummary,
     NotificationOut,
@@ -25,6 +26,18 @@ from app.schemas.learning import (
 from app.services.learning_service import LearningService
 
 router = APIRouter(tags=["learning"])
+
+
+@router.get("/announcements", response_model=list[AnnouncementOut])
+async def list_announcements(
+    platform: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await LearningService(db).list_announcements(current_user.id, platform)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)

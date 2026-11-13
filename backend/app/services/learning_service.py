@@ -5,13 +5,16 @@ from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import AppError, NotFoundError
+from app.core.security import encrypt_token
 from app.models.core import Assignment, Course, Notification, NotificationRule, NotificationSettings
 from app.models.logs import SyncLog
 from app.repositories.learning_repository import LearningRepository
 from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
 from app.schemas.learning import (
     AssignmentOut,
+    AnnouncementOut,
     CourseOut,
     DashboardSummary,
     NotificationSettingsUpdate,
@@ -22,6 +25,7 @@ from app.schemas.learning import (
     SyncJobOut,
 )
 from app.services.oauth_service import ensure_supported_platform
+from app.services.sync_service import SyncService
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,17 @@ class LearningService:
             overdue=overdue,
             connected_platforms=connected_platforms,
         )
+
+    async def list_announcements(self, user_id: uuid.UUID, platform: str | None = None) -> list[AnnouncementOut]:
+        if platform:
+            ensure_supported_platform(platform)
+        rows = await self.learning.list_announcements(user_id, platform)
+        return [AnnouncementOut(
+            id=row.id, course_id=row.course_id, course_name=row.course.name,
+            platform=row.course.platform.name, title=row.title, content=row.content,
+            published_at=row.published_at, source_url=row.source_url,
+            last_synced_at=row.last_synced_at,
+        ) for row in rows]
 
     async def list_courses(
         self, user_id: uuid.UUID, platform: str | None, include_deleted: bool
@@ -217,10 +232,37 @@ class LearningService:
 
         connection_owner = connection_user_id or user_id
         connection = await self.connections.get_by_user_and_platform(connection_owner, platform.id)
+        mock_teams_sync = (
+            platform_name == "microsoft_teams"
+            and settings.MICROSOFT_TEAMS_USE_MOCK_DATA
+            and settings.APP_ENV.strip().lower() != "production"
+        )
+        if (
+            connection is None
+            and mock_teams_sync
+        ):
+            # Demo mode can import the bundled fixture without an external OAuth account.
+            connection = await self.connections.upsert(
+                user_id=connection_owner,
+                platform_id=platform.id,
+                access_token_enc=encrypt_token("microsoft-teams-json-demo"),
+                refresh_token_enc=None,
+                token_expires_at=None,
+            )
         if connection is None:
             raise NotFoundError(f"'{platform_name}' is not connected yet. Connect it first.")
 
         sync_log = await self.learning.create_sync_log(connection_owner, platform.id)
+
+        if mock_teams_sync:
+            # Small local fixture imports directly, without requiring Redis/Celery.
+            connection_with_platform = await self.connections.get_by_id_with_platform(connection.id)
+            if connection_with_platform is None:
+                raise NotFoundError("Demo Microsoft Teams connection was not found")
+            completed_log = await SyncService(self.db).sync_connection(
+                connection_with_platform, sync_log
+            )
+            return self._sync_out(completed_log, platform.name)
 
         # Import here (not at module scope) to avoid importing Celery/worker
         # code into every FastAPI request - only needed on this code path.
