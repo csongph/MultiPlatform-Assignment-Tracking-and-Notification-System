@@ -21,6 +21,7 @@
 | 14 | 14_admin_audit_logging.md | Admin: Audit Logging | M14 |
 | 15 | 15_admin_system_monitoring.md | Admin: System Monitoring | M15 |
 | 16 | 16_admin_completion_addendum.md | Admin: Gap Analysis & Completion (implemented endpoints, data model, bug fixes) | M12–M15 |
+| 17 | 17_system_design_refinement_and_conceptual_model.md | System Design Refinement & Conceptual Model (CDM, Task Separation, Multi-tier Notif, Recovery, Admin) | Cross-Cutting |
 
 ---
 

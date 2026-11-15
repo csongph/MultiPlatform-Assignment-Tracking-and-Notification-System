@@ -1,15 +1,18 @@
 from datetime import datetime, timedelta, timezone
+import asyncio
 from urllib.parse import urlencode
 
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import OAuthProviderError
+from app.core.exceptions import OAuthProviderError, OAuthReauthorizationRequired
 from app.integrations.base_adapter import BaseOAuthAdapter, TokenBundle
 from app.integrations.base_fetcher import (
     BaseAssignmentFetcher,
     RemoteAssignment,
+    RemoteAnnouncement,
     RemoteCourse,
+    RemoteCourseWithAnnouncements,
     RemoteCourseWithAssignments,
     TokenExpiredError,
 )
@@ -17,14 +20,14 @@ from app.integrations.base_fetcher import (
 AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 CLASSROOM_API_BASE = "https://classroom.googleapis.com/v1"
+CLASSROOM_REGISTRATIONS_URL = f"{CLASSROOM_API_BASE}/registrations"
 
 SCOPES = [
     "https://www.googleapis.com/auth/classroom.courses.readonly",
-    "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
     "https://www.googleapis.com/auth/classroom.coursework.students.readonly",
-    "openid",
-    "email",
-    "profile",
+    "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly",
+    "https://www.googleapis.com/auth/classroom.push-notifications",
+    "https://www.googleapis.com/auth/classroom.announcements.readonly",
 ]
 
 
@@ -67,15 +70,28 @@ class GoogleClassroomAdapter(BaseOAuthAdapter):
         return bundle
 
     async def _post_token_request(self, data: dict) -> TokenBundle:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(TOKEN_ENDPOINT, data=data)
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.post(TOKEN_ENDPOINT, data=data)
+        except httpx.RequestError as exc:
+            raise OAuthProviderError("Failed to communicate with Google token endpoint") from exc
 
         if response.status_code != 200:
+            try:
+                provider_error = response.json().get("error")
+            except (ValueError, AttributeError):
+                provider_error = None
+            if provider_error in {"invalid_grant", "interaction_required"}:
+                raise OAuthReauthorizationRequired(
+                    "Google refresh token was revoked or requires new consent"
+                )
             raise OAuthProviderError(
-                f"Google token endpoint returned {response.status_code}: {response.text}"
+                f"Google token endpoint returned {response.status_code}"
             )
 
         payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("access_token"):
+            raise OAuthProviderError("Google token endpoint response did not contain an access token")
         expires_in = payload.get("expires_in")
         expires_at = (
             datetime.now(timezone.utc) + timedelta(seconds=expires_in) if expires_in else None
@@ -103,31 +119,98 @@ class GoogleClassroomFetcher(BaseAssignmentFetcher):
 
     platform_name = "google_classroom"
 
+    def __init__(self, max_retries: int = 3, max_concurrency: int = 5):
+        self.max_retries = max_retries
+        self.max_concurrency = max_concurrency
+
     async def fetch_assignments(self, access_token: str) -> list[RemoteCourseWithAssignments]:
         headers = {"Authorization": f"Bearer {access_token}"}
-        async with httpx.AsyncClient(timeout=20, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=25, headers=headers) as client:
             courses = await self._list_courses(client)
-            results: list[RemoteCourseWithAssignments] = []
-            for raw_course in courses:
+            semaphore = asyncio.Semaphore(self.max_concurrency)
+            async def load_course(raw_course: dict) -> RemoteCourseWithAssignments:
                 course = RemoteCourse(external_id=raw_course["id"], name=raw_course.get("name", "Untitled course"))
-                coursework = await self._list_coursework(client, course.external_id)
-                assignments = []
-                for cw in coursework:
-                    if cw.get("state") == "DELETED":
-                        continue
-                    assignments.append(await self._to_remote_assignment(client, course.external_id, cw))
-                results.append(RemoteCourseWithAssignments(course=course, assignments=assignments))
-            return results
+                async with semaphore:
+                    coursework = await self._list_coursework(client, course.external_id)
+                assignments = await asyncio.gather(*(
+                    self._to_remote_assignment(client, course.external_id, cw)
+                    for cw in coursework if cw.get("state") != "DELETED"
+                ))
+                return RemoteCourseWithAssignments(course=course, assignments=assignments)
+
+            return await asyncio.gather(*(load_course(course) for course in courses))
+
+    async def fetch_announcements(self, access_token: str) -> list[RemoteCourseWithAnnouncements]:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with httpx.AsyncClient(timeout=25, headers=headers) as client:
+            courses = await self._list_courses(client)
+            async def load(course: dict) -> RemoteCourseWithAnnouncements:
+                items: list[RemoteAnnouncement] = []
+                token = None
+                while True:
+                    params = {"pageSize": 100}
+                    if token:
+                        params["pageToken"] = token
+                    response = await self._get_with_retry(
+                        client, f"{CLASSROOM_API_BASE}/courses/{course['id']}/announcements", params
+                    )
+                    payload = response.json()
+                    for row in payload.get("announcements", []):
+                        # Draft announcements are not student-facing notifications.
+                        if row.get("state") != "PUBLISHED" or not row.get("id"):
+                            continue
+                        items.append(RemoteAnnouncement(
+                            external_id=row["id"],
+                            title=row.get("title") or "ประกาศจากผู้สอน",
+                            content=row.get("text"),
+                            published_at=self._parse_timestamp(row.get("updateTime") or row.get("creationTime")),
+                            source_url=row.get("alternateLink"),
+                        ))
+                    token = payload.get("nextPageToken")
+                    if not token:
+                        break
+                return RemoteCourseWithAnnouncements(str(course["id"]), items)
+            return await asyncio.gather(*(load(course) for course in courses))
+
+    @staticmethod
+    def _parse_timestamp(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            return None
+
+    async def _get_with_retry(self, client: httpx.AsyncClient, url: str, params: dict | None = None) -> httpx.Response:
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await client.get(url, params=params)
+            except httpx.RequestError as exc:
+                if attempt >= self.max_retries:
+                    raise OAuthProviderError("Google Classroom network request failed after retries") from exc
+                await asyncio.sleep(min(60, 2 ** attempt))
+                continue
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < self.max_retries:
+                    retry_after = response.headers.get("Retry-After")
+                    try:
+                        delay = min(60.0, max(0.0, float(retry_after))) if retry_after else 2 ** attempt
+                    except ValueError:
+                        delay = 2 ** attempt
+                    await asyncio.sleep(delay)
+                    continue
+            self._raise_for_status(response)
+            return response
+        raise OAuthProviderError("Google Classroom request failed after retries")
 
     async def _list_courses(self, client: httpx.AsyncClient) -> list[dict]:
         courses: list[dict] = []
         page_token = None
         while True:
-            params = {"courseStates": "ACTIVE", "pageSize": 100}
+            params = {"courseStates": "ACTIVE", "studentId": "me", "pageSize": 100}
             if page_token:
                 params["pageToken"] = page_token
-            response = await client.get(f"{CLASSROOM_API_BASE}/courses", params=params)
-            self._raise_for_status(response)
+            response = await self._get_with_retry(client, f"{CLASSROOM_API_BASE}/courses", params=params)
             payload = response.json()
             courses.extend(payload.get("courses", []))
             page_token = payload.get("nextPageToken")
@@ -142,10 +225,9 @@ class GoogleClassroomFetcher(BaseAssignmentFetcher):
             params = {"pageSize": 100}
             if page_token:
                 params["pageToken"] = page_token
-            response = await client.get(
+            response = await self._get_with_retry(client,
                 f"{CLASSROOM_API_BASE}/courses/{course_id}/courseWork", params=params
             )
-            self._raise_for_status(response)
             payload = response.json()
             coursework.extend(payload.get("courseWork", []))
             page_token = payload.get("nextPageToken")
@@ -166,26 +248,29 @@ class GoogleClassroomFetcher(BaseAssignmentFetcher):
             due_at=due_at,
             source_status=cw.get("state", "UNKNOWN"),
             computed_status=computed_status,
-            source_url=cw.get("alternateLink", ""),
+            source_url=cw.get("alternateLink"),
         )
 
     async def _computed_status(
         self, client: httpx.AsyncClient, course_id: str, coursework_id: str, due_at: datetime | None
     ) -> str:
-        """Best-effort submission status for the *current* user. Falls back
-        to a due-date-only guess if the submissions scope/endpoint isn't
-        available (e.g. permission issues on some Workspace domains)."""
-        try:
-            response = await client.get(
+        """Read this user's submission state; provider failures abort sync."""
+        page_token = None
+        while True:
+            params = {"userId": "me", "pageSize": 100}
+            if page_token:
+                params["pageToken"] = page_token
+            response = await self._get_with_retry(client,
                 f"{CLASSROOM_API_BASE}/courses/{course_id}/courseWork/{coursework_id}/studentSubmissions",
-                params={"userId": "me", "pageSize": 1},
+                params=params,
             )
-            if response.status_code == 200:
-                submissions = response.json().get("studentSubmissions", [])
-                if submissions and submissions[0].get("state") in ("TURNED_IN", "RETURNED"):
-                    return "submitted"
-        except httpx.HTTPError:
-            pass  # fall through to due-date-based guess below
+            payload = response.json()
+            submissions = payload.get("studentSubmissions", [])
+            if submissions and submissions[0].get("state") in ("TURNED_IN", "RETURNED"):
+                return "submitted"
+            page_token = payload.get("nextPageToken")
+            if not page_token:
+                break
 
         now = datetime.now(timezone.utc)
         if due_at is not None and due_at < now:
@@ -214,7 +299,7 @@ class GoogleClassroomFetcher(BaseAssignmentFetcher):
     def _raise_for_status(response: httpx.Response) -> None:
         if response.status_code == 401:
             raise TokenExpiredError("Google Classroom rejected the access token")
+        if response.status_code == 429:
+            raise OAuthProviderError("Google Classroom rate limit exceeded after retries")
         if response.status_code >= 400:
-            raise OAuthProviderError(
-                f"Google Classroom API returned {response.status_code}: {response.text}"
-            )
+            raise OAuthProviderError(f"Google Classroom API returned {response.status_code}")

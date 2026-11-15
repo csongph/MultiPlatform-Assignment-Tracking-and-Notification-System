@@ -18,6 +18,7 @@ from app.schemas.admin import (
     AdminSyncStatusOut,
     AdminUserListOut,
     AdminUserOut,
+    AdminUserUpdateRequest,
 )
 from app.services.admin_service import AdminService
 
@@ -35,6 +36,45 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     return await AdminService(db).list_users(search=search, page=page)
+
+
+@router.get("/users/{user_id}", response_model=AdminUserOut)
+async def get_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        return await AdminService(db).get_user(user_id)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.put("/users/{user_id}", response_model=AdminUserOut)
+async def update_user(
+    user_id: uuid.UUID,
+    payload: AdminUserUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await AdminService(db).update_profile(
+            current_user, user_id, payload.full_name, payload.email
+        )
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_user(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+    try:
+        await AdminService(db).delete_user(current_user, user_id)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.put("/users/{user_id}/role", response_model=AdminUserOut)

@@ -6,13 +6,13 @@
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Running: Scheduler trigger / Manual Sync
+    Idle --> Running: Provider webhook / Manual Sync
     Running --> Success: ดึง+บันทึกข้อมูลสำเร็จทุกแพลตฟอร์ม
     Running --> PartialSuccess: บางแพลตฟอร์มล้มเหลว
     Running --> Failed: ทุกแพลตฟอร์มล้มเหลว
     Failed --> Retrying: อยู่ใน retry budget (สูงสุด 3 ครั้ง)
     Retrying --> Running
-    Failed --> Idle: เกิน retry budget (รอรอบถัดไป)
+    Failed --> Idle: เกิน retry budget (รอ event ใหม่หรือ manual sync)
     Success --> Idle
     PartialSuccess --> Idle
 ```
@@ -21,7 +21,7 @@ stateDiagram-v2
 
 ```mermaid
 graph TD
-    Start([1. Sync Scheduler Trigger งานต่อ user]) --> Lock{2. ขอ Distributed Lock ต่อ user สำเร็จ?}
+    Start([1. Provider Webhook หรือ Manual Sync Trigger]) --> Lock{2. ขอ Distributed Lock ต่อ user สำเร็จ?}
     Lock -->|ไม่สำเร็จ ชนกับ job เดิม| Skip["3. ข้ามรอบนี้ (ป้องกัน Race Condition)"]
     Lock -->|สำเร็จ| CheckToken{4. Access Token ใกล้/หมดอายุ?}
     CheckToken -->|ใช่| Refresh["5. Refresh Access Token"]
@@ -63,13 +63,17 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-  participant SCH as Sync Scheduler
+  participant EVT as Provider Event / Event Bridge
+  participant WH as Webhook API
   participant BE as Sync Worker
   participant GC as Google Classroom API
   participant MT as Microsoft Graph API
   participant DB as Database
 
-  SCH->>BE: Trigger sync (per user, ตามรอบ)
+  GC-->>EVT: Classroom change via Pub/Sub
+  Note over EVT,MT: Teams Education events require an external event bridge; Graph has no assignment change notification
+  EVT->>WH: POST webhook event
+  WH->>BE: Enqueue sync immediately
   BE->>DB: อ่าน token ที่เข้ารหัสไว้
   par ดึงจากสองแพลตฟอร์มพร้อมกัน
     BE->>GC: GET courses/assignments

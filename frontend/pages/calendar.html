@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png">
+  <title>ปฏิทิน - LMS KMAPS</title>
+  <!-- Google Fonts: Prompt -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="../css/auth.css">
+  <link rel="stylesheet" href="../css/calendarstyle.css">
+  <link rel="stylesheet" href="../css/navigation.css">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            prompt: ['Prompt', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+</head>
+<body class="app-page">
+
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <main class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <div class="app-content">
+        <header class="app-header"><div><p class="app-eyebrow">KMAPS</p><h1>ปฏิทินและการแจ้งเตือน</h1></div></header>
+      <!-- Dashboard Stats Cards -->
+      <section class="summary-cards grid grid-cols-3 gap-4">
+        <div class="card bg-[#ffff52] text-[#1a1a1a] rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
+          <span class="text-xs font-semibold">งานที่ได้รับมอบหมายทั้งหมด</span>
+          <span class="text-4xl font-bold leading-none" id="total-tasks">0</span>
+        </div>
+        <div class="card bg-[#ff1e1e] text-white rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
+          <span class="text-xs font-semibold">ครบกำหนดวันนี้</span>
+          <span class="text-4xl font-bold leading-none" id="due-tasks">0</span>
+        </div>
+        <div class="card bg-[#00e659] text-[#1a1a1a] rounded-2xl p-[16px_20px] h-[110px] flex flex-col justify-between shadow-sm">
+          <span class="text-xs font-semibold">งานที่ส่งแล้ว</span>
+          <span class="text-4xl font-bold leading-none" id="submitted-tasks">0</span>
+        </div>
+      </section>
+
+      <!-- Calendar Section -->
+      <section class="calendar-wrapper bg-[#e5e5e8] rounded-[20px] p-5 flex flex-col items-center gap-4">
+        <div class="calendar-header-controls flex gap-2.5">
+          <select id="monthSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer">
+            <option value="0">มกราคม</option><option value="1">กุมภาพันธ์</option><option value="2">มีนาคม</option>
+            <option value="3">เมษายน</option><option value="4">พฤษภาคม</option><option value="5">มิถุนายน</option>
+            <option value="6">กรกฎาคม</option><option value="7">สิงหาคม</option><option value="8">กันยายน</option>
+            <option value="9">ตุลาคม</option><option value="10">พฤศจิกายน</option><option value="11">ธันวาคม</option>
+          </select>
+
+          <select id="yearSelect" class="px-4 py-1.5 rounded-full border border-gray-300 bg-white text-sm outline-none font-medium cursor-pointer" aria-label="เลือกปี">
+            <option value="">กำลังโหลดปี...</option>
+          </select>
+        </div>
+
+        <div class="calendar-card bg-white rounded-[20px] w-full max-w-[650px] p-6 shadow-sm">
+          <p id="calendar-status" class="calendar-status hidden" role="status" aria-live="polite"></p>
+          <!-- Weekdays Grid -->
+          <div class="weekdays-grid grid grid-cols-7 text-center font-semibold text-gray-600 text-sm mb-5">
+            <div>อา.</div>
+            <div>จ.</div>
+            <div>อ.</div>
+            <div>พ.</div>
+            <div>พฤ.</div>
+            <div>ศ.</div>
+            <div>ส.</div>
+          </div>
+
+          <!-- Days Grid -->
+          <div class="days-grid grid grid-cols-7 gap-y-3 gap-x-2.5 text-center" id="daysGrid">
+            <!-- Rendered dynamically by JS -->
+          </div>
+        </div>
+      </section>
+
+      <section class="platform-alerts-section" id="platform-notifications" aria-labelledby="platform-alerts-heading">
+        <div class="platform-alerts-header">
+          <div class="platform-alerts-heading">
+            <div class="platform-alerts-heading-icon"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i></div>
+            <div>
+              <p class="app-eyebrow">CLASSROOM &amp; TEAMS</p>
+              <h2 id="platform-alerts-heading">ประกาศและการแจ้งเตือน</h2>
+              <p>ข้อความแจ้งจากอาจารย์ในรายวิชาที่เชื่อมต่อ</p>
+            </div>
+          </div>
+          <div class="platform-alerts-actions">
+            <span id="platform-alert-count" class="platform-alert-count">กำลังโหลด</span>
+            <button id="refresh-platform-alerts" class="platform-alert-refresh" type="button" aria-label="โหลดประกาศอีกครั้ง" title="โหลดประกาศอีกครั้ง"><i class="fa-solid fa-rotate" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div id="announcement-list" class="platform-alerts-list" aria-live="polite">
+          <div class="platform-alert-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+        </div>
+      </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal for Day Details and Task Submission -->
+  <div class="modal-overlay fixed inset-0 bg-black/50 hidden justify-center items-center z-50" id="taskModal">
+    <div class="modal-card bg-white w-[90%] max-w-[450px] rounded-[20px] p-6 shadow-2xl">
+      <div class="modal-header flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-[#1a1a1a]" id="modalDateTitle">การส่งงานวันที่ -</h3>
+        <i class="fa-solid fa-xmark text-xl text-gray-400 cursor-pointer hover:text-gray-600"></i>
+      </div>
+
+      <div id="modalTaskContent"></div>
+
+      <form class="submission-form mt-4" id="submissionForm">
+        <hr class="my-4 border-gray-200">
+        <label for="taskNote" class="block text-xs font-semibold mb-1.5">ข้อความส่งงาน / หมายเหตุส่วนตัว:</label>
+        <input type="text" id="taskNote" placeholder="ระบุข้อความ..." required class="w-full p-[10px] rounded-lg border border-gray-300 mb-3 text-xs outline-none focus:border-green-500">
+        <p class="text-xs text-gray-500 mb-3">บันทึกสถานะส่วนตัวใน KMAPS ไม่ได้ส่งงานไปยัง Google Classroom หรือ Microsoft Teams</p>
+        <button type="submit" class="w-full py-3 bg-[#00e659] hover:bg-[#00c74b] rounded-lg font-bold text-[#1a1a1a] transition-colors">บันทึกว่าส่งแล้ว</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script type="module" src="../js/calendar.js"></script>
+</body>
+</html>

@@ -1,7 +1,6 @@
 from celery import Celery
 
 from app.core.config import settings
-from worker.sync.scheduler import SYNC_BEAT_SCHEDULE
 
 celery_app = Celery(
     "assignment_tracker",
@@ -14,6 +13,8 @@ celery_app = Celery(
     include=[
         "worker.sync.sync_engine",
         "worker.token_refresh",
+        "worker.notification.scheduler",
+        "worker.notification.dispatcher",
     ],
 )
 
@@ -24,14 +25,35 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
+    broker_connection_timeout=3,
+    broker_transport_options={
+        "socket_connect_timeout": 2,
+        "socket_timeout": 2,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
+    },
+    task_publish_retry=True,
+    task_publish_retry_policy={
+        "max_retries": 2,
+        "interval_start": 0,
+        "interval_step": 0.2,
+        "interval_max": 0.5,
+    },
 )
 
-# Periodic jobs. Requires a `celery -A worker.celery_app beat` process
-# running alongside the worker (`celery -A worker.celery_app worker`).
+# Periodic maintenance. Google Classroom changes arrive through Pub/Sub;
+# Microsoft Teams changes arrive through the authenticated event-bridge endpoint.
 celery_app.conf.beat_schedule = {
-    **SYNC_BEAT_SCHEDULE,
+    "renew-google-classroom-push-registrations": {
+        "task": "worker.sync.sync_engine.renew_google_push_registrations_task",
+        "schedule": 6 * 24 * 60 * 60,
+    },
     "refresh-expiring-tokens": {
         "task": "worker.token_refresh.refresh_expiring_tokens_task",
         "schedule": 300,  # check every 5 minutes regardless of TOKEN_REFRESH_LEAD_MINUTES
+    },
+    "schedule-due-notifications": {
+        "task": "worker.notification.scheduler.schedule_due_notifications_task",
+        "schedule": settings.NOTIFICATION_POLL_INTERVAL_SECONDS,
     },
 }

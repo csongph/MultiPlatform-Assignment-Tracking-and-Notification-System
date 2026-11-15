@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="KMAPS - รายวิชาและงานที่ได้รับมอบหมาย" />
+  <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png" />
+  <title>งานที่ได้รับมอบหมาย - LMS</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN (same config as dashboard.html) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              purple: '#2d1b4e',
+              'purple-dark': '#23153d',
+              lime: '#c8f561',
+              'lime-hover': '#b8e850',
+              yellow: '#fff159',
+              red: '#ff173d',
+              green: '#00e65b',
+              surface: '#ececf1',
+              progress: '#c884c7',
+            }
+          },
+          fontFamily: {
+            prompt: ['Prompt', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            outfit: ['Outfit', 'sans-serif'],
+          },
+          borderRadius: { '3xl': '24px', '4xl': '28px', '5xl': '32px' }
+        }
+      }
+    }
+  </script>
+
+  <!-- Existing shared styles (read-only) + this page's own additive styles -->
+  <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/navigation.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <link rel="stylesheet" href="../css/assignments.css" />
+</head>
+<body class="app-page">
+
+  <div class="app-viewport-layout">
+
+    <div id="kmaps-sidebar-container" class="app-sidebar-container"></div>
+
+    <div class="app-main-container"><div id="kmaps-topbar-container"></div><main class="app-content flex flex-col gap-5 lg:gap-6 min-w-0" role="main">
+
+      <div id="dev-banner" class="asg-dev-banner hidden">
+        🛠️ โหมดพรีวิว: ยังไม่ได้ล็อกอิน จึงแสดงข้อมูลจำลอง (ล็อกอินแล้วจะดึงข้อมูลจริงจาก API)
+      </div>
+
+      <!-- STAT CARDS (4) -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-4" aria-label="สรุปสถานะงาน">
+        <article class="stat-card stat-card-yellow p-5 flex flex-col justify-between min-h-[110px]">
+          <span class="text-xs sm:text-sm font-medium">งานที่ได้รับมอบหมายทั้งหมด</span>
+          <strong id="stat-total" class="font-outfit text-4xl sm:text-5xl font-bold mt-2">0</strong>
+        </article>
+        <article class="stat-card stat-card-red p-5 flex flex-col justify-between min-h-[110px]">
+          <span class="text-xs sm:text-sm font-medium">ครบกำหนดวันนี้</span>
+          <strong id="stat-today" class="font-outfit text-4xl sm:text-5xl font-bold mt-2">0</strong>
+        </article>
+        <article class="stat-card asg-stat-overdue p-5 flex flex-col justify-between min-h-[110px]">
+          <span class="text-xs sm:text-sm font-medium">เกินกำหนด / ค้างส่ง</span>
+          <strong id="stat-overdue" class="font-outfit text-4xl sm:text-5xl font-bold mt-2">0</strong>
+        </article>
+        <article class="stat-card stat-card-green p-5 flex flex-col justify-between min-h-[110px]">
+          <span class="text-xs sm:text-sm font-medium">งานที่ส่งแล้ว</span>
+          <strong id="stat-submitted" class="font-outfit text-4xl sm:text-5xl font-bold mt-2">0</strong>
+        </article>
+      </section>
+
+      <!-- MAIN PANEL -->
+      <section class="md3-surface-panel p-5 sm:p-8 flex flex-col gap-5" aria-label="รายการงาน">
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">งานที่ได้รับมอบหมาย</h1>
+
+        <!-- Platform source filter -->
+        <div id="platform-tabs" class="asg-platform-tabs" role="tablist" aria-label="แยกงานตามแพลตฟอร์ม"></div>
+
+        <!-- Courses grouped by their source platform -->
+        <div id="course-chips" class="asg-course-groups" aria-label="กรองตามรายวิชา"></div>
+
+        <!-- Toolbar -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div id="tab-bar" class="flex flex-wrap gap-2" role="tablist" aria-label="กรองตามสถานะ">
+            <button type="button" class="asg-tab" data-tab="all">ทั้งหมด<span class="asg-count">0</span></button>
+            <button type="button" class="asg-tab" data-tab="pending">ยังไม่ส่ง<span class="asg-count">0</span></button>
+            <button type="button" class="asg-tab" data-tab="overdue">เกินกำหนด<span class="asg-count">0</span></button>
+            <button type="button" class="asg-tab" data-tab="submitted">ส่งแล้ว<span class="asg-count">0</span></button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <select id="sort-by" class="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-full font-prompt focus:outline-none" aria-label="จัดเรียงตาม">
+              <option value="due">เรียง: กำหนดส่งใกล้สุด</option>
+              <option value="title">เรียง: ชื่องาน ก-ฮ / A-Z</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Task cards -->
+        <div id="task-list" class="flex flex-col gap-4"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Reminder modal -->
+  <div id="reminder-modal" class="asg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reminder-heading">
+    <div class="asg-modal">
+      <h2 id="reminder-heading" class="text-lg font-bold text-slate-900">ตั้งแจ้งเตือนล่วงหน้า</h2>
+      <p id="reminder-task-title" class="text-xs text-slate-500 mt-1 mb-4"></p>
+
+      <label class="block text-xs font-medium text-slate-700 mb-1" for="reminder-value">แจ้งเตือนก่อนครบกำหนด</label>
+      <div class="flex gap-2">
+        <input id="reminder-value" type="number" min="1" max="30" step="1" value="1" class="w-24 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-brand-purple" />
+        <select id="reminder-unit" class="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-brand-purple">
+          <option value="minutes">นาที</option>
+          <option value="hours">ชั่วโมง</option>
+          <option value="days" selected>วัน</option>
+        </select>
+      </div>
+      <p id="reminder-error" class="hidden text-xs text-red-600 mt-2">กรุณากรอกจำนวนเต็มตั้งแต่ 1 ขึ้นไป</p>
+
+      <div class="flex flex-wrap justify-end gap-2 mt-6">
+        <button type="button" id="reminder-remove" class="hidden asg-btn !border-red-300 !text-red-600">ลบแจ้งเตือน</button>
+        <button type="button" id="reminder-cancel" class="asg-btn">ยกเลิก</button>
+        <button type="button" id="reminder-save" class="asg-btn asg-btn-primary">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script type="module" src="../js/assignments.js"></script>
+</body>
+</html>

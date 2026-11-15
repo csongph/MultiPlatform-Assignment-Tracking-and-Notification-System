@@ -1,21 +1,33 @@
+import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
-from app.models.core import Assignment, Course, Notification, NotificationSettings
+from app.core.config import settings
+from app.core.exceptions import AppError, NotFoundError
+from app.core.security import encrypt_token
+from app.models.core import Assignment, Course, Notification, NotificationRule, NotificationSettings
 from app.models.logs import SyncLog
 from app.repositories.learning_repository import LearningRepository
 from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
 from app.schemas.learning import (
     AssignmentOut,
+    AnnouncementOut,
     CourseOut,
     DashboardSummary,
     NotificationSettingsUpdate,
+    PersonalAssignmentStatusOut,
+    PersonalAssignmentStatusUpdate,
+    NotificationRuleCreate,
+    NotificationRuleUpdate,
     SyncJobOut,
 )
 from app.services.oauth_service import ensure_supported_platform
+from app.services.sync_service import SyncService
+
+logger = logging.getLogger(__name__)
 
 
 class LearningService:
@@ -36,6 +48,17 @@ class LearningService:
             overdue=overdue,
             connected_platforms=connected_platforms,
         )
+
+    async def list_announcements(self, user_id: uuid.UUID, platform: str | None = None) -> list[AnnouncementOut]:
+        if platform:
+            ensure_supported_platform(platform)
+        rows = await self.learning.list_announcements(user_id, platform)
+        return [AnnouncementOut(
+            id=row.id, course_id=row.course_id, course_name=row.course.name,
+            platform=row.course.platform.name, title=row.title, content=row.content,
+            published_at=row.published_at, source_url=row.source_url,
+            last_synced_at=row.last_synced_at,
+        ) for row in rows]
 
     async def list_courses(
         self, user_id: uuid.UUID, platform: str | None, include_deleted: bool
@@ -60,13 +83,30 @@ class LearningService:
             due_before=due_before,
             include_deleted=include_deleted,
         )
-        return [self._assignment_out(assignment) for assignment in assignments]
+        statuses = await self.learning.list_user_assignment_statuses(
+            user_id, [assignment.id for assignment in assignments]
+        )
+        return [self._assignment_out(assignment, statuses.get(assignment.id)) for assignment in assignments]
 
     async def get_assignment(self, user_id: uuid.UUID, assignment_id: uuid.UUID) -> AssignmentOut:
         assignment = await self.learning.get_assignment(user_id, assignment_id)
         if assignment is None:
             raise NotFoundError("Assignment not found")
-        return self._assignment_out(assignment)
+        statuses = await self.learning.list_user_assignment_statuses(user_id, [assignment.id])
+        return self._assignment_out(assignment, statuses.get(assignment.id))
+
+    async def update_personal_assignment_status(
+        self, user_id: uuid.UUID, assignment_id: uuid.UUID, payload: PersonalAssignmentStatusUpdate
+    ) -> PersonalAssignmentStatusOut:
+        row = await self.learning.set_personal_assignment_status(
+            user_id, assignment_id, payload.submitted, payload.personal_note
+        )
+        if row is None:
+            raise NotFoundError("Assignment not found")
+        return PersonalAssignmentStatusOut(
+            assignment_id=row.assignment_id, submitted=row.submitted,
+            submitted_at=row.submitted_at, personal_note=row.personal_note,
+        )
 
     async def get_notification_settings(self, user_id: uuid.UUID) -> NotificationSettings:
         return await self.learning.get_notification_settings(user_id)
@@ -74,6 +114,14 @@ class LearningService:
     async def update_notification_settings(
         self, user_id: uuid.UUID, payload: NotificationSettingsUpdate
     ) -> NotificationSettings:
+        # Older frontend clients do not send the newly added JSON field.  Keep
+        # their saved intervals instead of accidentally clearing them on PUT.
+        current_settings = await self.learning.get_notification_settings(user_id)
+        reminder_intervals = (
+            payload.reminder_intervals
+            if "reminder_intervals" in payload.model_fields_set
+            else current_settings.reminder_intervals
+        )
         return await self.learning.update_notification_settings(
             user_id=user_id,
             lead_time_minutes=payload.lead_time_minutes,
@@ -81,11 +129,83 @@ class LearningService:
             due_soon_enabled=payload.due_soon_enabled,
             overdue_enabled=payload.overdue_enabled,
             channel=payload.channel,
+            reminder_intervals=reminder_intervals,
         )
+
+    async def list_notification_rules(self, user_id: uuid.UUID) -> list[NotificationRule]:
+        return await self.learning.list_notification_rules(user_id)
+
+    @staticmethod
+    def _lead_time_minutes(value: int, unit: str) -> int:
+        """Keep a minute value for scheduler arithmetic while the API uses units."""
+        return value * {"day": 1440, "hour": 60, "minute": 1}[unit]
+
+    async def create_notification_rule(
+        self, user_id: uuid.UUID, payload: NotificationRuleCreate
+    ) -> NotificationRule:
+        if payload.assignment_id is not None:
+            assignment = await self.learning.get_assignment(user_id, payload.assignment_id)
+            if assignment is None or assignment.is_deleted:
+                raise NotFoundError("Assignment not found")
+        try:
+            rule = await self.learning.create_notification_rule(
+                user_id=user_id,
+                type_=payload.type,
+                lead_time_value=payload.lead_time_value,
+                lead_time_unit=payload.lead_time_unit,
+                lead_time_minutes=self._lead_time_minutes(payload.lead_time_value, payload.lead_time_unit),
+                sequence_order=payload.sequence_order,
+                is_enabled=payload.is_enabled,
+                assignment_id=payload.assignment_id,
+            )
+            if rule.assignment_id is not None:
+                await self.learning.clear_pending_assignment_reminders(user_id, rule.assignment_id)
+            return rule
+        except IntegrityError as exc:
+            raise ValueError("A notification rule with this type and sequence order already exists") from exc
+
+    async def update_notification_rule(
+        self, user_id: uuid.UUID, rule_id: uuid.UUID, payload: NotificationRuleUpdate
+    ) -> NotificationRule:
+        rule = await self.learning.get_notification_rule(user_id, rule_id)
+        if rule is None:
+            raise NotFoundError("Notification rule not found")
+        try:
+            values = {
+                "lead_time_value": payload.lead_time_value,
+                "lead_time_unit": payload.lead_time_unit,
+                "sequence_order": payload.sequence_order,
+                "is_enabled": payload.is_enabled,
+            }
+            if payload.lead_time_value is not None or payload.lead_time_unit is not None:
+                value = payload.lead_time_value if payload.lead_time_value is not None else rule.lead_time_value
+                unit = payload.lead_time_unit if payload.lead_time_unit is not None else rule.lead_time_unit
+                values["lead_time_minutes"] = self._lead_time_minutes(value, unit)
+            updated = await self.learning.update_notification_rule(rule, **values)
+            if updated.assignment_id is not None:
+                await self.learning.clear_pending_assignment_reminders(user_id, updated.assignment_id)
+            return updated
+        except IntegrityError as exc:
+            raise ValueError("A notification rule with this type and sequence order already exists") from exc
+
+    async def delete_notification_rule(self, user_id: uuid.UUID, rule_id: uuid.UUID) -> None:
+        rule = await self.learning.get_notification_rule(user_id, rule_id)
+        if rule is None:
+            raise NotFoundError("Notification rule not found")
+        assignment_id = rule.assignment_id
+        await self.learning.delete_notification_rule(rule)
+        if assignment_id is not None:
+            await self.learning.clear_pending_assignment_reminders(user_id, assignment_id)
 
     async def list_notifications(
         self, user_id: uuid.UUID, status: str | None
     ) -> list[Notification]:
+        # Materialize reminders that are already due when the inbox is opened.
+        # Celery Beat still handles periodic delivery, but this keeps in-app
+        # reminders available after a worker/beat restart or temporary outage.
+        now = datetime.now(timezone.utc)
+        await self.learning.create_due_notifications(now, user_id=user_id)
+        await self.learning.create_overdue_notifications(now, user_id=user_id)
         return await self.learning.list_notifications(user_id, status)
 
     async def mark_notification_read(
@@ -96,7 +216,12 @@ class LearningService:
             raise NotFoundError("Notification not found")
         return notification
 
-    async def queue_sync(self, user_id: uuid.UUID, platform_name: str) -> SyncJobOut:
+    async def mark_all_notifications_read(self, user_id: uuid.UUID) -> list[Notification]:
+        return await self.learning.mark_all_notifications_read(user_id)
+
+    async def queue_sync(
+        self, user_id: uuid.UUID, platform_name: str, connection_user_id: uuid.UUID | None = None
+    ) -> SyncJobOut:
         ensure_supported_platform(platform_name)
         platform = await self.platforms.get_by_name(platform_name)
         if platform is None:
@@ -105,17 +230,52 @@ class LearningService:
                 f"Seed it first (see scripts/seed_platforms.py)."
             )
 
-        connection = await self.connections.get_by_user_and_platform(user_id, platform.id)
+        connection_owner = connection_user_id or user_id
+        connection = await self.connections.get_by_user_and_platform(connection_owner, platform.id)
+        mock_teams_sync = (
+            platform_name == "microsoft_teams"
+            and settings.MICROSOFT_TEAMS_USE_MOCK_DATA
+            and settings.APP_ENV.strip().lower() != "production"
+        )
+        if (
+            connection is None
+            and mock_teams_sync
+        ):
+            # Demo mode can import the bundled fixture without an external OAuth account.
+            connection = await self.connections.upsert(
+                user_id=connection_owner,
+                platform_id=platform.id,
+                access_token_enc=encrypt_token("microsoft-teams-json-demo"),
+                refresh_token_enc=None,
+                token_expires_at=None,
+            )
         if connection is None:
             raise NotFoundError(f"'{platform_name}' is not connected yet. Connect it first.")
 
-        sync_log = await self.learning.create_sync_log(user_id, platform.id)
+        sync_log = await self.learning.create_sync_log(connection_owner, platform.id)
+
+        if mock_teams_sync:
+            # Small local fixture imports directly, without requiring Redis/Celery.
+            connection_with_platform = await self.connections.get_by_id_with_platform(connection.id)
+            if connection_with_platform is None:
+                raise NotFoundError("Demo Microsoft Teams connection was not found")
+            completed_log = await SyncService(self.db).sync_connection(
+                connection_with_platform, sync_log
+            )
+            return self._sync_out(completed_log, platform.name)
 
         # Import here (not at module scope) to avoid importing Celery/worker
         # code into every FastAPI request - only needed on this code path.
         from worker.sync.sync_engine import sync_connection_task
 
-        sync_connection_task.delay(str(connection.id), str(sync_log.id))
+        try:
+            sync_connection_task.delay(str(connection.id), str(sync_log.id))
+        except Exception as exc:
+            sync_log.status = "failed"
+            sync_log.error_detail = {"error": "Sync queue unavailable"}
+            sync_log.finished_at = datetime.now().astimezone()
+            await self.db.commit()
+            raise AppError("Sync queue is unavailable. Please retry later.", 503) from exc
 
         return self._sync_out(sync_log, platform.name)
 
@@ -123,6 +283,14 @@ class LearningService:
         sync_log = await self.learning.get_sync_log(user_id, sync_id)
         if sync_log is None:
             raise NotFoundError("Sync job not found")
+        if sync_log.status in {"success", "succeeded", "completed", "failed", "error", "skipped", "partial"}:
+            logger.info(
+                "Sync finished: platform=%s status=%s items_synced=%s detail=%s",
+                sync_log.platform.name,
+                sync_log.status,
+                sync_log.items_synced,
+                sync_log.error_detail,
+            )
         return self._sync_out(sync_log, sync_log.platform.name)
 
     @staticmethod
@@ -132,11 +300,13 @@ class LearningService:
             platform=course.platform.name,
             external_course_id=course.external_course_id,
             name=course.name,
+            course_code=course.course_code,
+            instructor_name=course.instructor_name,
             is_deleted=course.is_deleted,
         )
 
     @staticmethod
-    def _assignment_out(assignment: Assignment) -> AssignmentOut:
+    def _assignment_out(assignment: Assignment, personal_status=None) -> AssignmentOut:
         return AssignmentOut(
             id=assignment.id,
             course_id=assignment.course_id,
@@ -147,9 +317,11 @@ class LearningService:
             due_at=assignment.due_at,
             source_status=assignment.source_status,
             computed_status=assignment.computed_status,
-            source_url=assignment.source_url,
+            source_url=assignment.source_url or None,
             is_deleted=assignment.is_deleted,
             last_synced_at=assignment.last_synced_at,
+            personal_submitted=bool(personal_status and personal_status.submitted),
+            personal_note=personal_status.personal_note if personal_status else None,
         )
 
     @staticmethod

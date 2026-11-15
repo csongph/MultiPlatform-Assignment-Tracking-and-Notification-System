@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +45,11 @@ class AdminRoleUpdateRequest(BaseModel):
 
 class AdminStatusUpdateRequest(BaseModel):
     is_active: bool
+
+
+class AdminUserUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=150)
+    email: EmailStr | None = None
 
 
 # ---------------------------------------------------------------------------

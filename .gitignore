@@ -1,0 +1,25 @@
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local run scripts
+*.bat
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

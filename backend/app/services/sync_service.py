@@ -1,12 +1,18 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.core.security import decrypt_token, encrypt_token
 from app.integrations import get_adapter, get_fetcher
 from app.integrations.base_fetcher import BaseAssignmentFetcher, TokenExpiredError
+from app.services.google_classroom_push_service import GoogleClassroomPushService
 from app.models.core import OAuthConnection
 from app.models.logs import SyncLog
-from app.repositories.sync_repository import AssignmentRepository, CourseRepository, SyncLogRepository
+from app.repositories.learning_repository import LearningRepository
+from app.repositories.sync_repository import AnnouncementRepository, AssignmentRepository, CourseRepository, SyncLogRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SyncService:
@@ -21,7 +27,9 @@ class SyncService:
         self.db = db
         self.courses = CourseRepository(db)
         self.assignments = AssignmentRepository(db)
+        self.announcements = AnnouncementRepository(db)
         self.sync_logs = SyncLogRepository(db)
+        self.learning = LearningRepository(db)
 
     async def sync_connection(self, connection: OAuthConnection, sync_log: SyncLog | None = None) -> SyncLog:
         # `connection.platform` must already be eager-loaded by the caller
@@ -43,21 +51,41 @@ class SyncService:
 
         try:
             results = await self._fetch_with_refresh(connection, fetcher)
-        except NotImplementedError as exc:
+        except Exception as exc:  # noqa: BLE001 - we want to log *any* failure, not crash the worker
+            await self.db.rollback()
+            # A Graph permission/server error does not invalidate the OAuth
+            # connection. Only mark it broken when the access token remains
+            # expired after the refresh path has already failed.
+            if isinstance(exc, TokenExpiredError):
+                connection.status = "broken"
+            error_message = f"{type(exc).__name__}: {exc}"
+            logger.error(
+                "Provider sync failed: platform=%s sync_log_id=%s error=%s",
+                connection.platform.name,
+                sync_log.id,
+                error_message,
+            )
             await self.sync_logs.mark_finished(
-                sync_log, status="skipped", items_synced=0, error_detail={"reason": str(exc)}
+                sync_log, status="failed", items_synced=0,
+                error_detail={"error": error_message},
             )
             return sync_log
-        except Exception as exc:  # noqa: BLE001 - we want to log *any* failure, not crash the worker
-            connection.status = "broken"
-            await self.db.commit()
+
+        if not results:
+            logger.warning(
+                "Provider sync returned no courses: platform=%s sync_log_id=%s",
+                connection.platform.name,
+                sync_log.id,
+            )
             await self.sync_logs.mark_finished(
-                sync_log, status="failed", items_synced=0, error_detail={"error": str(exc)}
+                sync_log, status="success", items_synced=0,
+                error_detail={"info": "Provider returned no courses; existing synced records were retained."},
             )
             return sync_log
 
         items_synced = 0
         seen_course_ids: set[str] = set()
+        synced_assignment_ids = []
 
         for item in results:
             course = await self.courses.upsert(
@@ -70,7 +98,7 @@ class SyncService:
 
             seen_assignment_ids: set[str] = set()
             for remote_assignment in item.assignments:
-                await self.assignments.upsert(
+                assignment, _created = await self.assignments.upsert(
                     course_id=course.id,
                     external_assignment_id=remote_assignment.external_id,
                     title=remote_assignment.title,
@@ -80,18 +108,90 @@ class SyncService:
                     computed_status=remote_assignment.computed_status,
                     source_url=remote_assignment.source_url,
                 )
+                synced_assignment_ids.append(assignment.id)
                 seen_assignment_ids.add(remote_assignment.external_id)
                 items_synced += 1
 
-            await self.assignments.soft_delete_missing(course.id, seen_assignment_ids)
+            if seen_assignment_ids:
+                await self.assignments.soft_delete_missing(course.id, seen_assignment_ids)
 
-        await self.courses.soft_delete_missing(connection.user_id, connection.platform_id, seen_course_ids)
+        announcement_sync_error = None
+        try:
+            announcement_groups = await self._fetch_announcements_with_refresh(connection, fetcher)
+            for group in announcement_groups:
+                course = await self.courses.get(
+                    connection.user_id, connection.platform_id, group.course_external_id
+                )
+                if course is None or course.is_deleted:
+                    continue
+                seen_announcement_ids: set[str] = set()
+                for announcement in group.announcements:
+                    await self.announcements.upsert(course.id, announcement)
+                    seen_announcement_ids.add(announcement.external_id)
+                await self.announcements.soft_delete_missing(course.id, seen_announcement_ids)
+        except Exception as exc:  # announcement permissions must not block assignment ingestion
+            announcement_sync_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("Announcement sync failed: platform=%s error=%s", connection.platform.name, announcement_sync_error)
+
+        # Do not archive previously synced data if the provider returned an empty course
+        # list unexpectedly (permissions, transient inconsistency, or account transition).
+        if seen_course_ids:
+            await self.courses.soft_delete_missing(connection.user_id, connection.platform_id, seen_course_ids)
+
+        if synced_assignment_ids:
+            await self.learning.create_new_assignment_notifications(
+                connection.user_id, synced_assignment_ids
+            )
 
         if connection.status != "connected":
             connection.status = "connected"
         await self.db.commit()
 
-        await self.sync_logs.mark_finished(sync_log, status="success", items_synced=items_synced)
+        diagnostic = {"announcement_sync_error": announcement_sync_error} if announcement_sync_error else None
+        if connection.platform.name == "google_classroom":
+            try:
+                await GoogleClassroomPushService(self.db).ensure_registrations(
+                    connection, list(seen_course_ids)
+                )
+            except Exception as exc:  # assignment sync remains successful if push registration is unavailable
+                logger.warning(
+                    "Google Classroom push registration failed: connection_id=%s error=%s",
+                    connection.id,
+                    exc,
+                )
+                diagnostic = {
+                    **(diagnostic or {}),
+                    "push_registration_error": f"{type(exc).__name__}: {exc}",
+                }
+
+        if items_synced == 0:
+            diagnostic = {
+                **(diagnostic or {}),
+                "info": (
+                    f"Provider returned {len(seen_course_ids)} courses but no active assignments."
+                )
+            }
+            logger.warning(
+                "Provider sync returned courses but no active assignments: platform=%s "
+                "sync_log_id=%s courses=%s",
+                connection.platform.name,
+                sync_log.id,
+                len(seen_course_ids),
+            )
+        else:
+            logger.info(
+                "Provider sync finished: platform=%s sync_log_id=%s courses=%s assignments=%s",
+                connection.platform.name,
+                sync_log.id,
+                len(seen_course_ids),
+                items_synced,
+            )
+        await self.sync_logs.mark_finished(
+            sync_log,
+            status="success",
+            items_synced=items_synced,
+            error_detail=diagnostic,
+        )
         return sync_log
 
     async def _fetch_with_refresh(
@@ -117,3 +217,25 @@ class SyncService:
             await self.db.commit()
 
             return await self._fetch_with_refresh(connection, fetcher, _retried=True)
+
+    async def _fetch_announcements_with_refresh(
+        self,
+        connection: OAuthConnection,
+        fetcher: BaseAssignmentFetcher,
+        _retried: bool = False,
+    ):
+        access_token = decrypt_token(connection.access_token_enc)
+        try:
+            return await fetcher.fetch_announcements(access_token)
+        except TokenExpiredError:
+            if _retried or not connection.refresh_token_enc:
+                raise
+            adapter = get_adapter(connection.platform.name)
+            refresh_token = decrypt_token(connection.refresh_token_enc)
+            bundle = await adapter.refresh_access_token(refresh_token)
+            connection.access_token_enc = encrypt_token(bundle.access_token)
+            if bundle.refresh_token:
+                connection.refresh_token_enc = encrypt_token(bundle.refresh_token)
+            connection.token_expires_at = bundle.expires_at
+            await self.db.commit()
+            return await self._fetch_announcements_with_refresh(connection, fetcher, _retried=True)

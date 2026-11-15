@@ -22,7 +22,15 @@ class ConflictError(AppError):
     status_code = 409
 
 
+class ServiceUnavailableError(AppError):
+    status_code = 503
+
+
 class OAuthProviderError(AppError):
     """Raised when Google/Microsoft returns an error during the OAuth exchange."""
 
     status_code = 502
+
+
+class OAuthReauthorizationRequired(OAuthProviderError):
+    """Raised when a provider permanently rejects a stored refresh token."""

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="../assets/image/logoweb-256.png">
+  <title>ประกาศจากอาจารย์ - LMS KMAPS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="../css/notification.css">
+  <link rel="stylesheet" href="../css/auth.css">
+  <link rel="stylesheet" href="../css/navigation.css">
+</head>
+<body class="app-page">
+  <div class="app-viewport-layout">
+    <div class="app-sidebar-container" id="kmaps-sidebar-container"></div>
+    <main class="app-main-container">
+      <div id="kmaps-topbar-container"></div>
+      <div class="app-content">
+        <header class="app-header">
+          <div><p class="app-eyebrow">KMAPS</p><h1>ประกาศจากอาจารย์</h1>
+            <p>แสดงเฉพาะประกาศจากผู้สอนใน Google Classroom และ Microsoft Teams</p>
+          </div>
+        </header>
+        <section class="notification-card" aria-labelledby="announcements-heading">
+          <div class="configured-reminders-heading">
+            <div><h2 id="announcements-heading">ประกาศล่าสุด</h2><p>ข้อมูลจากคลาสที่เชื่อมต่อและซิงก์ไว้</p></div>
+          </div>
+          <div id="announcement-list" class="notification-list" aria-live="polite">
+            <div class="notification-loading">กำลังโหลดประกาศ...</div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="../config.js"></script>
+  <script type="module" src="../js/announcements.js"></script>
+</body>
+</html>

@@ -1,15 +1,19 @@
 import uuid
+import secrets
+import logging
 
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.exceptions import NotFoundError, ServiceUnavailableError, UnauthorizedError
 from app.core.security import create_oauth_state_token, decode_oauth_state_token, encrypt_token
 from app.integrations import SUPPORTED_PLATFORMS, get_adapter
 from app.models.core import OAuthConnection
 from app.repositories.admin_repository import AuditLogRepository
 from app.repositories.oauth_repository import OAuthConnectionRepository, PlatformRepository
 from app.repositories.user_repository import UserRepository
+
+logger = logging.getLogger(__name__)
 
 
 class OAuthOnboardingService:
@@ -30,7 +34,7 @@ class OAuthOnboardingService:
 
     def build_authorization_url(self, user_id: uuid.UUID, platform_name: str) -> str:
         adapter = get_adapter(platform_name)  # raises NotFoundError if unknown
-        state = create_oauth_state_token(user_id, platform_name)
+        state = create_oauth_state_token(user_id, platform_name, nonce=secrets.token_urlsafe(32))
         return adapter.get_authorization_url(state=state)
 
     async def handle_callback(self, platform_name: str, code: str, state: str) -> OAuthConnection:
@@ -39,12 +43,33 @@ class OAuthOnboardingService:
         if state_platform != platform_name:
             raise UnauthorizedError("OAuth state does not match the callback platform")
 
+        # OAuth state replay protection is required; fail closed if Redis is unavailable.
+        from app.core.config import settings
+        try:
+            import redis.asyncio as redis_asyncio
+            redis = redis_asyncio.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+            try:
+                if not await redis.set(f"oauth-state:{state}", "1", ex=600, nx=True):
+                    raise UnauthorizedError("OAuth state has already been used")
+            finally:
+                await redis.aclose()
+        except UnauthorizedError:
+            raise
+        except Exception as exc:
+            logger.exception("OAuth state replay protection could not reach Redis")
+            raise ServiceUnavailableError(
+                "OAuth state verification is unavailable because Redis cannot be reached. "
+                "Check REDIS_URL and confirm the Redis server is running, then retry the connection."
+            ) from exc
+
         platform = await self.platforms.get_by_name(platform_name)
         if platform is None:
             raise NotFoundError(
                 f"Platform '{platform_name}' has no row in the platforms table. "
                 f"Seed it first (see scripts/seed_platforms.py)."
             )
+
+        connection_existing = await self.connections.get_by_user_and_platform(user_id, platform.id)
 
         adapter = get_adapter(platform_name)
         token_bundle = await adapter.exchange_code_for_token(code)
@@ -56,7 +81,7 @@ class OAuthOnboardingService:
             user_id=user_id,
             platform_id=platform.id,
             access_token_enc=access_token_enc,
-            refresh_token_enc=refresh_token_enc,
+            refresh_token_enc=refresh_token_enc or (connection_existing.refresh_token_enc if connection_existing else None),
             token_expires_at=token_bundle.expires_at,
             status="connected",
         )

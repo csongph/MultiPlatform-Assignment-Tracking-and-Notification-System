@@ -6,14 +6,16 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -60,6 +62,9 @@ class Course(Base):
     platform_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("platforms.id"), nullable=False)
     external_course_id: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    course_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instructor_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="courses")
@@ -81,12 +86,95 @@ class Assignment(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
     source_status: Mapped[str] = mapped_column(String(30), nullable=False)
     computed_status: Mapped[str] = mapped_column(String(20), index=True, nullable=False)  # not_submitted/submitted/overdue
-    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     course: Mapped["Course"] = relationship(back_populates="assignments")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="assignment")
+    user_statuses: Mapped[list["UserAssignmentStatus"]] = relationship(back_populates="assignment")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+    __table_args__ = (UniqueConstraint("course_id", "external_announcement_id", name="uq_announcement_course_external"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("courses.id"), nullable=False)
+    external_announcement_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author_role: Mapped[str] = mapped_column(String(20), default="unknown", nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    course: Mapped["Course"] = relationship()
+
+
+class UserAssignmentStatus(Base):
+    __tablename__ = "user_assignment_status"
+    __table_args__ = (
+        UniqueConstraint("user_id", "assignment_id", name="uq_user_assignment_status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id"), nullable=False
+    )
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_overdue: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    personal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped["User"] = relationship(back_populates="assignment_statuses")
+    assignment: Mapped["Assignment"] = relationship(back_populates="user_statuses")
+
+
+class NotificationRule(Base):
+    __tablename__ = "notification_rules"
+    __table_args__ = (
+        Index(
+            "uq_notification_rule_global_user_type_seq",
+            "user_id", "type", "sequence_order",
+            unique=True,
+            postgresql_where=text("assignment_id IS NULL"),
+        ),
+        Index(
+            "uq_notification_rule_user_type_assignment",
+            "user_id", "type", "assignment_id",
+            unique=True,
+            postgresql_where=text("assignment_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    assignment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=True
+    )
+    type: Mapped[str] = mapped_column(String(20), default="due_soon", nullable=False)
+    lead_time_value: Mapped[int] = mapped_column(Integer, nullable=False)
+    lead_time_unit: Mapped[str] = mapped_column(String(10), nullable=False)  # day/hour/minute
+    lead_time_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sequence_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped["User"] = relationship(back_populates="notification_rules")
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="rule")
 
 
 class NotificationSettings(Base):
@@ -97,6 +185,7 @@ class NotificationSettings(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=False
     )
     lead_time_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)  # 1-43200
+    reminder_intervals: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
     new_assignment_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     due_soon_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     overdue_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -107,13 +196,22 @@ class NotificationSettings(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "assignment_id", "type", "tier", name="uq_notification_user_ass_type_tier"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     assignment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("assignments.id"), nullable=True
     )
+    notification_rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notification_rules.id"), nullable=True
+    )
     type: Mapped[str] = mapped_column(String(20), nullable=False)  # new/due_soon/overdue
+    tier: Mapped[int] = mapped_column(SmallInteger, default=1, nullable=False)  # 1=Stage 1, 2=Stage 2, etc.
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True, nullable=False)
     retry_count: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
@@ -121,3 +219,4 @@ class Notification(Base):
 
     user: Mapped["User"] = relationship(back_populates="notifications")
     assignment: Mapped["Assignment"] = relationship(back_populates="notifications")
+    rule: Mapped["NotificationRule | None"] = relationship(back_populates="notifications")

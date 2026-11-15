@@ -1,17 +1,38 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.core import Assignment, Course, Notification, NotificationSettings, OAuthConnection
+from app.models.core import (
+    Announcement,
+    Assignment,
+    Course,
+    Notification,
+    NotificationRule,
+    NotificationSettings,
+    OAuthConnection,
+    UserAssignmentStatus,
+)
 from app.models.logs import SyncLog
 
 
 class LearningRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def list_announcements(self, user_id: uuid.UUID, platform: str | None = None) -> list[Announcement]:
+        statement = (select(Announcement).join(Course)
+            .options(selectinload(Announcement.course).selectinload(Course.platform))
+            .where(Course.user_id == user_id, Course.is_deleted.is_(False),
+                   Announcement.is_deleted.is_(False), Announcement.author_role == "teacher")
+            .order_by(Announcement.published_at.desc().nullslast(), Announcement.last_synced_at.desc()))
+        if platform:
+            statement = statement.where(Course.platform.has(name=platform))
+        result = await self.db.execute(statement)
+        return list(result.scalars().all())
 
     async def dashboard_counts(self, user_id: uuid.UUID) -> tuple[int, int, int, int, list[str]]:
         now = datetime.now(timezone.utc)
@@ -23,13 +44,18 @@ class LearningRepository:
         total_assignments = await self._count(
             select(func.count(Assignment.id))
             .join(Course)
-            .where(Course.user_id == user_id, Assignment.is_deleted.is_(False))
+            .where(
+                Course.user_id == user_id,
+                Course.is_deleted.is_(False),
+                Assignment.is_deleted.is_(False),
+            )
         )
         due_soon = await self._count(
             select(func.count(Assignment.id))
             .join(Course)
             .where(
                 Course.user_id == user_id,
+                Course.is_deleted.is_(False),
                 Assignment.is_deleted.is_(False),
                 Assignment.due_at.is_not(None),
                 Assignment.due_at >= now,
@@ -41,6 +67,7 @@ class LearningRepository:
             .join(Course)
             .where(
                 Course.user_id == user_id,
+                Course.is_deleted.is_(False),
                 Assignment.is_deleted.is_(False),
                 Assignment.computed_status == "overdue",
             )
@@ -93,7 +120,10 @@ class LearningRepository:
         if due_before:
             statement = statement.where(Assignment.due_at <= due_before)
         if not include_deleted:
-            statement = statement.where(Assignment.is_deleted.is_(False))
+            statement = statement.where(
+                Assignment.is_deleted.is_(False),
+                Course.is_deleted.is_(False),
+            )
 
         result = await self.db.execute(statement)
         return list(result.scalars().all())
@@ -103,9 +133,54 @@ class LearningRepository:
             select(Assignment)
             .join(Course)
             .options(selectinload(Assignment.course).selectinload(Course.platform))
-            .where(Course.user_id == user_id, Assignment.id == assignment_id)
+            .where(
+                Course.user_id == user_id,
+                Course.is_deleted.is_(False),
+                Assignment.is_deleted.is_(False),
+                Assignment.id == assignment_id,
+            )
         )
         return result.scalar_one_or_none()
+
+    async def list_user_assignment_statuses(
+        self, user_id: uuid.UUID, assignment_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, UserAssignmentStatus]:
+        if not assignment_ids:
+            return {}
+        result = await self.db.execute(
+            select(UserAssignmentStatus).where(
+                UserAssignmentStatus.user_id == user_id,
+                UserAssignmentStatus.assignment_id.in_(assignment_ids),
+            )
+        )
+        return {row.assignment_id: row for row in result.scalars().all()}
+
+    async def set_personal_assignment_status(
+        self, user_id: uuid.UUID, assignment_id: uuid.UUID, submitted: bool, personal_note: str | None
+    ) -> UserAssignmentStatus | None:
+        if await self.get_assignment(user_id, assignment_id) is None:
+            return None
+        result = await self.db.execute(
+            select(UserAssignmentStatus).where(
+                UserAssignmentStatus.user_id == user_id,
+                UserAssignmentStatus.assignment_id == assignment_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if row is None:
+            row = UserAssignmentStatus(
+                user_id=user_id, assignment_id=assignment_id, submitted=submitted,
+                submitted_at=now if submitted else None, personal_note=personal_note,
+            )
+            self.db.add(row)
+        else:
+            row.submitted = submitted
+            row.submitted_at = now if submitted else None
+            row.personal_note = personal_note
+        await self.db.commit()
+        await self.db.refresh(row)
+        return row
 
     async def get_notification_settings(self, user_id: uuid.UUID) -> NotificationSettings:
         result = await self.db.execute(
@@ -127,6 +202,7 @@ class LearningRepository:
         due_soon_enabled: bool,
         overdue_enabled: bool,
         channel: str,
+        reminder_intervals: dict | list | None,
     ) -> NotificationSettings:
         settings = await self.get_notification_settings(user_id)
         settings.lead_time_minutes = lead_time_minutes
@@ -134,9 +210,94 @@ class LearningRepository:
         settings.due_soon_enabled = due_soon_enabled
         settings.overdue_enabled = overdue_enabled
         settings.channel = channel
+        settings.reminder_intervals = reminder_intervals
         await self.db.commit()
         await self.db.refresh(settings)
         return settings
+
+    async def list_notification_rules(self, user_id: uuid.UUID) -> list[NotificationRule]:
+        result = await self.db.execute(
+            select(NotificationRule)
+            .where(NotificationRule.user_id == user_id)
+            .order_by(NotificationRule.type, NotificationRule.sequence_order)
+        )
+        return list(result.scalars().all())
+
+    async def get_notification_rule(
+        self, user_id: uuid.UUID, rule_id: uuid.UUID
+    ) -> NotificationRule | None:
+        result = await self.db.execute(
+            select(NotificationRule).where(
+                NotificationRule.id == rule_id, NotificationRule.user_id == user_id
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def create_notification_rule(
+        self,
+        user_id: uuid.UUID,
+        type_: str,
+        lead_time_value: int,
+        lead_time_unit: str,
+        lead_time_minutes: int,
+        sequence_order: int,
+        is_enabled: bool,
+        assignment_id: uuid.UUID | None = None,
+    ) -> NotificationRule:
+        rule = NotificationRule(
+            user_id=user_id,
+            assignment_id=assignment_id,
+            type=type_,
+            lead_time_value=lead_time_value,
+            lead_time_unit=lead_time_unit,
+            lead_time_minutes=lead_time_minutes,
+            sequence_order=sequence_order,
+            is_enabled=is_enabled,
+        )
+        self.db.add(rule)
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise
+        await self.db.refresh(rule)
+        return rule
+
+    async def update_notification_rule(
+        self, rule: NotificationRule, **values: int | bool | str | None
+    ) -> NotificationRule:
+        for field, value in values.items():
+            if value is not None:
+                setattr(rule, field, value)
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise
+        await self.db.refresh(rule)
+        return rule
+
+    async def delete_notification_rule(self, rule: NotificationRule) -> None:
+        await self.db.execute(
+            update(Notification)
+            .where(Notification.notification_rule_id == rule.id)
+            .values(notification_rule_id=None)
+        )
+        await self.db.delete(rule)
+        await self.db.commit()
+
+    async def clear_pending_assignment_reminders(self, user_id: uuid.UUID, assignment_id: uuid.UUID) -> None:
+        """Remove queued reminders so a changed rule is recalculated on the next scheduler pass."""
+        await self.db.execute(
+            delete(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.assignment_id == assignment_id,
+                Notification.type == "due_soon",
+                Notification.status.in_(("pending", "cancelled")),
+            )
+        )
+        await self.db.commit()
 
     async def list_notifications(self, user_id: uuid.UUID, status: str | None = None) -> list[Notification]:
         statement = (
@@ -165,6 +326,245 @@ class LearningRepository:
         await self.db.commit()
         await self.db.refresh(notification)
         return notification
+
+    async def mark_all_notifications_read(self, user_id: uuid.UUID) -> list[Notification]:
+        result = await self.db.execute(
+            select(Notification).where(Notification.user_id == user_id, Notification.status != "read")
+        )
+        notifications = list(result.scalars().all())
+        now = datetime.now(timezone.utc)
+        for notification in notifications:
+            notification.status = "read"
+            notification.delivered_at = notification.delivered_at or now
+        await self.db.commit()
+        return notifications
+
+    async def create_due_notifications(
+        self, now: datetime, user_id: uuid.UUID | None = None
+    ) -> list[uuid.UUID]:
+        """Create due-soon rows once per user/rule/assignment.
+
+        The database unique constraint `(user_id, assignment_id, type, tier)`
+        is the final idempotency guard when two Celery workers overlap.
+        """
+        result = await self.db.execute(
+            select(Assignment, Course, NotificationRule)
+            .join(Course, Assignment.course_id == Course.id)
+            .outerjoin(
+                NotificationRule,
+                and_(
+                    NotificationRule.user_id == Course.user_id,
+                    NotificationRule.type == "due_soon",
+                    or_(
+                        NotificationRule.assignment_id.is_(None),
+                        NotificationRule.assignment_id == Assignment.id,
+                    ),
+                ),
+            )
+            .join(
+                NotificationSettings,
+                and_(
+                    NotificationSettings.user_id == Course.user_id,
+                    NotificationSettings.due_soon_enabled.is_(True),
+                ),
+            )
+            .outerjoin(
+                UserAssignmentStatus,
+                and_(
+                    UserAssignmentStatus.user_id == Course.user_id,
+                    UserAssignmentStatus.assignment_id == Assignment.id,
+                ),
+            )
+            .where(
+                Course.is_deleted.is_(False),
+                Assignment.is_deleted.is_(False),
+                Assignment.due_at.is_not(None),
+                Assignment.due_at >= now,
+                Assignment.computed_status != "submitted",
+                (UserAssignmentStatus.submitted.is_(False) | UserAssignmentStatus.submitted.is_(None)),
+                *([Course.user_id == user_id] if user_id is not None else []),
+            )
+        )
+
+        created_ids: list[uuid.UUID] = []
+        rows_by_assignment: dict[uuid.UUID, tuple[Assignment, Course, list[NotificationRule]]] = {}
+        for assignment, course, rule in result.all():
+            current = rows_by_assignment.setdefault(assignment.id, (assignment, course, []))
+            if rule is not None:
+                current[2].append(rule)
+
+        for assignment, course, rules in rows_by_assignment.values():
+            specific_rules = [rule for rule in rules if rule.assignment_id == assignment.id]
+            # A per-assignment rule (including a disabled one) overrides global rules.
+            applicable_rules = specific_rules or [rule for rule in rules if rule.assignment_id is None]
+            for rule in applicable_rules:
+                if not rule.is_enabled:
+                    continue
+                scheduled_at = assignment.due_at - timedelta(minutes=rule.lead_time_minutes)
+                if scheduled_at > now:
+                    continue
+                notification = Notification(
+                    user_id=course.user_id,
+                    assignment_id=assignment.id,
+                    notification_rule_id=rule.id,
+                    type="due_soon",
+                    tier=rule.sequence_order,
+                    status="pending",
+                    retry_count=0,
+                    scheduled_at=scheduled_at,
+                )
+                try:
+                    async with self.db.begin_nested():
+                        self.db.add(notification)
+                        await self.db.flush()
+                        created_ids.append(notification.id)
+                except IntegrityError:
+                    # This notification was already created by an earlier poll.
+                    continue
+        await self.db.commit()
+        return created_ids
+
+    async def create_overdue_notifications(
+        self, now: datetime, user_id: uuid.UUID | None = None
+    ) -> list[uuid.UUID]:
+        """Add one in-app notification when an enabled assignment becomes overdue."""
+        result = await self.db.execute(
+            select(Assignment.id, Course.user_id)
+            .join(Course, Assignment.course_id == Course.id)
+            .join(
+                NotificationSettings,
+                and_(
+                    NotificationSettings.user_id == Course.user_id,
+                    NotificationSettings.overdue_enabled.is_(True),
+                ),
+            )
+            .outerjoin(
+                UserAssignmentStatus,
+                and_(
+                    UserAssignmentStatus.user_id == Course.user_id,
+                    UserAssignmentStatus.assignment_id == Assignment.id,
+                ),
+            )
+            .where(
+                Course.is_deleted.is_(False),
+                Assignment.is_deleted.is_(False),
+                Assignment.due_at.is_not(None),
+                Assignment.due_at < now,
+                Assignment.computed_status != "submitted",
+                (UserAssignmentStatus.submitted.is_(False) | UserAssignmentStatus.submitted.is_(None)),
+                *([Course.user_id == user_id] if user_id is not None else []),
+            )
+        )
+
+        created_ids: list[uuid.UUID] = []
+        for assignment_id, user_id in result.all():
+            notification = Notification(
+                user_id=user_id,
+                assignment_id=assignment_id,
+                notification_rule_id=None,
+                type="overdue",
+                tier=1,
+                status="delivered",
+                retry_count=0,
+                scheduled_at=now,
+                delivered_at=now,
+            )
+            try:
+                async with self.db.begin_nested():
+                    self.db.add(notification)
+                    await self.db.flush()
+                    created_ids.append(notification.id)
+            except IntegrityError:
+                # The unique notification constraint makes repeated scheduler runs safe.
+                continue
+        await self.db.commit()
+        return created_ids
+
+    async def create_new_assignment_notifications(
+        self, user_id: uuid.UUID, assignment_ids: list[uuid.UUID]
+    ) -> list[uuid.UUID]:
+        """Ensure synced assignments have one in-app new-assignment inbox entry."""
+        if not assignment_ids:
+            return []
+
+        settings_result = await self.db.execute(
+            select(NotificationSettings.new_assignment_enabled).where(
+                NotificationSettings.user_id == user_id
+            )
+        )
+        new_assignment_enabled = settings_result.scalar_one_or_none()
+        # Older accounts without a settings row use the same enabled default
+        # as accounts created through AuthService.
+        if new_assignment_enabled is False:
+            return []
+
+        existing_result = await self.db.execute(
+            select(Notification.assignment_id).where(
+                Notification.user_id == user_id,
+                Notification.assignment_id.in_(assignment_ids),
+                Notification.type == "new",
+                Notification.tier == 1,
+            )
+        )
+        already_notified = set(existing_result.scalars().all())
+        now = datetime.now(timezone.utc)
+        created_ids: list[uuid.UUID] = []
+        for assignment_id in assignment_ids:
+            if assignment_id in already_notified:
+                continue
+            notification = Notification(
+                user_id=user_id,
+                assignment_id=assignment_id,
+                notification_rule_id=None,
+                type="new",
+                tier=1,
+                status="delivered",
+                retry_count=0,
+                scheduled_at=now,
+                delivered_at=now,
+            )
+            try:
+                async with self.db.begin_nested():
+                    self.db.add(notification)
+                    await self.db.flush()
+                    created_ids.append(notification.id)
+            except IntegrityError:
+                # Another sync worker may have inserted the same inbox row.
+                continue
+        return created_ids
+
+    async def claim_pending_notifications(self, now: datetime, max_retries: int) -> list[Notification]:
+        """Lock pending rows for a dispatcher run without marking them delivered."""
+        result = await self.db.execute(
+            select(Notification)
+            .options(
+                selectinload(Notification.user),
+                selectinload(Notification.assignment).selectinload(Assignment.course),
+                selectinload(Notification.rule),
+            )
+            .where(
+                Notification.status == "pending",
+                Notification.scheduled_at <= now,
+                Notification.retry_count < max_retries,
+            )
+            .order_by(Notification.scheduled_at)
+            .with_for_update(skip_locked=True)
+        )
+        return list(result.scalars().all())
+
+    async def mark_notification_delivered(self, notification: Notification, now: datetime) -> None:
+        notification.status = "delivered"
+        notification.delivered_at = now
+        await self.db.commit()
+
+    async def mark_notification_cancelled(self, notification: Notification) -> None:
+        """Stop a queued notification whose owner changed their preferences."""
+        notification.status = "cancelled"
+        await self.db.commit()
+
+    async def mark_notification_delivery_failed(self, notification: Notification) -> None:
+        notification.retry_count += 1
+        await self.db.commit()
 
     async def create_sync_log(self, user_id: uuid.UUID, platform_id: int) -> SyncLog:
         sync_log = SyncLog(

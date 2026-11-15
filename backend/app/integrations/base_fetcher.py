@@ -22,7 +22,23 @@ class RemoteAssignment:
     due_at: datetime | None
     source_status: str  # raw state string from the provider, e.g. "PUBLISHED"
     computed_status: str  # normalized: not_submitted / submitted / overdue
-    source_url: str
+    source_url: str | None
+
+
+@dataclass
+class RemoteAnnouncement:
+    external_id: str
+    title: str
+    content: str | None
+    published_at: datetime | None
+    source_url: str | None
+    author_role: str = "teacher"
+
+
+@dataclass
+class RemoteCourseWithAnnouncements:
+    course_external_id: str
+    announcements: list[RemoteAnnouncement] = field(default_factory=list)
 
 
 @dataclass
@@ -59,3 +75,7 @@ class BaseAssignmentFetcher(ABC):
                 assignment sync yet (OAuth-only integration).
         """
         raise NotImplementedError
+
+    async def fetch_announcements(self, access_token: str) -> list[RemoteCourseWithAnnouncements]:
+        """Return announcements when the provider API and granted scopes allow it."""
+        return []
