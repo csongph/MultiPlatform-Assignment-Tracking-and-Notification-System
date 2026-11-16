@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ภาพรวมระบบ | KMAPS Admin</title>
+  <link rel="icon" href="assets/img/logo.png" />
+
+  <!-- ฟอนต์: Inter (อังกฤษ/ตัวเลข) + Noto Sans Thai (ไทย) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    /* สีหลักจาก Figma: #FFFFFF, #000000, #C8FF59, Linear (ม่วงเข้ม), #CFC3E6 */
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Inter", "Noto Sans Thai", "sans-serif"] },
+          colors: {
+            lime: { DEFAULT: "#C8FF59", soft: "#F1FFD6" },
+            lavender: { DEFAULT: "#CFC3E6", soft: "#F2EEF9" },
+            plum: { DEFAULT: "#6B3FA0", dark: "#1B1029" },
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+
+<body data-page="overview" class="bg-white text-black font-sans antialiased">
+  <div class="flex min-h-screen">
+
+    <!-- ===================== Sidebar ===================== -->
+    <div id="sidebarBackdrop" class="fixed inset-0 z-30 bg-black/40 hidden lg:hidden"></div>
+    <aside id="sidebar" class="sidebar fixed lg:sticky top-0 lg:top-4 z-40 lg:z-auto lg:m-4 lg:mr-0 w-60 h-screen lg:h-[calc(100vh-2rem)]
+             -translate-x-full lg:translate-x-0 transition-transform duration-200 lg:rounded-[28px] flex flex-col shrink-0">
+      <div class="flex flex-col items-center pt-8 pb-6">
+        <img src="assets/img/logo.png" alt="LMS" class="w-20 h-20 object-contain" />
+        <span class="mt-4 px-3 py-0.5 rounded-full bg-lime border border-black text-black text-[11px] font-bold tracking-wide">ADMIN</span>
+      </div>
+
+      <nav class="flex-1 px-3 space-y-1.5">
+        <a href="index.html" class="nav-item active">
+          <i data-lucide="layout-grid" class="w-[18px] h-[18px]"></i><span>ภาพรวมระบบ</span>
+        </a>
+        <a href="users.html" class="nav-item">
+          <i data-lucide="users" class="w-[18px] h-[18px]"></i><span>จัดการผู้ใช้งาน</span>
+        </a>
+        <a href="connections.html" class="nav-item">
+          <i data-lucide="link" class="w-[18px] h-[18px]"></i><span>การเชื่อมต่อ LMS</span>
+        </a>
+      </nav>
+
+      <div class="pb-6 text-center">
+        <button id="btnResetMock" class="text-[11px] text-white/50 hover:text-lime hover:underline mb-2">รีเซ็ตข้อมูลจำลอง</button>
+        <p class="text-[11px] text-white/70">KMAPS Admin · v1.0</p>
+      </div>
+    </aside>
+
+    <!-- ===================== Main ===================== -->
+    <div class="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 pt-6 pb-10">
+      <header class="flex items-start gap-4 mb-5">
+        <button id="btnMenu" class="lg:hidden mt-1 p-2 rounded-lg border border-black" aria-label="เปิดเมนู">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="min-w-0 flex-1">
+          <h1 class="text-2xl font-extrabold tracking-tight">ภาพรวมระบบ</h1>
+          <p class="text-xs text-black/60 mt-1">สรุปผู้ใช้ รายวิชา และสถานะการเชื่อมต่อ LMS · อัปเดตล่าสุด <span id="updatedAt"></span></p>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="flex items-center gap-2.5 bg-lime border border-black rounded-2xl pl-1.5 pr-1.5 sm:pr-5 py-1.5">
+            <div class="w-9 h-9 rounded-full bg-white border border-black grid place-items-center overflow-hidden">
+              <svg viewBox="0 0 36 36" class="w-9 h-9"><circle cx="18" cy="14" r="7" fill="#F6C9A8"/><path d="M10 12c0-6 16-6 16 0-3-2-13-2-16 0z" fill="#5A3A22"/><path d="M6 36c1-8 6-12 12-12s11 4 12 12z" fill="#6FA8DC"/></svg>
+            </div>
+            <div class="hidden sm:block leading-tight">
+              <p class="text-sm font-bold">K.Saranyapat</p>
+              <p class="text-xs text-black/60">ผู้ดูแลระบบ</p>
+            </div>
+          </div>
+          <button id="btnLogout" class="w-12 h-12 grid place-items-center bg-lime border border-black rounded-2xl hover:brightness-95" aria-label="ออกจากระบบ" data-tip="ออกจากระบบ">
+            <i data-lucide="log-out" class="w-6 h-6"></i>
+          </button>
+        </div>
+      </header>
+
+      <main id="app">
+        <div class="space-y-4">
+          <!-- การ์ดสถิติ -->
+          <div class="grid md:grid-cols-3 gap-4">
+            <div class="card px-5 py-4">
+              <p class="text-xs text-black/70">ผู้ใช้ทั้งหมด</p>
+              <p id="statUsers" class="stat-value">–</p>
+              <p class="text-[11px] text-black/60 mt-0.5">นักเรียน <span id="statStudents">–</span> · แอดมิน <span id="statAdmins">–</span></p>
+            </div>
+            <div class="card px-5 py-4">
+              <p class="text-xs text-black/70">นักเรียนที่ใช้งานใน 7 วัน</p>
+              <p id="statActive" class="stat-value">–</p>
+              <p id="statActiveGrowth" class="text-[11px] font-medium mt-0.5"></p>
+            </div>
+            <div class="card px-5 py-4">
+              <p class="text-xs text-black/70">รายวิชาที่เชื่อมต่อ</p>
+              <p id="statCourses" class="stat-value">–</p>
+              <p class="text-[11px] text-black/60 mt-0.5">Google <span id="statGoogle">–</span> · Teams <span id="statTeams">–</span> (รวมที่ซ้ำ)</p>
+            </div>
+          </div>
+
+          <div class="grid xl:grid-cols-3 gap-4">
+            <!-- กราฟรายวิชา -->
+            <section class="card p-5 xl:col-span-2">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="font-bold">รายวิชาที่เชื่อมต่อจาก Google Classroom และ Teams</h2>
+                  <p class="text-[11px] text-black/60 mt-0.5">ทั้งหมด <span id="courseTotal">–</span> รายวิชา · ภาคเรียน <span id="courseSemester">–</span></p>
+                </div>
+                <a href="connections.html" class="link-plum shrink-0">ดูรายวิชาทั้งหมด <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></a>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 mt-3">
+                <span class="text-[11px] text-black/60">รูปแบบการแสดงผล</span>
+                <div id="chartSeg" class="seg">
+                  <button data-view="pie"><i data-lucide="chart-pie" class="w-3.5 h-3.5"></i>วงกลม</button>
+                  <button data-view="donut" class="active"><i data-lucide="circle-dot" class="w-3.5 h-3.5"></i>โดนัท</button>
+                  <button data-view="bar"><i data-lucide="chart-column" class="w-3.5 h-3.5"></i>แท่ง</button>
+                  <button data-view="table"><i data-lucide="table" class="w-3.5 h-3.5"></i>ตาราง</button>
+                </div>
+              </div>
+              <!-- พื้นที่กราฟ (JS วาดให้ตามแบบที่เลือก) -->
+              <div id="chartBody" class="mt-4 min-h-[260px]"></div>
+            </section>
+
+            <!-- สถานะการซิงค์ -->
+            <section class="card p-5 self-start">
+              <h2 class="font-bold">สถานะการซิงค์ LMS</h2>
+              <ul id="syncStatusList" class="mt-3 space-y-3"></ul>
+              <a href="connections.html" class="link-plum mt-4">จัดการการเชื่อมต่อ <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></a>
+            </section>
+          </div>
+
+          <!-- ผู้ใช้ที่ลงทะเบียนล่าสุด -->
+          <section class="card p-5">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold">ผู้ใช้ที่ลงทะเบียนล่าสุด</h2>
+              <a href="users.html" class="link-plum">ไปที่จัดการผู้ใช้งาน <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></a>
+            </div>
+            <div class="overflow-x-auto mt-3">
+              <table class="tbl">
+                <thead>
+                  <tr><th>ชื่อ-นามสกุล</th><th>อีเมล</th><th>บทบาท</th><th>บัญชีที่เชื่อม</th><th>ลงทะเบียนเมื่อ</th><th>สถานะ</th></tr>
+                </thead>
+                <tbody id="recentUsersBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===================== Modals ===================== -->
+
+  <div id="m-logout" class="modal fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+    <div class="modal-overlay absolute inset-0" data-close></div>
+    <div class="relative min-h-full flex items-center justify-center p-4 pointer-events-none">
+      <div class="modal-panel pointer-events-auto w-full max-w-[480px] bg-white rounded-3xl shadow-2xl p-6">
+        <div class="icon-ring ring-plum"><i data-lucide="log-out" class="w-6 h-6"></i></div>
+        <h3 class="mt-4 text-lg font-bold">ออกจากระบบ?</h3>
+        <p class="mt-1 text-xs text-black/60 leading-relaxed">คุณจะต้องเข้าสู่ระบบใหม่เพื่อใช้งานหน้าผู้ดูแลระบบ</p>
+
+
+        <div class="mt-5 flex flex-wrap justify-end gap-2">
+          <button class="btn btn-outline" data-close>ยกเลิก</button>
+          <button class="btn btn-plum" data-confirm><i data-lucide="log-out" class="w-4 h-4"></i>ออกจากระบบ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="m-reset-mock" class="modal fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+    <div class="modal-overlay absolute inset-0" data-close></div>
+    <div class="relative min-h-full flex items-center justify-center p-4 pointer-events-none">
+      <div class="modal-panel pointer-events-auto w-full max-w-[480px] bg-white rounded-3xl shadow-2xl p-6">
+        <div class="icon-ring ring-plum"><i data-lucide="rotate-ccw" class="w-6 h-6"></i></div>
+        <h3 class="mt-4 text-lg font-bold">รีเซ็ตข้อมูลจำลอง?</h3>
+        <p class="mt-1 text-xs text-black/60 leading-relaxed">ข้อมูลที่แก้ไขไว้ในเบราว์เซอร์นี้จะกลับเป็นค่าเริ่มต้น</p>
+
+
+        <div class="mt-5 flex flex-wrap justify-end gap-2">
+          <button class="btn btn-outline" data-close>ยกเลิก</button>
+          <button class="btn btn-plum" data-confirm><i data-lucide="rotate-ccw" class="w-4 h-4"></i>รีเซ็ต</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Toast -->
+  <div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2"></div>
+
+  <!-- ไอคอน (Lucide) -->
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <!-- ข้อมูล + ตัวช่วย -->
+  <script src="assets/js/mock-data.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/core.js"></script>
+  <script src="assets/js/overview.js"></script>
+</body>
+</html>
